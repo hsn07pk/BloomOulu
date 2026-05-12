@@ -29,9 +29,9 @@ The script for each narration lives inline in the generation step at
 
 Each plant now has three narrations in `audio/{en,fi,sv}/{id}.m4a`.
 
-- **EN** — Samantha (en_US), 160 wpm
-- **FI** — Satu (fi_FI), 150 wpm
-- **SV** — Alva (sv_SE), 150 wpm
+- **EN** - Samantha (en_US), 160 wpm
+- **FI** - Satu (fi_FI), 150 wpm
+- **SV** - Alva (sv_SE), 150 wpm
 
 All generated via macOS `say --data-format=aac` with `[[slnc N]]` pause
 markers for natural rhythm. The transcript field in `data.jsx` exposes

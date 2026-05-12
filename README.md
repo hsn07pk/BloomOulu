@@ -2,7 +2,7 @@
 
 # 🌱 BloomOulu
 
-**One platform for the University of Oulu Botanical Garden — adoption · AI-grounded plant guide · immersive QR experience · live kiosk.**
+**One platform for the University of Oulu Botanical Garden - adoption · AI-grounded plant guide · immersive QR experience · live kiosk.**
 
 [![Live demo](https://img.shields.io/badge/demo-bloom--oulu.vercel.app-2D5440?style=flat&logo=vercel)](https://bloom-oulu.vercel.app/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-A8C060.svg?style=flat)](./LICENSE)
@@ -20,7 +20,7 @@
 
 BloomOulu is a unified digital experience for the University of Oulu Botanical Garden, the northernmost scientific garden in the world. It replaces the existing voluntary‑MobilePay donation flow with a **four-tier Adopt-a-Plant program** (€25 → €500 + corporate), pairs every plant label with a **scannable QR** that opens a rich plant page (audio narration, real photos, deep-link), and adds an **AI plant guide grounded in the Garden's own science** with visible citations.
 
-The platform is designed for the European Accessibility Act 2025 and BGCI/IUCN reporting standards, and is multilingual (Finnish, Swedish, English) end-to-end — UI, audio narration, captions and all.
+The platform is designed for the European Accessibility Act 2025 and BGCI/IUCN reporting standards, and is multilingual (Finnish, Swedish, English) end-to-end - UI, audio narration, captions and all.
 
 > Built by **Team Meraki** for **GrowthHack 2026** at the University of Oulu, with research grounded in [the comprehensive platform analysis](https://github.com/hsn07pk/BloomOulu/) (peer benchmarks: Kew, Meise, ELTE Füvészkert, RBGE, Queens BG, NYBG, Mt Auburn).
 
@@ -59,14 +59,14 @@ Try:
 |---|---|
 | **Frontend** | Vanilla React 18 loaded via Babel-standalone (no build step). One global namespace; window-attached components. |
 | **Mapping** | [Leaflet](https://leafletjs.com/) + OpenStreetMap tiles (free, no key). |
-| **Weather** | [Open-Meteo](https://open-meteo.com/) (free, no key) — live readings for the Garden coordinates. |
+| **Weather** | [Open-Meteo](https://open-meteo.com/) (free, no key) - live readings for the Garden coordinates. |
 | **QR codes** | [qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator) (vanilla JS) with level-H error correction. |
 | **Audio** | macOS `say` (Samantha/Satu/Alva voices) → AAC m4a, served as static assets. |
 | **Images** | Wikimedia Commons (CC-licensed, attributed in `plants/CREDITS.md`), resized to 800 px / 75 % JPEG via `sips`. |
 | **Hosting** | [Vercel](https://vercel.com/) static deploy from `main`, auto-redeploy on push, EU region. |
 | **Fonts** | Fraunces, Manrope, JetBrains Mono (Google Fonts). |
 
-No npm, no bundler, no build pipeline — `git push` is the deploy. The entire site is static files.
+No npm, no bundler, no build pipeline - `git push` is the deploy. The entire site is static files.
 
 ## Project structure
 
@@ -103,7 +103,7 @@ BloomOulu/
 
 ## Local development
 
-Three equivalent ways to run BloomOulu on your machine — pick whichever you have.
+Three equivalent ways to run BloomOulu on your machine - pick whichever you have.
 
 ### 🐳 Docker (recommended)
 
@@ -142,7 +142,7 @@ The Plant page deep-links via URL hash (e.g. `…/demo-design/#plant=puls-pat`).
 
 Pushing to `main` auto-deploys on Vercel (~30 seconds). Branches get preview URLs automatically.
 
-To deploy your own fork: import the repo at [vercel.com/new](https://vercel.com/new) — leave framework as "Other" and root directory at `./`. Done.
+To deploy your own fork: import the repo at [vercel.com/new](https://vercel.com/new) - leave framework as "Other" and root directory at `./`. Done.
 
 ## Accessibility
 
@@ -170,10 +170,10 @@ Plant scientific names stay constant; common names are pulled per language from 
 
 ## Attribution
 
-- **Plant photos** — Wikimedia Commons under various Creative Commons licences. See [`demo-design/plants/CREDITS.md`](./demo-design/plants/CREDITS.md) for per-image source + author.
-- **Map tiles** — © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright).
-- **Weather data** — [Open-Meteo](https://open-meteo.com/) (CC BY 4.0).
-- **Research** — peer-benchmarked against Kew (UK), Meise (BE), ELTE Füvészkert (HU), Royal Botanic Garden Edinburgh, Queens Botanical Garden (US), New York Botanical Garden, Mount Auburn Cemetery, Singapore Botanic Gardens, BGCI / IUCN Red List.
+- **Plant photos** - Wikimedia Commons under various Creative Commons licences. See [`demo-design/plants/CREDITS.md`](./demo-design/plants/CREDITS.md) for per-image source + author.
+- **Map tiles** - © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright).
+- **Weather data** - [Open-Meteo](https://open-meteo.com/) (CC BY 4.0).
+- **Research** - peer-benchmarked against Kew (UK), Meise (BE), ELTE Füvészkert (HU), Royal Botanic Garden Edinburgh, Queens Botanical Garden (US), New York Botanical Garden, Mount Auburn Cemetery, Singapore Botanic Gardens, BGCI / IUCN Red List.
 
 ## Status
 
@@ -181,14 +181,14 @@ Plant scientific names stay constant; common names are pulled per language from 
 
 ## License
 
-MIT — see [`LICENSE`](./LICENSE).
+MIT - see [`LICENSE`](./LICENSE).
 
 ## Acknowledgments
 
-- **Team Meraki** — concept, research, design, build.
-- **University of Oulu Botanical Garden** — Director Jouni Aspi, Curator Anna Liisa Ruotsalainen, Head Gardener Tuomas Kauppila.
-- **University of Oulu Biodiversity Unit** — corpus grounding for AskTheGarden.
-- **BGCI** + **LIFE+ ESCAPE** project (LIFE11 BIO/FI/000917) — conservation framing.
+- **Team Meraki** - concept, research, design, build.
+- **University of Oulu Botanical Garden** - Director Jouni Aspi, Curator Anna Liisa Ruotsalainen, Head Gardener Tuomas Kauppila.
+- **University of Oulu Biodiversity Unit** - corpus grounding for AskTheGarden.
+- **BGCI** + **LIFE+ ESCAPE** project (LIFE11 BIO/FI/000917) - conservation framing.
 
 <div align="center">
 

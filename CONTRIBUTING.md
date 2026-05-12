@@ -2,7 +2,7 @@
 
 Thanks for stopping by 🌱
 
-This is a prototype repo — it ships a self-contained static demo at
+This is a prototype repo - it ships a self-contained static demo at
 [bloom-oulu.vercel.app/demo-design/](https://bloom-oulu.vercel.app/demo-design/).
 The production frontend will be a separate codebase. With that in mind, here's
 how to work in this repo if you'd like to contribute.
@@ -16,7 +16,7 @@ python3 -m http.server 8000
 # open http://localhost:8000/demo-design/
 ```
 
-No build step — the demo loads React + Babel-standalone in the browser. Edits
+No build step - the demo loads React + Babel-standalone in the browser. Edits
 to any `.jsx` / `.html` file are visible on a hard refresh.
 
 ## Project layout
@@ -62,7 +62,7 @@ English source string.
   Use `data-grid-mobile="2"` to opt into a 2-col layout on phones.
 - **Accessibility.** Every new icon-only button needs `aria-label`. Live
   regions for status (`role="status" aria-live="polite"`). Don't intercept
-  clicks with decorative `position: absolute` elements — add
+  clicks with decorative `position: absolute` elements - add
   `pointer-events: none` and `aria-hidden="true"`.
 - **One component per concern.** New shared components go in `icons.jsx` (the
   catch-all for everything we expose on `window`).
