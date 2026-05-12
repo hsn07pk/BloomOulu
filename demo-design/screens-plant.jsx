@@ -5,16 +5,40 @@ const PlantScreen = ({ plantId, onBack, onNav, onAdopt }) => {
   const plantRaw = PLANTS.find(p => p.id === plantId) || PLANTS[0];
   const plant = localisePlant(plantRaw, lang);
   const [audioPlaying, setAudioPlaying] = React.useState(false);
-  const [audioProgress, setAudioProgress] = React.useState(0);
+  const [audioCurrent, setAudioCurrent] = React.useState(0);
+  const [audioDuration, setAudioDuration] = React.useState(0);
   const [tab, setTab] = React.useState("story");
   const [season, setSeason] = React.useState("summer");
   const [mode, setMode] = React.useState("adult");
+  const audioRef = React.useRef(null);
 
+  // Reset audio when the plant changes
   React.useEffect(() => {
-    if (!audioPlaying) return;
-    const t = setInterval(() => setAudioProgress(p => p >= 100 ? (setAudioPlaying(false), 0) : p + 1), 80);
-    return () => clearInterval(t);
-  }, [audioPlaying]);
+    const a = audioRef.current;
+    if (!a) return;
+    a.pause();
+    a.currentTime = 0;
+    setAudioPlaying(false);
+    setAudioCurrent(0);
+  }, [plant.id]);
+
+  const toggleAudio = () => {
+    const a = audioRef.current;
+    if (!a) return;
+    if (a.paused) {
+      a.play().then(() => setAudioPlaying(true)).catch(() => setAudioPlaying(false));
+    } else {
+      a.pause();
+      setAudioPlaying(false);
+    }
+  };
+  const fmtTime = (s) => {
+    if (!s || !isFinite(s)) return "0:00";
+    const m = Math.floor(s / 60);
+    const sec = Math.floor(s % 60);
+    return `${m}:${sec.toString().padStart(2, "0")}`;
+  };
+  const audioProgress = audioDuration > 0 ? (audioCurrent / audioDuration) * 100 : 0;
 
   const seasons = [
     { id: "spring", label: t("Spring"), icon: "flower" },
@@ -49,16 +73,26 @@ const PlantScreen = ({ plantId, onBack, onNav, onAdopt }) => {
             </div>
             <div style={{ position: "absolute", bottom: 20, left: 20, right: 20, display: "flex", alignItems: "end", justifyContent: "space-between" }}>
               <div style={{ background: "rgba(255,255,255,0.92)", padding: "12px 16px", borderRadius: 14, display: "flex", alignItems: "center", gap: 12 }}>
-                <button onClick={() => setAudioPlaying(!audioPlaying)} className="btn btn-primary" style={{ width: 44, height: 44, padding: 0, borderRadius: "50%" }}>
+                <audio
+                  ref={audioRef}
+                  src={`audio/${plant.id}.m4a`}
+                  preload="metadata"
+                  onLoadedMetadata={e => setAudioDuration(e.currentTarget.duration)}
+                  onTimeUpdate={e => setAudioCurrent(e.currentTarget.currentTime)}
+                  onEnded={() => { setAudioPlaying(false); setAudioCurrent(0); }}
+                />
+                <button onClick={toggleAudio} className="btn btn-primary" style={{ width: 44, height: 44, padding: 0, borderRadius: "50%" }} aria-label={audioPlaying ? t("Pause") : t("Play")}>
                   <Icon name={audioPlaying ? "pause" : "play"} size={16}/>
                 </button>
                 <div style={{ minWidth: 180 }}>
-                  <div className="tiny" style={{ color: "var(--ink-2)" }}>{t("Audio · Yle Radio Suomi voice")}</div>
+                  <div className="tiny" style={{ color: "var(--ink-2)" }}>{t("Audio narration · Garden voice")}</div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
                     <div style={{ flex: 1, height: 4, background: "rgba(31,58,44,0.12)", borderRadius: 999, overflow: "hidden" }}>
                       <div style={{ width: `${audioProgress}%`, height: "100%", background: "var(--forest)" }}/>
                     </div>
-                    <span className="mono small" style={{ color: "var(--ink-2)" }}>0:{(plant.audio || "1:30").split(":")[1]}</span>
+                    <span className="mono small" style={{ color: "var(--ink-2)" }}>
+                      {fmtTime(audioCurrent)} / {fmtTime(audioDuration || 0)}
+                    </span>
                   </div>
                 </div>
               </div>

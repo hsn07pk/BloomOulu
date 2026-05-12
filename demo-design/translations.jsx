@@ -114,6 +114,9 @@ const T = {
     // Plant detail
     "Scanned via QR · ": "Skannattu QR-koodilla · ",
     "Audio · Yle Radio Suomi voice": "Ääni · Yle Radio Suomen lukija",
+    "Audio narration · Garden voice": "Äänikertomus · Puutarhan ääni",
+    "Pause": "Tauko",
+    "Play": "Toista",
     "The story": "Tarina",
     "Seasonal view": "Vuodenajat",
     "Accession data": "Kokoelmadata",
@@ -612,6 +615,9 @@ const T = {
     // Plant
     "Scanned via QR · ": "Skannad via QR · ",
     "Audio · Yle Radio Suomi voice": "Ljud · Yle Radio Suomi-röst",
+    "Audio narration · Garden voice": "Ljudberättelse · Trädgårdsröst",
+    "Pause": "Paus",
+    "Play": "Spela",
     "The story": "Berättelsen",
     "Seasonal view": "Årstidsvy",
     "Accession data": "Samlingsdata",

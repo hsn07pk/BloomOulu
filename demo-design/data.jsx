@@ -23,7 +23,7 @@ const PLANTS = [
     story: "Once common on Finland's sandy eskers, the pasqueflower has retreated to a handful of protected sites. Oulu propagated 230 seedlings under LIFE+ ESCAPE.",
     bloom: "April – May",
     accessed: "Collected 1998, Hämeenlinna pop.",
-    audio: "1:42",
+    audio: "0:30",
     quickFacts: [
       ["Origin", "Häme esker"],
       ["Bloom", "Apr – May"],
@@ -53,7 +53,7 @@ const PLANTS = [
     story: "A tiny azure bell that flowers for three weeks above the tree line. Sensitive to reindeer overgrazing and warming summers.",
     bloom: "July",
     accessed: "Collected 2014, Saana fell",
-    audio: "1:15",
+    audio: "0:27",
     quickFacts: [
       ["Origin", "Kilpisjärvi"],
       ["Bloom", "July"],
@@ -83,7 +83,7 @@ const PLANTS = [
     story: "A buttery yellow saxifrage of intact rich fens, indicator species for healthy mires. Oulu maintains 5 source populations ex situ.",
     bloom: "August",
     accessed: "Collected 2009, Pudasjärvi mire",
-    audio: "2:08",
+    audio: "0:23",
     quickFacts: [
       ["Origin", "Pudasjärvi"],
       ["Bloom", "August"],
@@ -113,7 +113,7 @@ const PLANTS = [
     story: "A pink coastal primrose tightly bound to the rising shores of the Bothnian Bay - a uniquely Finnish post-glacial story.",
     bloom: "June – July",
     accessed: "Collected 2002, Hailuoto",
-    audio: "1:58",
+    audio: "0:20",
     quickFacts: [
       ["Origin", "Hailuoto"],
       ["Bloom", "Jun – Jul"],
@@ -143,7 +143,7 @@ const PLANTS = [
     story: "A signature meadow species declining with the loss of traditional pasture management. Sponsorship funds restoration partnerships.",
     bloom: "June",
     accessed: "Collected 1987, Lieksa",
-    audio: "1:24",
+    audio: "0:25",
     quickFacts: [
       ["Origin", "Lieksa"],
       ["Bloom", "June"],
@@ -173,7 +173,7 @@ const PLANTS = [
     story: "Europe's most iconic temperate orchid. Slow-growing - a single rhizome can live a century. Strictly protected; propagation is exacting.",
     bloom: "Late May – June",
     accessed: "Collected 1995, Kuusamo",
-    audio: "2:34",
+    audio: "0:25",
     quickFacts: [
       ["Origin", "Kuusamo"],
       ["Bloom", "May – Jun"],
@@ -203,7 +203,7 @@ const PLANTS = [
     story: "A leafy lichen and an indicator species - its presence signals ancient, undisturbed forest. Sensitive to logging and air pollution.",
     bloom: "n/a (lichen)",
     accessed: "Collected 2017, Syöte NP",
-    audio: "1:50",
+    audio: "0:23",
     quickFacts: [
       ["Origin", "Syöte"],
       ["Bloom", "-"],
@@ -233,7 +233,7 @@ const PLANTS = [
     story: "The most photographed plant in the Romeo greenhouse. Leaves reach 2.5 m; can support 30 kg. Night blooms turn from white to pink.",
     bloom: "August evenings",
     accessed: "Cultivated since 1972",
-    audio: "3:12",
+    audio: "0:24",
     quickFacts: [
       ["Origin", "Amazon"],
       ["Bloom", "Aug nights"],
