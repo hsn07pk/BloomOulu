@@ -419,11 +419,11 @@ function buildAnswer(q, t) {
       citations: [ASK_CITATIONS[3], ASK_CITATIONS[1]],
       body: (
         <>
-          <p>{t("The garden holds 6 species assessed as Endangered (EN) or Vulnerable (VU) in the 2019 Finnish Red List. Among these,")} <b>Pulsatilla patens</b> {t("is VU;")} <b>Saxifraga hirculus</b> {t("and")} <b>Primula nutans</b> {t("are EN.")}</p>
-          <p style={{ marginTop: 12 }}>{t("All three are part of the Garden's contribution to the LIFE+ ESCAPE programme (2012–2017), which lifted ex-situ coverage of Finnish threatened plants from 11% to 56%.")}</p>
+          <p>{t("The garden holds 5 species assessed as Endangered (EN) or Vulnerable (VU) in the 2019 Finnish Red List.")} <b>Pulsatilla patens</b>, <b>Campanula uniflora</b>, {t("and")} <b>Cypripedium calceolus</b> {t("are VU;")} <b>Saxifraga hirculus</b> {t("and")} <b>Primula nutans</b> {t("are EN.")}</p>
+          <p style={{ marginTop: 12 }}>{t("All five are part of the Garden's contribution to the LIFE+ ESCAPE programme (2012-2017), which collected 175 threatened taxa nationally, banked 148 in long-term storage, and lifted ex-situ coverage of Finnish threatened plants from 11% to 56%.")}</p>
         </>
       ),
-      cards: ["puls-pat", "saxi-hirc"]
+      cards: ["puls-pat", "saxi-hirc", "camp-uni", "prim-nut"]
     };
   }
   if (ql.includes("water lily") || ql.includes("victoria") || ql.includes("vesilij") || ql.includes("näckros")) {

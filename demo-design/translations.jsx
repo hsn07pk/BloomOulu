@@ -391,7 +391,10 @@ const T = {
     "I differ from Pl@ntNet, iNaturalist, or general chatbots because I know Oulu. Every answer shows its source. If I'm not sure, I'll say so and offer to forward your question to Curator Anna Liisa Ruotsalainen.":
       "Eroan Pl@ntNetistä, iNaturalististä ja yleisistä chatboteista, koska tunnen Oulun. Jokainen vastaus näyttää lähteensä. Jos en ole varma, sanon sen ja tarjoan kysymyksesi välitettäväksi kuraattori Anna Liisa Ruotsalaiselle.",
     "What is blooming in the Romeo greenhouse this week?": "Mitä Romeo-kasvihuoneessa kukkii tällä viikolla?",
-    "Which plants here are Critically Endangered in Finland?": "Mitkä kasvit täällä ovat erittäin uhanalaisia Suomessa?",
+    "Which plants here are Critically Endangered in Finland?": "Mitkä kasvit täällä ovat uhanalaisia tai vaarantuneita Suomessa?",
+    "Which plants here are Endangered or Vulnerable in Finland?": "Mitkä kasvit täällä ovat uhanalaisia tai vaarantuneita Suomessa?",
+    "The garden holds 5 species assessed as Endangered (EN) or Vulnerable (VU) in the 2019 Finnish Red List.": "Puutarhassa on 5 lajia, jotka on luokiteltu uhanalaisiksi (EN) tai vaarantuneiksi (VU) Suomen vuoden 2019 punaisella listalla.",
+    "All five are part of the Garden's contribution to the LIFE+ ESCAPE programme (2012-2017), which collected 175 threatened taxa nationally, banked 148 in long-term storage, and lifted ex-situ coverage of Finnish threatened plants from 11% to 56%.": "Kaikki viisi ovat osa puutarhan panosta LIFE+ ESCAPE -ohjelmaan (2012-2017), joka keräsi 175 uhanalaista taksonia kansallisesti, talletti 148 pitkäaikaiseen säilytykseen ja nosti Suomen uhanalaisten kasvien ex situ -kattavuuden 11 %:sta 56 %:iin.",
     "Can I see the Victoria water lily bloom this weekend?": "Voinko nähdä Victoria-vesililjan kukkivan tänä viikonloppuna?",
     "Where can I find the Lady's-slipper Orchid in the garden?": "Mistä löydän tikankontin puutarhasta?",
     "Tell me about the LIFE+ ESCAPE seed bank project.": "Kerro LIFE+ ESCAPE -siemenpankkihankkeesta.",
@@ -1050,7 +1053,10 @@ const T = {
     "I differ from Pl@ntNet, iNaturalist, or general chatbots because I know Oulu. Every answer shows its source. If I'm not sure, I'll say so and offer to forward your question to Curator Anna Liisa Ruotsalainen.":
       "Jag skiljer mig från Pl@ntNet, iNaturalist och allmänna chatbots eftersom jag känner Uleåborg. Varje svar visar sin källa. Om jag är osäker säger jag det och erbjuder att vidarebefordra din fråga till intendent Anna Liisa Ruotsalainen.",
     "What is blooming in the Romeo greenhouse this week?": "Vad blommar i Romeo-växthuset denna vecka?",
-    "Which plants here are Critically Endangered in Finland?": "Vilka växter här är akut hotade i Finland?",
+    "Which plants here are Critically Endangered in Finland?": "Vilka växter här är hotade eller sårbara i Finland?",
+    "Which plants here are Endangered or Vulnerable in Finland?": "Vilka växter här är hotade eller sårbara i Finland?",
+    "The garden holds 5 species assessed as Endangered (EN) or Vulnerable (VU) in the 2019 Finnish Red List.": "Trädgården har 5 arter bedömda som starkt hotade (EN) eller sårbara (VU) på Finlands rödlista 2019.",
+    "All five are part of the Garden's contribution to the LIFE+ ESCAPE programme (2012-2017), which collected 175 threatened taxa nationally, banked 148 in long-term storage, and lifted ex-situ coverage of Finnish threatened plants from 11% to 56%.": "Alla fem ingår i trädgårdens bidrag till LIFE+ ESCAPE-programmet (2012-2017), som samlade in 175 hotade taxa nationellt, bankade 148 i långtidsförvar och höjde ex situ-täckningen av Finlands hotade växter från 11 % till 56 %.",
     "Can I see the Victoria water lily bloom this weekend?": "Kan jag se Victoria-näckrosen blomma i helgen?",
     "Where can I find the Lady's-slipper Orchid in the garden?": "Var hittar jag guckusko i trädgården?",
     "Tell me about the LIFE+ ESCAPE seed bank project.": "Berätta om LIFE+ ESCAPE-fröbanksprojektet.",

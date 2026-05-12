@@ -25,7 +25,7 @@ const PLANTS = [
     story: "A purple-petaled survivor of Finland's sandy heaths. Vulnerable on the 2019 Red List; fire suppression has erased the open soil it needs to germinate. Oulu propagated 230 seedlings as part of the LIFE+ ESCAPE programme (LIFE11 BIO/FI/000917, 2012-2017), which collected 175 Finnish threatened taxa and banked 148 in long-term storage.",
     bloom: "April - May",
     accessed: "Collected 1998, Hämeenlinna pop.",
-    audio: "0:32",
+    audio: "0:34",
     transcript: {
       en: "Welcome to Pulsatilla patens, the Eastern pasqueflower. In Finnish, kangasvuokko. This Vulnerable species - listed on Finland's 2019 Red List - was once common on the sandy eskers of southern Finland, but fire suppression has erased the open soil it needs to germinate. The specimen in front of you was collected in 1998 from a population in Hämeenlinna, and is part of the Garden's contribution to the LIFE+ ESCAPE conservation programme. Watch the south-facing slope in April or May for the first silver-grey buds opening into deep violet flowers.",
       fi: "Pulsatilla patens, kangasvuokko. Vaarantunut laji vuoden 2019 punaisella listalla. Aikoinaan yleinen Suomen hiekkaharjuilla, nyt vain muutamalla suojelualueella. Tämä yksilö kerättiin Hämeenlinnasta vuonna 1998 osana LIFE+ ESCAPE -suojeluohjelmaa. Kukkii huhti- ja toukokuussa.",
@@ -442,7 +442,7 @@ const ASK_CITATIONS = [
 
 const TRENDING_QUESTIONS = [
   "What is blooming in the Romeo greenhouse this week?",
-  "Which plants here are Critically Endangered in Finland?",
+  "Which plants here are Endangered or Vulnerable in Finland?",
   "Can I see the Victoria water lily bloom this weekend?",
   "Where can I find the Lady's-slipper Orchid in the garden?",
   "Tell me about the LIFE+ ESCAPE seed bank project."
