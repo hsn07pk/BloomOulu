@@ -468,7 +468,8 @@ const T = {
     "Saturday 21 June 2026 · 13:00": "Lauantai 21.6.2026 · 13:00",
     "Guided tour by Curator Anna Liisa Ruotsalainen + peak peony bloom + Romeo & Julia behind-the-scenes.":
       "Opastettu kierros kuraattori Anna Liisa Ruotsalaisen johdolla + pioniumäärän huippu + Romeo & Julia kulissien takana.",
-    "RSVP · 2 guests included": "Vastaa kutsuun · 2 vierasta",
+    "RSVP · 2 guests included": "Vastaa kutsuun · +1 vieras",
+    "RSVP · +1 guest included": "Vastaa kutsuun · +1 vieras",
     "Your plants": "Kasvisi",
     "Three living dedications.": "Kolme elävää omistusta.",
     "Bloom calendar": "Kukintakalenteri",
@@ -1123,7 +1124,8 @@ const T = {
     "Saturday 21 June 2026 · 13:00": "Lördag 21 juni 2026 · 13:00",
     "Guided tour by Curator Anna Liisa Ruotsalainen + peak peony bloom + Romeo & Julia behind-the-scenes.":
       "Guidad tur av intendent Anna Liisa Ruotsalainen + pionernas topp + Romeo & Julia bakom kulisserna.",
-    "RSVP · 2 guests included": "OSA · 2 gäster ingår",
+    "RSVP · 2 guests included": "OSA · +1 gäst ingår",
+    "RSVP · +1 guest included": "OSA · +1 gäst ingår",
     "Your plants": "Dina växter",
     "Three living dedications.": "Tre levande tillägnan.",
     "Bloom calendar": "Blomningskalender",

@@ -104,7 +104,7 @@ const GardenScreen = ({ onOpenPlant, onNav }) => {
             <p className="small" style={{ marginTop: 12, color: "var(--ink-soft)", lineHeight: 1.5 }}>
               {t("Guided tour by Curator Anna Liisa Ruotsalainen + peak peony bloom + Romeo & Julia behind-the-scenes.")}
             </p>
-            <button className="btn btn-primary small" style={{ marginTop: 14 }}>{t("RSVP · 2 guests included")}</button>
+            <button className="btn btn-primary small" style={{ marginTop: 14 }}>{t("RSVP · +1 guest included")}</button>
           </div>
         </div>
 
