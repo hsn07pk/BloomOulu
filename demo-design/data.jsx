@@ -351,7 +351,7 @@ const TIERS = [
     name: "Seedling",
     fi: "Siemen",
     price: 25,
-    monthly: 2,
+    monthly: 3,
     tag: "Most popular gift",
     blurb: "A starter gesture. Nickname your plant, pick one from your home region, get a digital certificate and quarterly notes.",
     perks: [
@@ -368,7 +368,7 @@ const TIERS = [
     name: "Rooted",
     fi: "Juurtunut",
     price: 75,
-    monthly: 7,
+    monthly: 8,
     tag: "Best value",
     blurb: "Printed certificate mailed to you, I@H postcard from your plant's region, seasonal photos of your specific plant.",
     perks: [
@@ -385,7 +385,7 @@ const TIERS = [
     name: "Vulnerable",
     fi: "Vaarantunut",
     price: 250,
-    monthly: 21,
+    monthly: 25,
     tag: "Donor-wall listing",
     blurb: "Funds an actively threatened species. Signed botanical art, themed garden walk, Adopters' Open Day + guest.",
     perks: [
@@ -403,7 +403,7 @@ const TIERS = [
     name: "Endangered",
     fi: "Erittäin uhanalainen",
     price: 750,
-    monthly: 63,
+    monthly: 75,
     tag: "Plaque by YOUR plant",
     blurb: "Limited-edition signed art, donor dinner with a seed-bank visit, an engraved plaque next to your specific plant, and an annual seed packet.",
     perks: [
