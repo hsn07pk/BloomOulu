@@ -1,4 +1,4 @@
-// Main app — top nav + screen routing
+// Main app - top nav + screen routing
 
 const App = () => {
   const [route, setRoute] = React.useState({ screen: "discover" });
@@ -62,7 +62,7 @@ const App = () => {
         {route.screen === "kiosk" && <KioskScreen onNav={nav}/>}
       </main>
 
-      {/* Footer — hide on full-bleed screens */}
+      {/* Footer - hide on full-bleed screens */}
       {!isFullBleed && (
         <footer style={{ background: "var(--forest-deep)", color: "var(--cream)", marginTop: 64, padding: "56px 0 40px", position: "relative", overflow: "hidden" }}>
           <div style={{ position: "absolute", inset: 0, backgroundImage: "repeating-linear-gradient(115deg, transparent, transparent 80px, rgba(168,192,96,.04) 80px, rgba(168,192,96,.04) 81px)", pointerEvents: "none" }}/>
@@ -73,7 +73,7 @@ const App = () => {
                 <span className="serif" style={{ fontSize: 24, color: "var(--cream)" }}>BloomOulu</span>
               </div>
               <p style={{ marginTop: 20, fontSize: 14, color: "rgba(250,247,238,0.65)", lineHeight: 1.55, maxWidth: 320 }}>
-                {t("One platform for the University of Oulu Botanical Garden — adoption, AI-grounded answers, and the QR plant experience. Built with Team Meraki for GrowthHack 2026.")}
+                {t("One platform for the University of Oulu Botanical Garden - adoption, AI-grounded answers, and the QR plant experience. Built with Team Meraki for GrowthHack 2026.")}
               </p>
               <div style={{ marginTop: 24, display: "flex", gap: 10 }}>
                 <button className="icon-btn" style={{ background: "transparent", color: "var(--cream)", borderColor: "rgba(250,247,238,0.2)" }}><Icon name="share" size={14}/></button>

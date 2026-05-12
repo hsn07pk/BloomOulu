@@ -45,7 +45,7 @@ const Icon = ({ name, size = 18, stroke = 1.6, className = "", style = {} }) => 
   return <svg {...props}>{paths[name]}</svg>;
 };
 
-// BloomOulu logo — stylised five-petaled bloom with circuit veining
+// BloomOulu logo - stylised five-petaled bloom with circuit veining
 // Matches the brand mark: forest-green → teal → sage gradient.
 const BloomMark = ({ size = 34, monochrome = false, light = false }) => {
   const c1 = monochrome ? (light ? "#A8C060" : "#2D5440") : "#2D5440";
@@ -92,7 +92,7 @@ const BloomMark = ({ size = 34, monochrome = false, light = false }) => {
   );
 };
 
-// Botanical illustration — leaf with circuit-style veining, plant-specific
+// Botanical illustration - leaf with circuit-style veining, plant-specific
 const Botanical = ({ color = "#2D5440", accent = "#A8C060", variant = 0, style = {} }) => {
   const variants = [
     // 0: tall spike

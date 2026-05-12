@@ -1,4 +1,4 @@
-// Translations — English is source-of-truth; FI/SV are overrides.
+// Translations - English is source-of-truth; FI/SV are overrides.
 // t(en) → returns translation in current lang, or English if missing.
 
 const T = {
@@ -37,13 +37,13 @@ const T = {
     "Near Threatened": "Silmälläpidettävä",
     "Greenhouse Star": "Kasvihuonetähti",
 
-    // Discover — Hero
+    // Discover - Hero
     "University of Oulu Botanical Garden": "Oulun yliopiston kasvitieteellinen puutarha",
     "65°N · Northernmost scientific garden": "65°N · Pohjoisin tieteellinen puutarha",
     "Adopt a plant.": "Adoptoi kasvi.",
     "Keep Finland in bloom.": "Pidä Suomi kukassa.",
-    "Of 2,667 species on Finland's Red List, 175 live ex situ in this garden. Sponsor one — name it, follow it, watch it flower. Or just say hi to it through the QR code on its label.":
-      "Suomen punaisen listan 2 667 lajista 175 elää ex situ tässä puutarhassa. Sponsoroi yksi — nimeä se, seuraa sitä, katso kuinka se kukkii. Tai tervehdi sitä laatan QR-koodin kautta.",
+    "Of 2,667 species on Finland's Red List, 175 live ex situ in this garden. Sponsor one - name it, follow it, watch it flower. Or just say hi to it through the QR code on its label.":
+      "Suomen punaisen listan 2 667 lajista 175 elää ex situ tässä puutarhassa. Sponsoroi yksi - nimeä se, seuraa sitä, katso kuinka se kukkii. Tai tervehdi sitä laatan QR-koodin kautta.",
     "Adopt a plant from €25": "Adoptoi kasvi · alkaen 25 €",
     "Ask the Garden": "Kysy puutarhalta",
     "plant species": "kasvilajia",
@@ -59,8 +59,8 @@ const T = {
     // Plant index
     "The collection · 4 213 specimens": "Kokoelma · 4 213 yksilöä",
     "Browse the living index": "Selaa elävää hakemistoa",
-    "Every plant in the outdoor garden and the Romeo & Julia greenhouses has its own page, its own audio narration, and — for many — a sponsorship invitation.":
-      "Jokaisella ulkopuutarhan ja Romeo & Julia -kasvihuoneiden kasvilla on oma sivu, oma äänikertomus ja — monille — sponsorointikutsu.",
+    "Every plant in the outdoor garden and the Romeo & Julia greenhouses has its own page, its own audio narration, and - for many - a sponsorship invitation.":
+      "Jokaisella ulkopuutarhan ja Romeo & Julia -kasvihuoneiden kasvilla on oma sivu, oma äänikertomus ja - monille - sponsorointikutsu.",
     "All": "Kaikki",
     "Adopters": "Adoptoijat",
     "adopters": "adoptoijaa",
@@ -78,8 +78,8 @@ const T = {
     "How BloomOulu works": "Miten BloomOulu toimii",
     "Scan · Ask · Adopt · Return": "Skannaa · Kysy · Adoptoi · Palaa",
     "Scan a plant": "Skannaa kasvi",
-    "Every label has a QR — and an NFC tag for blind visitors. Tap or scan, get 30-second audio in Finnish, Swedish, or English.":
-      "Jokaisella laatalla on QR — ja NFC-tunniste näkövammaisille kävijöille. Napauta tai skannaa, kuule 30 sekunnin ääni suomeksi, ruotsiksi tai englanniksi.",
+    "Every label has a QR - and an NFC tag for blind visitors. Tap or scan, get 30-second audio in Finnish, Swedish, or English.":
+      "Jokaisella laatalla on QR - ja NFC-tunniste näkövammaisille kävijöille. Napauta tai skannaa, kuule 30 sekunnin ääni suomeksi, ruotsiksi tai englanniksi.",
     "Our AI is grounded in the Garden's accession database and the Biodiversity Unit's publications. Every answer cites its source.":
       "Tekoälymme perustuu puutarhan kokoelmatietokantaan ja Biodiversiteettiyksikön julkaisuihin. Jokainen vastaus mainitsee lähteensä.",
     "From €25 for a digital certificate to €500 for an engraved plaque. Gift-flow first-class. Memorial adoptions supported.":
@@ -99,8 +99,8 @@ const T = {
     "Summer": "Kesä",
     "Autumn": "Syksy",
     "Winter": "Talvi",
-    "Under the snow now. What's happening below: rhizomes are dormant, mycorrhizal partners still active. Outdoor garden is closed for maintenance — visit Romeo & Julia year-round.":
-      "Lumen alla nyt. Mitä tapahtuu alla: juurakot lepäävät, mykorritsa-kumppanit yhä aktiivisia. Ulkopuutarha on suljettu huoltoa varten — vieraile Romeo & Juliassa ympäri vuoden.",
+    "Under the snow now. What's happening below: rhizomes are dormant, mycorrhizal partners still active. Outdoor garden is closed for maintenance - visit Romeo & Julia year-round.":
+      "Lumen alla nyt. Mitä tapahtuu alla: juurakot lepäävät, mykorritsa-kumppanit yhä aktiivisia. Ulkopuutarha on suljettu huoltoa varten - vieraile Romeo & Juliassa ympäri vuoden.",
     "Adult": "Aikuinen",
     "Kid mode": "Lapsille",
     "School": "Koulu",
@@ -140,7 +140,7 @@ const T = {
     "Jun – Jul": "Kesä – heinä",
     "May – Jun": "Touko – kesä",
     "Aug nights": "Elokuun yöt",
-    "—": "—",
+    "-": "-",
     "Red List": "Punainen lista",
     "Ex-situ since": "Ex situ vuodesta",
     "Habitat": "Elinympäristö",
@@ -151,7 +151,7 @@ const T = {
     "Stop 3 of 10 · 18 minutes to next": "Pysähdys 3/10 · 18 min seuraavaan",
     "Next stop": "Seuraava pysähdys",
     "Blooms": "Kukkii",
-    "Quick fact: Pulsatilla — story":
+    "Quick fact: Pulsatilla - story":
       "Aikoinaan yleinen Suomen harjuilla, kylmänkukka on vetäytynyt muutamalle suojelualueelle. Oulu kasvatti 230 tainta LIFE+ ESCAPE -ohjelmassa.",
     "Ask the Garden about this plant": "Kysy puutarhalta tästä kasvista",
     "This specimen has been in continuous cultivation at Oulu since": "Tämä yksilö on ollut jatkuvassa viljelyssä Oulussa vuodesta",
@@ -185,7 +185,7 @@ const T = {
       "CSR-valmiit neljännesvuosittaiset vaikuttavuusraportit, logon näkyminen, henkilöstökierrokset. Verovähennyskelpoinen suomalaisille yrityksille TVL §57 mukaan.",
     "Continue with": "Jatka tasolla",
     "Pick a plant": "Valitse kasvi",
-    "Some plants are nearly fully funded — co-adopt anyway, or pick one that needs you more.": "Osa kasveista on jo lähes täysin rahoitettu — yhteisadoptiot mahdollisia, tai valitse sinua eniten tarvitseva.",
+    "Some plants are nearly fully funded - co-adopt anyway, or pick one that needs you more.": "Osa kasveista on jo lähes täysin rahoitettu - yhteisadoptiot mahdollisia, tai valitse sinua eniten tarvitseva.",
     "tier ·": "taso ·",
     "Needs adopters": "Tarvitsee adoptoijia",
 
@@ -282,10 +282,23 @@ const T = {
     "across 200-question test set. Below 5% threshold for public launch. Re-audited monthly.":
       "200 kysymyksen testijoukossa. Alle 5 %:n kynnys julkista lanseerausta varten. Auditoidaan kuukausittain.",
     "Tervetuloa.": "Tervetuloa.",
-    "I'm AskTheGarden — the University of Oulu Botanical Garden's voice. I'm grounded in our accession database, the Biodiversity Unit's publications, and the LIFE+ ESCAPE conservation programme.":
-      "Olen Kysy puutarhalta — Oulun yliopiston kasvitieteellisen puutarhan ääni. Perustun kokoelmatietokantaamme, Biodiversiteettiyksikön julkaisuihin ja LIFE+ ESCAPE -suojeluohjelmaan.",
+    "I'm AskTheGarden - the University of Oulu Botanical Garden's voice. I'm grounded in our accession database, the Biodiversity Unit's publications, and the LIFE+ ESCAPE conservation programme.":
+      "Olen Kysy puutarhalta - Oulun yliopiston kasvitieteellisen puutarhan ääni. Perustun kokoelmatietokantaamme, Biodiversiteettiyksikön julkaisuihin ja LIFE+ ESCAPE -suojeluohjelmaan.",
     "I differ from Pl@ntNet, iNaturalist, or general chatbots because I know Oulu. Every answer shows its source. If I'm not sure, I'll say so and offer to forward your question to Curator Anna Liisa Ruotsalainen.":
       "Eroan Pl@ntNetistä, iNaturalististä ja yleisistä chatboteista, koska tunnen Oulun. Jokainen vastaus näyttää lähteensä. Jos en ole varma, sanon sen ja tarjoan kysymyksesi välitettäväksi kuraattori Anna Liisa Ruotsalaiselle.",
+    "What is blooming in the Romeo greenhouse this week?": "Mitä Romeo-kasvihuoneessa kukkii tällä viikolla?",
+    "Which plants here are Critically Endangered in Finland?": "Mitkä kasvit täällä ovat erittäin uhanalaisia Suomessa?",
+    "Can I see the Victoria water lily bloom this weekend?": "Voinko nähdä Victoria-vesililjan kukkivan tänä viikonloppuna?",
+    "Where can I find the Lady's-slipper Orchid in the garden?": "Mistä löydän tikankontin puutarhasta?",
+    "Tell me about the LIFE+ ESCAPE seed bank project.": "Kerro LIFE+ ESCAPE -siemenpankkihankkeesta.",
+    "How is Pulsatilla doing?": "Mitä Pulsatillalle kuuluu?",
+    "Adopters' Day - when?": "Adoptoijien päivä - milloin?",
+    "2.1% error rate": "2,1 % virheprosentti",
+    "Draft school-tour script for yläkoulu (Saxifraga hirculus)": "Laadi koulukierroksen käsikirjoitus yläkoululle (Saxifraga hirculus)",
+    "Generate signage text - Trollius europaeus (FI/SV/EN)": "Tuota opasteteksti - Trollius europaeus (FI/SV/EN)",
+    "Summarise this quarter's gardener notes": "Tiivistä tämän vuosineljänneksen puutarhurin muistiinpanot",
+    "Find a Kone Foundation grant template": "Etsi Koneen Säätiön apurahapohja",
+    "Identify a herbarium sample (image upload)": "Tunnista herbaarionäyte (kuvalataus)",
     "Helpful": "Hyödyllinen",
     "Off-base": "Pielessä",
     "Forward to curator": "Välitä kuraattorille",
@@ -295,21 +308,21 @@ const T = {
     "south slope, peak bloom expected through Sunday": "etelärinne, huippukukinta odotettavissa sunnuntaihin asti",
     "Bothnian Bay bed, first flush": "Perämeren penkki, ensimmäinen aalto",
     "meadow bed 4, ~30% open": "niittypenkki 4, ~30 % auki",
-    "Based on Head Gardener Tuomas Kauppila's note from May 10. Greenhouse Victoria water lily not yet blooming — August evenings.": "Perustuu pääpuutarhuri Tuomas Kauppilan 10.5. kirjattuun huomioon. Kasvihuoneen Victoria vesililja ei vielä kuki — elokuun illat.",
+    "Based on Head Gardener Tuomas Kauppila's note from May 10. Greenhouse Victoria water lily not yet blooming - August evenings.": "Perustuu pääpuutarhuri Tuomas Kauppilan 10.5. kirjattuun huomioon. Kasvihuoneen Victoria vesililja ei vielä kuki - elokuun illat.",
     "The garden holds 6 species assessed as Critically Endangered (CR) or Endangered (EN) in the 2019 Finnish Red List. Among these,": "Puutarhassa on 6 lajia, jotka on arvioitu erittäin uhanalaisiksi (CR) tai uhanalaisiksi (EN) Suomen vuoden 2019 punaisella listalla. Näistä",
     "is CR;": "on CR;",
     "are EN.": "ovat EN.",
     "All three are part of the Garden's contribution to the LIFE+ ESCAPE programme (2012–2017), which lifted ex-situ coverage of Finnish threatened plants from 11% to 56%.": "Kaikki kolme ovat osa puutarhan panostusta LIFE+ ESCAPE -ohjelmaan (2012–2017), joka nosti Suomen uhanalaisten kasvien ex situ -kattavuuden 11 %:sta 56 %:iin.",
     "in Romeo greenhouse blooms in": "Romeo-kasvihuoneessa kukkii",
     "August evenings": "elokuun iltoina",
-    "only — the white flowers open at dusk and turn pink overnight. Bloom evenings are typically Tuesday–Sunday once flowering begins; we announce specific dates 48h ahead.": "vain — valkoiset kukat avautuvat hämärässä ja muuttuvat yöllä vaaleanpunaisiksi. Kukintaillat ovat tyypillisesti ti–su kukinnan alettua; ilmoitamme tarkat päivät 48 h etukäteen.",
+    "only - the white flowers open at dusk and turn pink overnight. Bloom evenings are typically Tuesday–Sunday once flowering begins; we announce specific dates 48h ahead.": "vain - valkoiset kukat avautuvat hämärässä ja muuttuvat yöllä vaaleanpunaisiksi. Kukintaillat ovat tyypillisesti ti–su kukinnan alettua; ilmoitamme tarkat päivät 48 h etukäteen.",
     "Cultivated here since 1972; leaves currently 1.8 m across.": "Viljelty täällä vuodesta 1972; lehdet nyt 1,8 m halkaisijaltaan.",
-    "is in bed 7 of the outdoor garden, west of the Romeo greenhouse. Currently flowering — late May through mid-June.": "on ulkopuutarhan penkissä 7, Romeo-kasvihuoneen länsipuolella. Kukkii nyt — toukokuun lopusta kesäkuun puoliväliin.",
+    "is in bed 7 of the outdoor garden, west of the Romeo greenhouse. Currently flowering - late May through mid-June.": "on ulkopuutarhan penkissä 7, Romeo-kasvihuoneen länsipuolella. Kukkii nyt - toukokuun lopusta kesäkuun puoliväliin.",
     "The specimen came from Kuusamo in 1995; the species is Vulnerable in Finland and strictly protected. Please don't touch the flowers.": "Yksilö tuotiin Kuusamosta 1995; laji on Suomessa vaarantunut ja tarkasti suojeltu. Älä koske kukkiin.",
     "project (LIFE11 BIO/FI/000917, 2012–2017) was a national programme on ex-situ conservation of Finnish native plants.": "-hanke (LIFE11 BIO/FI/000917, 2012–2017) oli kansallinen ohjelma Suomen kotoperäisten kasvien ex situ -suojelusta.",
     "Headline results: ~1.7 million high-quality seeds collected, 175 taxa sampled in the field, 148 taxa banked in the Finnish national seed bank. Ex-situ coverage of threatened Finnish vascular plants rose from 11% to 56%.": "Päätulokset: ~1,7 miljoonaa laatusiementä kerätty, 175 taksonia näytteistetty maastosta, 148 taksonia talletettu Suomen kansalliseen siemenpankkiin. Suomen uhanalaisten putkilokasvien ex situ -kattavuus nousi 11 %:sta 56 %:iin.",
-    "Oulu Botanical Garden was a partner. Adoption funds the next chapter — partnership with the Finnish Museum of Natural History (Luomus) continues.": "Oulun kasvitieteellinen puutarha oli kumppani. Adoptio rahoittaa seuraavan luvun — kumppanuus Suomen luonnontieteellisen keskusmuseon (Luomus) kanssa jatkuu.",
-    "That's outside what I can confidently answer from the Garden's corpus. I can give you a general response, or I can forward your question to Curator Anna Liisa Ruotsalainen — typical reply within 2 working days.": "Tämä on puutarhan korpuksen ulkopuolella, jossa voin vastata varmasti. Voin antaa yleisen vastauksen, tai voin välittää kysymyksesi kuraattori Anna Liisa Ruotsalaiselle — vastaus tyypillisesti 2 työpäivässä.",
+    "Oulu Botanical Garden was a partner. Adoption funds the next chapter - partnership with the Finnish Museum of Natural History (Luomus) continues.": "Oulun kasvitieteellinen puutarha oli kumppani. Adoptio rahoittaa seuraavan luvun - kumppanuus Suomen luonnontieteellisen keskusmuseon (Luomus) kanssa jatkuu.",
+    "That's outside what I can confidently answer from the Garden's corpus. I can give you a general response, or I can forward your question to Curator Anna Liisa Ruotsalainen - typical reply within 2 working days.": "Tämä on puutarhan korpuksen ulkopuolella, jossa voin vastata varmasti. Voin antaa yleisen vastauksen, tai voin välittää kysymyksesi kuraattori Anna Liisa Ruotsalaiselle - vastaus tyypillisesti 2 työpäivässä.",
     "If you're identifying a plant from a photo, I can also pass it through Pl@ntNet and check the result against our accessions.": "Jos tunnistat kasvia kuvasta, voin myös välittää sen Pl@ntNetille ja tarkistaa tuloksen kokoelmaamme vasten.",
 
     // Garden
@@ -356,25 +369,25 @@ const T = {
     "2 weeks ago · Gardener": "2 viikkoa sitten · Puutarhuri",
     "Activity": "Tapahtumat",
     "is blooming": "kukkii",
-    "First buds opened — peak this weekend. Tap to plan a visit.": "Ensimmäiset silmut avautuneet — huippu tänä viikonloppuna. Napauta suunnitellaksesi vierailun.",
+    "First buds opened - peak this weekend. Tap to plan a visit.": "Ensimmäiset silmut avautuneet - huippu tänä viikonloppuna. Napauta suunnitellaksesi vierailun.",
     "Your gift to Aino was opened": "Lahjasi Ainolle avattu",
     "Quarterly batch update posted": "Neljännesvuotinen päivitys julkaistu",
-    "Renewal upcoming — Campanula uniflora": "Uusinta tulossa — Campanula uniflora",
+    "Renewal upcoming - Campanula uniflora": "Uusinta tulossa - Campanula uniflora",
     "Class 5A adopted Trollius europaeus": "Luokka 5A adoptoi Trollius europaeuksen",
     "She viewed the Trollius europaeus certificate. She hasn't sent a thank-you yet.": "Hän katsoi Trollius europaeus -sertifikaatin. Ei ole vielä lähettänyt kiitosta.",
     "Gardener Kauppila's notes on all your plants. Read what changed this quarter.": "Puutarhuri Kauppilan muistiinpanot kaikista kasveistasi. Lue mikä muuttui tällä neljänneksellä.",
     "Anniversary of your 2024 adoption. Renew at the same tier or upgrade.": "Vuoden 2024 adoptiosi vuosipäivä. Uusi samalla tasolla tai päivitä.",
-    "Oulun normaalikoulu, Mrs. Mäkelä's class — your class-sponsorship was matched.": "Oulun normaalikoulu, Mäkelän luokka — luokkasponsorointisi täsmäytetty.",
+    "Oulun normaalikoulu, Mrs. Mäkelä's class - your class-sponsorship was matched.": "Oulun normaalikoulu, Mäkelän luokka - luokkasponsorointisi täsmäytetty.",
     "3 hours ago": "3 tuntia sitten",
     "Yesterday · 14:22": "Eilen · 14:22",
     "May 1, 2026": "1.5.2026",
     "8 June": "8. kesäkuuta",
     "April 22": "22. huhtikuuta",
-    "First buds opening on the south slope. Watch this week — peak bloom predicted Sat–Sun. We'll send the bloom alert email.": "Ensimmäiset silmut avautuvat etelärinteessä. Tarkkaile tällä viikolla — huippukukinta ennustettu la–su. Lähetämme kukintahälytyksen sähköpostiin.",
+    "First buds opening on the south slope. Watch this week - peak bloom predicted Sat–Sun. We'll send the bloom alert email.": "Ensimmäiset silmut avautuvat etelärinteessä. Tarkkaile tällä viikolla - huippukukinta ennustettu la–su. Lähetämme kukintahälytyksen sähköpostiin.",
     "Strong rosette growth this season. New fell-soil mix proving favourable; expect more flowers than 2024.": "Vahvaa ruusukekasvua tällä kaudella. Uusi tunturimaaseos osoittautuu suotuisaksi; odota enemmän kukintoja kuin 2024.",
-    "Rhizome divided into two pots — both healthy. Flowering not expected until 2027 (orchids are patient).": "Juurakko jaettu kahteen ruukkuun — molemmat terveitä. Kukintaa ei odoteta ennen vuotta 2027 (orkideat ovat kärsivällisiä).",
+    "Rhizome divided into two pots - both healthy. Flowering not expected until 2027 (orchids are patient).": "Juurakko jaettu kahteen ruukkuun - molemmat terveitä. Kukintaa ei odoteta ennen vuotta 2027 (orkideat ovat kärsivällisiä).",
     "For Eeva Karjalainen": "Eeva Karjalaiselle",
-    "1948 — 2023 · Who loved the lady's-slipper.": "1948 — 2023 · Hän, joka rakasti tikankonttia.",
+    "1948 - 2023 · Who loved the lady's-slipper.": "1948 - 2023 · Hän, joka rakasti tikankonttia.",
     "Cypripedium calceolus, bed 7 · Annual bloom alert sent each May to Eeva's family.":
       "Cypripedium calceolus, penkki 7 · Vuosittainen kukintahälytys Eevan perheelle toukokuussa.",
     "Manage memorial →": "Hallinnoi muistoa →",
@@ -443,8 +456,8 @@ const T = {
     "Kiosk view": "Kioskinäkymä",
     "Privacy / GDPR": "Tietosuoja / GDPR",
     "Funds-flow policy": "Varojenkäytön käytäntö",
-    "One platform for the University of Oulu Botanical Garden — adoption, AI-grounded answers, and the QR plant experience. Built with Team Meraki for GrowthHack 2026.":
-      "Yksi alusta Oulun yliopiston kasvitieteelliselle puutarhalle — adoptio, tekoälyvastaukset ja QR-kasvikokemus. Rakennettu Team Meraki -tiimin kanssa GrowthHack 2026 -kilpailuun."
+    "One platform for the University of Oulu Botanical Garden - adoption, AI-grounded answers, and the QR plant experience. Built with Team Meraki for GrowthHack 2026.":
+      "Yksi alusta Oulun yliopiston kasvitieteelliselle puutarhalle - adoptio, tekoälyvastaukset ja QR-kasvikokemus. Rakennettu Team Meraki -tiimin kanssa GrowthHack 2026 -kilpailuun."
   },
 
   SV: {
@@ -487,8 +500,8 @@ const T = {
     "65°N · Northernmost scientific garden": "65°N · Nordligaste vetenskapliga trädgården",
     "Adopt a plant.": "Adoptera en växt.",
     "Keep Finland in bloom.": "Håll Finland i blom.",
-    "Of 2,667 species on Finland's Red List, 175 live ex situ in this garden. Sponsor one — name it, follow it, watch it flower. Or just say hi to it through the QR code on its label.":
-      "Av Finlands 2 667 rödlistade arter lever 175 ex situ i denna trädgård. Sponsra en — döp den, följ den, se den blomma. Eller hälsa på den genom QR-koden på etiketten.",
+    "Of 2,667 species on Finland's Red List, 175 live ex situ in this garden. Sponsor one - name it, follow it, watch it flower. Or just say hi to it through the QR code on its label.":
+      "Av Finlands 2 667 rödlistade arter lever 175 ex situ i denna trädgård. Sponsra en - döp den, följ den, se den blomma. Eller hälsa på den genom QR-koden på etiketten.",
     "Adopt a plant from €25": "Adoptera en växt · från 25 €",
     "Ask the Garden": "Fråga Trädgården",
     "plant species": "växtarter",
@@ -503,8 +516,8 @@ const T = {
 
     "The collection · 4 213 specimens": "Samlingen · 4 213 individer",
     "Browse the living index": "Bläddra i levande indexet",
-    "Every plant in the outdoor garden and the Romeo & Julia greenhouses has its own page, its own audio narration, and — for many — a sponsorship invitation.":
-      "Varje växt i utomhusträdgården och i Romeo & Julia-växthusen har sin egen sida, egen ljudberättelse och — för många — en sponsringsinbjudan.",
+    "Every plant in the outdoor garden and the Romeo & Julia greenhouses has its own page, its own audio narration, and - for many - a sponsorship invitation.":
+      "Varje växt i utomhusträdgården och i Romeo & Julia-växthusen har sin egen sida, egen ljudberättelse och - för många - en sponsringsinbjudan.",
     "All": "Alla",
     "Adopters": "Adoptörer",
     "adopters": "adoptörer",
@@ -520,8 +533,8 @@ const T = {
     "How BloomOulu works": "Så fungerar BloomOulu",
     "Scan · Ask · Adopt · Return": "Skanna · Fråga · Adoptera · Återvänd",
     "Scan a plant": "Skanna en växt",
-    "Every label has a QR — and an NFC tag for blind visitors. Tap or scan, get 30-second audio in Finnish, Swedish, or English.":
-      "Varje etikett har en QR — och en NFC-tagg för synskadade besökare. Knacka eller skanna, få 30 sekunders ljud på finska, svenska eller engelska.",
+    "Every label has a QR - and an NFC tag for blind visitors. Tap or scan, get 30-second audio in Finnish, Swedish, or English.":
+      "Varje etikett har en QR - och en NFC-tagg för synskadade besökare. Knacka eller skanna, få 30 sekunders ljud på finska, svenska eller engelska.",
     "Our AI is grounded in the Garden's accession database and the Biodiversity Unit's publications. Every answer cites its source.":
       "Vår AI bygger på trädgårdens samlingsdatabas och Biodiversitetsenhetens publikationer. Varje svar anger sin källa.",
     "From €25 for a digital certificate to €500 for an engraved plaque. Gift-flow first-class. Memorial adoptions supported.":
@@ -541,8 +554,8 @@ const T = {
     "Summer": "Sommar",
     "Autumn": "Höst",
     "Winter": "Vinter",
-    "Under the snow now. What's happening below: rhizomes are dormant, mycorrhizal partners still active. Outdoor garden is closed for maintenance — visit Romeo & Julia year-round.":
-      "Under snön nu. Vad som händer under: rotstockarna vilar, mykorrhiza-partner är fortfarande aktiva. Utomhusträdgården är stängd för underhåll — besök Romeo & Julia året runt.",
+    "Under the snow now. What's happening below: rhizomes are dormant, mycorrhizal partners still active. Outdoor garden is closed for maintenance - visit Romeo & Julia year-round.":
+      "Under snön nu. Vad som händer under: rotstockarna vilar, mykorrhiza-partner är fortfarande aktiva. Utomhusträdgården är stängd för underhåll - besök Romeo & Julia året runt.",
     "Adult": "Vuxen",
     "Kid mode": "Barnläge",
     "School": "Skola",
@@ -581,7 +594,7 @@ const T = {
     "Jun – Jul": "Jun – jul",
     "May – Jun": "Maj – jun",
     "Aug nights": "Augustinätter",
-    "—": "—",
+    "-": "-",
     "Red List": "Rödlistan",
     "Ex-situ since": "Ex situ sedan",
     "Habitat": "Habitat",
@@ -624,7 +637,7 @@ const T = {
       "CSR-färdiga kvartalsrapporter, logoplacering, personalrundtur. Avdragsgill enligt TVL §57 för finska företag.",
     "Continue with": "Fortsätt med",
     "Pick a plant": "Välj en växt",
-    "Some plants are nearly fully funded — co-adopt anyway, or pick one that needs you more.": "Vissa växter är nästan helt finansierade — samadoptera ändå, eller välj en som behöver dig mer.",
+    "Some plants are nearly fully funded - co-adopt anyway, or pick one that needs you more.": "Vissa växter är nästan helt finansierade - samadoptera ändå, eller välj en som behöver dig mer.",
     "tier ·": "nivå ·",
     "Needs adopters": "Behöver adoptörer",
     "For yourself, a friend's birthday, in someone's memory, or for your class.": "Till dig själv, en väns födelsedag, till någons minne, eller för din klass.",
@@ -720,10 +733,23 @@ const T = {
     "across 200-question test set. Below 5% threshold for public launch. Re-audited monthly.":
       "i 200-frågors testset. Under 5 %-tröskeln för offentlig lansering. Granskas månadsvis.",
     "Tervetuloa.": "Välkommen.",
-    "I'm AskTheGarden — the University of Oulu Botanical Garden's voice. I'm grounded in our accession database, the Biodiversity Unit's publications, and the LIFE+ ESCAPE conservation programme.":
-      "Jag är Fråga Trädgården — rösten för Uleåborgs universitets botaniska trädgård. Jag bygger på vår samlingsdatabas, Biodiversitetsenhetens publikationer och LIFE+ ESCAPE-bevarandeprogrammet.",
+    "I'm AskTheGarden - the University of Oulu Botanical Garden's voice. I'm grounded in our accession database, the Biodiversity Unit's publications, and the LIFE+ ESCAPE conservation programme.":
+      "Jag är Fråga Trädgården - rösten för Uleåborgs universitets botaniska trädgård. Jag bygger på vår samlingsdatabas, Biodiversitetsenhetens publikationer och LIFE+ ESCAPE-bevarandeprogrammet.",
     "I differ from Pl@ntNet, iNaturalist, or general chatbots because I know Oulu. Every answer shows its source. If I'm not sure, I'll say so and offer to forward your question to Curator Anna Liisa Ruotsalainen.":
       "Jag skiljer mig från Pl@ntNet, iNaturalist och allmänna chatbots eftersom jag känner Uleåborg. Varje svar visar sin källa. Om jag är osäker säger jag det och erbjuder att vidarebefordra din fråga till intendent Anna Liisa Ruotsalainen.",
+    "What is blooming in the Romeo greenhouse this week?": "Vad blommar i Romeo-växthuset denna vecka?",
+    "Which plants here are Critically Endangered in Finland?": "Vilka växter här är akut hotade i Finland?",
+    "Can I see the Victoria water lily bloom this weekend?": "Kan jag se Victoria-näckrosen blomma i helgen?",
+    "Where can I find the Lady's-slipper Orchid in the garden?": "Var hittar jag guckusko i trädgården?",
+    "Tell me about the LIFE+ ESCAPE seed bank project.": "Berätta om LIFE+ ESCAPE-fröbanksprojektet.",
+    "How is Pulsatilla doing?": "Hur mår Pulsatilla?",
+    "Adopters' Day - when?": "Adoptanternas dag - när?",
+    "2.1% error rate": "2,1 % felfrekvens",
+    "Draft school-tour script for yläkoulu (Saxifraga hirculus)": "Utkast till skolutturmanus för högstadiet (Saxifraga hirculus)",
+    "Generate signage text - Trollius europaeus (FI/SV/EN)": "Generera skylttext - Trollius europaeus (FI/SV/EN)",
+    "Summarise this quarter's gardener notes": "Sammanfatta detta kvartals trädgårdsmästarnoteringar",
+    "Find a Kone Foundation grant template": "Hitta en mall för Kone-stiftelsens bidragsansökan",
+    "Identify a herbarium sample (image upload)": "Identifiera ett herbarieprov (bilduppladdning)",
     "Helpful": "Hjälpsamt",
     "Off-base": "Fel ute",
     "Forward to curator": "Vidare till intendent",
@@ -733,21 +759,21 @@ const T = {
     "south slope, peak bloom expected through Sunday": "södra sluttningen, toppblomning väntas till söndag",
     "Bothnian Bay bed, first flush": "Bottenvikens bädd, första vågen",
     "meadow bed 4, ~30% open": "ängsbädd 4, ~30 % öppen",
-    "Based on Head Gardener Tuomas Kauppila's note from May 10. Greenhouse Victoria water lily not yet blooming — August evenings.": "Baserat på chefsträdgårdsmästare Tuomas Kauppilas notering från 10 maj. Växthusets Victoria-näckros blommar inte än — augustikvällar.",
+    "Based on Head Gardener Tuomas Kauppila's note from May 10. Greenhouse Victoria water lily not yet blooming - August evenings.": "Baserat på chefsträdgårdsmästare Tuomas Kauppilas notering från 10 maj. Växthusets Victoria-näckros blommar inte än - augustikvällar.",
     "The garden holds 6 species assessed as Critically Endangered (CR) or Endangered (EN) in the 2019 Finnish Red List. Among these,": "Trädgården har 6 arter bedömda som akut hotade (CR) eller starkt hotade (EN) på Finlands rödlista 2019. Av dessa",
     "is CR;": "är CR;",
     "are EN.": "är EN.",
     "All three are part of the Garden's contribution to the LIFE+ ESCAPE programme (2012–2017), which lifted ex-situ coverage of Finnish threatened plants from 11% to 56%.": "Alla tre ingår i trädgårdens bidrag till LIFE+ ESCAPE-programmet (2012–2017), som höjde ex-situ-täckningen av Finlands hotade växter från 11 % till 56 %.",
     "in Romeo greenhouse blooms in": "i Romeo-växthuset blommar i",
     "August evenings": "augustikvällar",
-    "only — the white flowers open at dusk and turn pink overnight. Bloom evenings are typically Tuesday–Sunday once flowering begins; we announce specific dates 48h ahead.": "endast — vita blommor öppnar i skymningen och blir rosa över natten. Blomningskvällar är typiskt ti–sön när blomning börjat; vi meddelar specifika datum 48 h innan.",
+    "only - the white flowers open at dusk and turn pink overnight. Bloom evenings are typically Tuesday–Sunday once flowering begins; we announce specific dates 48h ahead.": "endast - vita blommor öppnar i skymningen och blir rosa över natten. Blomningskvällar är typiskt ti–sön när blomning börjat; vi meddelar specifika datum 48 h innan.",
     "Cultivated here since 1972; leaves currently 1.8 m across.": "Odlad här sedan 1972; bladen är nu 1,8 m breda.",
-    "is in bed 7 of the outdoor garden, west of the Romeo greenhouse. Currently flowering — late May through mid-June.": "finns i bädd 7 i utomhusträdgården, väster om Romeo-växthuset. Blommar nu — sent maj till mitten av juni.",
+    "is in bed 7 of the outdoor garden, west of the Romeo greenhouse. Currently flowering - late May through mid-June.": "finns i bädd 7 i utomhusträdgården, väster om Romeo-växthuset. Blommar nu - sent maj till mitten av juni.",
     "The specimen came from Kuusamo in 1995; the species is Vulnerable in Finland and strictly protected. Please don't touch the flowers.": "Exemplaret kom från Kuusamo 1995; arten är sårbar i Finland och strikt skyddad. Rör inte blommorna.",
     "project (LIFE11 BIO/FI/000917, 2012–2017) was a national programme on ex-situ conservation of Finnish native plants.": "-projektet (LIFE11 BIO/FI/000917, 2012–2017) var ett nationellt program för ex-situ-bevarande av Finlands inhemska växter.",
     "Headline results: ~1.7 million high-quality seeds collected, 175 taxa sampled in the field, 148 taxa banked in the Finnish national seed bank. Ex-situ coverage of threatened Finnish vascular plants rose from 11% to 56%.": "Huvudresultat: ~1,7 miljoner kvalitetsfrön samlade, 175 taxa provtagna i fält, 148 taxa deponerade i Finlands nationella fröbank. Ex-situ-täckningen av hotade finska kärlväxter steg från 11 % till 56 %.",
-    "Oulu Botanical Garden was a partner. Adoption funds the next chapter — partnership with the Finnish Museum of Natural History (Luomus) continues.": "Uleåborgs botaniska trädgård var partner. Adoptionen finansierar nästa kapitel — partnerskapet med Finlands naturhistoriska centralmuseum (Luomus) fortsätter.",
-    "That's outside what I can confidently answer from the Garden's corpus. I can give you a general response, or I can forward your question to Curator Anna Liisa Ruotsalainen — typical reply within 2 working days.": "Det ligger utanför vad jag säkert kan besvara från trädgårdens korpus. Jag kan ge ett generellt svar, eller vidarebefordra din fråga till intendent Anna Liisa Ruotsalainen — svar typiskt inom 2 arbetsdagar.",
+    "Oulu Botanical Garden was a partner. Adoption funds the next chapter - partnership with the Finnish Museum of Natural History (Luomus) continues.": "Uleåborgs botaniska trädgård var partner. Adoptionen finansierar nästa kapitel - partnerskapet med Finlands naturhistoriska centralmuseum (Luomus) fortsätter.",
+    "That's outside what I can confidently answer from the Garden's corpus. I can give you a general response, or I can forward your question to Curator Anna Liisa Ruotsalainen - typical reply within 2 working days.": "Det ligger utanför vad jag säkert kan besvara från trädgårdens korpus. Jag kan ge ett generellt svar, eller vidarebefordra din fråga till intendent Anna Liisa Ruotsalainen - svar typiskt inom 2 arbetsdagar.",
     "If you're identifying a plant from a photo, I can also pass it through Pl@ntNet and check the result against our accessions.": "Om du identifierar en växt från ett foto kan jag också skicka den genom Pl@ntNet och kontrollera resultatet mot våra samlingar.",
 
     // Garden
@@ -794,25 +820,25 @@ const T = {
     "2 weeks ago · Gardener": "för 2 veckor sedan · Trädgårdsmästare",
     "Activity": "Aktivitet",
     "is blooming": "blommar",
-    "First buds opened — peak this weekend. Tap to plan a visit.": "Första knopparna öppnade — topp i helgen. Knacka för att planera besök.",
+    "First buds opened - peak this weekend. Tap to plan a visit.": "Första knopparna öppnade - topp i helgen. Knacka för att planera besök.",
     "Your gift to Aino was opened": "Din gåva till Aino öppnades",
     "Quarterly batch update posted": "Kvartalsuppdatering publicerad",
-    "Renewal upcoming — Campanula uniflora": "Förnyelse kommer — Campanula uniflora",
+    "Renewal upcoming - Campanula uniflora": "Förnyelse kommer - Campanula uniflora",
     "Class 5A adopted Trollius europaeus": "Klass 5A adopterade Trollius europaeus",
     "She viewed the Trollius europaeus certificate. She hasn't sent a thank-you yet.": "Hon tittade på Trollius europaeus-certifikatet. Hon har inte skickat något tack än.",
     "Gardener Kauppila's notes on all your plants. Read what changed this quarter.": "Trädgårdsmästare Kauppilas anteckningar om alla dina växter. Läs vad som ändrats detta kvartal.",
     "Anniversary of your 2024 adoption. Renew at the same tier or upgrade.": "Årsdag för din adoption från 2024. Förnya på samma nivå eller uppgradera.",
-    "Oulun normaalikoulu, Mrs. Mäkelä's class — your class-sponsorship was matched.": "Oulun normaalikoulu, fru Mäkeläs klass — din klassponsring matchades.",
+    "Oulun normaalikoulu, Mrs. Mäkelä's class - your class-sponsorship was matched.": "Oulun normaalikoulu, fru Mäkeläs klass - din klassponsring matchades.",
     "3 hours ago": "3 timmar sedan",
     "Yesterday · 14:22": "Igår · 14:22",
     "May 1, 2026": "1 maj 2026",
     "8 June": "8 juni",
     "April 22": "22 april",
-    "First buds opening on the south slope. Watch this week — peak bloom predicted Sat–Sun. We'll send the bloom alert email.": "Första knopparna öppnar på södra sluttningen. Håll utkik denna vecka — toppblomning förutspås lö–sön. Vi skickar blomningsvarning via e-post.",
+    "First buds opening on the south slope. Watch this week - peak bloom predicted Sat–Sun. We'll send the bloom alert email.": "Första knopparna öppnar på södra sluttningen. Håll utkik denna vecka - toppblomning förutspås lö–sön. Vi skickar blomningsvarning via e-post.",
     "Strong rosette growth this season. New fell-soil mix proving favourable; expect more flowers than 2024.": "Stark rosetttillväxt denna säsong. Den nya fjälljordblandningen visar sig gynnsam; vänta fler blommor än 2024.",
-    "Rhizome divided into two pots — both healthy. Flowering not expected until 2027 (orchids are patient).": "Rotstocken delades i två krukor — båda friska. Blomning inte förväntad förrän 2027 (orkidéer är tålmodiga).",
+    "Rhizome divided into two pots - both healthy. Flowering not expected until 2027 (orchids are patient).": "Rotstocken delades i två krukor - båda friska. Blomning inte förväntad förrän 2027 (orkidéer är tålmodiga).",
     "For Eeva Karjalainen": "För Eeva Karjalainen",
-    "1948 — 2023 · Who loved the lady's-slipper.": "1948 — 2023 · Hon som älskade guckuskon.",
+    "1948 - 2023 · Who loved the lady's-slipper.": "1948 - 2023 · Hon som älskade guckuskon.",
     "Cypripedium calceolus, bed 7 · Annual bloom alert sent each May to Eeva's family.":
       "Cypripedium calceolus, bädd 7 · Årlig blomningsvarning till Eevas familj varje maj.",
     "Manage memorial →": "Hantera minne →",
@@ -881,8 +907,8 @@ const T = {
     "Kiosk view": "Kioskvy",
     "Privacy / GDPR": "Integritet / GDPR",
     "Funds-flow policy": "Redovisningspolicy",
-    "One platform for the University of Oulu Botanical Garden — adoption, AI-grounded answers, and the QR plant experience. Built with Team Meraki for GrowthHack 2026.":
-      "En plattform för Uleåborgs universitets botaniska trädgård — adoption, AI-baserade svar och QR-växtupplevelsen. Byggd med Team Meraki för GrowthHack 2026."
+    "One platform for the University of Oulu Botanical Garden - adoption, AI-grounded answers, and the QR plant experience. Built with Team Meraki for GrowthHack 2026.":
+      "En plattform för Uleåborgs universitets botaniska trädgård - adoption, AI-baserade svar och QR-växtupplevelsen. Byggd med Team Meraki för GrowthHack 2026."
   }
 };
 
@@ -898,20 +924,20 @@ const PLANT_STORIES = {
     "puls-pat": "Aikoinaan yleinen Suomen hiekkaharjuilla, hämeenkylmänkukka on vetäytynyt muutamalle suojelualueelle. Oulu kasvatti 230 tainta LIFE+ ESCAPE -ohjelman aikana.",
     "camp-uni": "Pikkuruinen taivaansininen kello, joka kukkii kolme viikkoa metsärajan yläpuolella. Herkkä porolaidunnukselle ja lämpeneville kesille.",
     "saxi-hirc": "Voipala-keltainen rikko, koskemattomien rehevien soiden kukka, terveyden ilmaisin. Oulu ylläpitää 5 lähtöpopulaatiota ex situ.",
-    "prim-nut": "Vaaleanpunainen rantaesikko, joka on tiukasti sidoksissa Perämeren nouseviin rantoihin — ainutlaatuisesti suomalainen tarina jääkauden jälkeisestä noususta.",
+    "prim-nut": "Vaaleanpunainen rantaesikko, joka on tiukasti sidoksissa Perämeren nouseviin rantoihin - ainutlaatuisesti suomalainen tarina jääkauden jälkeisestä noususta.",
     "trol-eur": "Tunnusomainen niittylaji, joka vähenee perinteisen laidunnuksen kadotessa. Sponsorointi rahoittaa kunnostuskumppanuuksia.",
-    "cyp-cal": "Euroopan ikonisin lauhkean vyöhykkeen orkidea. Hidaskasvuinen — yksi juurakko voi elää sata vuotta. Tiukasti suojeltu; lisäys vaatii taitoa.",
-    "lob-pul": "Lehtevä jäkälä ja indikaattorilaji — sen läsnäolo viestii vanhasta, koskemattomasta metsästä. Herkkä hakkuille ja ilmansaasteille.",
+    "cyp-cal": "Euroopan ikonisin lauhkean vyöhykkeen orkidea. Hidaskasvuinen - yksi juurakko voi elää sata vuotta. Tiukasti suojeltu; lisäys vaatii taitoa.",
+    "lob-pul": "Lehtevä jäkälä ja indikaattorilaji - sen läsnäolo viestii vanhasta, koskemattomasta metsästä. Herkkä hakkuille ja ilmansaasteille.",
     "vict-am": "Romeo-kasvihuoneen valokuvatuin kasvi. Lehdet kasvavat 2,5 m halkaisijaltaan; kestävät 30 kg. Yön kukinta muuttaa valkoisen vaaleanpunaiseksi."
   },
   SV: {
     "puls-pat": "En gång vanlig på Finlands sandiga åsar har backsippan dragit sig tillbaka till några skyddade platser. Uleåborg drog upp 230 plantor inom LIFE+ ESCAPE.",
     "camp-uni": "En liten azurblå klocka som blommar i tre veckor ovanför trädgränsen. Känslig för renbete och varmare somrar.",
     "saxi-hirc": "En smörgul stenbräcka från orörda rika kärr, indikatorart för friska mossar. Uleåborg upprätthåller 5 källpopulationer ex situ.",
-    "prim-nut": "En rosa strandviva tätt knuten till Bottenvikens stigande stränder — en unikt finsk postglacial berättelse.",
+    "prim-nut": "En rosa strandviva tätt knuten till Bottenvikens stigande stränder - en unikt finsk postglacial berättelse.",
     "trol-eur": "En signaturängsart i tillbakagång med förlusten av traditionell betesdrift. Sponsring finansierar restaureringspartnerskap.",
-    "cyp-cal": "Europas mest ikoniska tempererade orkidé. Långsamt växande — en rotstock kan leva ett sekel. Strikt skyddad; förökning är krävande.",
-    "lob-pul": "En bladig lav och indikatorart — dess närvaro signalerar gammal, orörd skog. Känslig för avverkning och luftföroreningar.",
+    "cyp-cal": "Europas mest ikoniska tempererade orkidé. Långsamt växande - en rotstock kan leva ett sekel. Strikt skyddad; förökning är krävande.",
+    "lob-pul": "En bladig lav och indikatorart - dess närvaro signalerar gammal, orörd skog. Känslig för avverkning och luftföroreningar.",
     "vict-am": "Den mest fotograferade växten i Romeo-växthuset. Bladen når 2,5 m; kan bära 30 kg. Nattblommor går från vita till rosa."
   }
 };
@@ -947,7 +973,7 @@ const TIER_COPY = {
       perks: ["Kaikki Siemen-tason edut", "Nimetty kasvisivu (12 kk)", "2 × kasvihuonelippu", "10 % putiikkikuponki"] },
     "Vulnerable": { name: "Vaarantunut", blurb: "Rahoittaa aktiivisesti uhanalaista lajia. Sisältää vuotuisen Adoptoijien päivän ja kukintahälytykset.",
       perks: ["Kaikki Yleinen-tason edut", "Painettu sertifikaatti (postitse)", "Adoptoijien päivän kutsu", "Kukintahälytykset", "Pyörivä nimi QR-sivulla"] },
-    "Critically Endangered": { name: "Erittäin uhanalainen", blurb: "Kaksivuotinen hoito yhdelle Suomen uhanalaisimmista kasveista — oikea laatta yksilön viereen.",
+    "Critically Endangered": { name: "Erittäin uhanalainen", blurb: "Kaksivuotinen hoito yhdelle Suomen uhanalaisimmista kasveista - oikea laatta yksilön viereen.",
       perks: ["Kaikki Vaarantunut-tason edut", "Kaiverrettu laatta (2 v)", "Kulissien takainen kierros (2 vierasta)", "Maininta vuosikertomuksessa", "Allekirjoitettu johtajan kirje"] }
   },
   SV: {

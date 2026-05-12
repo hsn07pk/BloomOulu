@@ -106,7 +106,7 @@ const PLANTS = [
     adopters: 64,
     funded: 92,
     target: 100,
-    story: "A pink coastal primrose tightly bound to the rising shores of the Bothnian Bay — a uniquely Finnish post-glacial story.",
+    story: "A pink coastal primrose tightly bound to the rising shores of the Bothnian Bay - a uniquely Finnish post-glacial story.",
     bloom: "June – July",
     accessed: "Collected 2002, Hailuoto",
     audio: "1:58",
@@ -164,7 +164,7 @@ const PLANTS = [
     adopters: 152,
     funded: 100,
     target: 100,
-    story: "Europe's most iconic temperate orchid. Slow-growing — a single rhizome can live a century. Strictly protected; propagation is exacting.",
+    story: "Europe's most iconic temperate orchid. Slow-growing - a single rhizome can live a century. Strictly protected; propagation is exacting.",
     bloom: "Late May – June",
     accessed: "Collected 1995, Kuusamo",
     audio: "2:34",
@@ -193,13 +193,13 @@ const PLANTS = [
     adopters: 12,
     funded: 28,
     target: 60,
-    story: "A leafy lichen and an indicator species — its presence signals ancient, undisturbed forest. Sensitive to logging and air pollution.",
+    story: "A leafy lichen and an indicator species - its presence signals ancient, undisturbed forest. Sensitive to logging and air pollution.",
     bloom: "n/a (lichen)",
     accessed: "Collected 2017, Syöte NP",
     audio: "1:50",
     quickFacts: [
       ["Origin", "Syöte"],
-      ["Bloom", "—"],
+      ["Bloom", "-"],
       ["Red List", "NT"],
       ["Habitat", "Aspen bark"]
     ]
@@ -318,7 +318,7 @@ const ASK_CITATIONS = [
   { id: "c1", source: "Annales Botanici Fennici", year: 2019, title: "Distribution patterns of Pulsatilla patens in Häme eskers", page: "56(1–3): 41–58" },
   { id: "c2", source: "LIFE+ ESCAPE Final Report", year: 2017, title: "Ex-situ conservation of Finnish native plant species", page: "Section 4.2" },
   { id: "c3", source: "Oulu Accession DB", year: 2024, title: "Accession OULU-1998-0421", page: "Pulsatilla patens, Hämeenlinna source pop." },
-  { id: "c4", source: "Red List of Finnish Species", year: 2019, title: "Vascular plants — threat category assessment", page: "p. 217" },
+  { id: "c4", source: "Red List of Finnish Species", year: 2019, title: "Vascular plants - threat category assessment", page: "p. 217" },
   { id: "c5", source: "Memoranda Soc. F. F. Fennica", year: 2021, title: "Saxifraga hirculus indicator value in boreal fens", page: "97: 33–47" }
 ];
 

@@ -1,4 +1,4 @@
-// Plant detail — the QR scan experience
+// Plant detail - the QR scan experience
 
 const PlantScreen = ({ plantId, onBack, onNav, onAdopt }) => {
   const { t, lang } = useT();
@@ -38,7 +38,7 @@ const PlantScreen = ({ plantId, onBack, onNav, onAdopt }) => {
       </div>
 
       <div className="container" style={{ paddingTop: 32, paddingBottom: 64, display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 48 }}>
-        {/* LEFT — content */}
+        {/* LEFT - content */}
         <div>
           {/* Hero */}
           <div className="card" style={{ background: plant.accent, padding: 0, overflow: "hidden", borderRadius: 24, position: "relative", aspectRatio: "16/10" }}>
@@ -155,7 +155,7 @@ const PlantScreen = ({ plantId, onBack, onNav, onAdopt }) => {
                 {season === "winter" && (
                   <div style={{ marginTop: 18, padding: 16, background: "#f0f3f5", borderRadius: 12, fontSize: 14, color: "var(--ink-2)" }}>
                     <Icon name="snow" size={14} style={{ verticalAlign: "middle", marginRight: 6, color: "var(--sky)" }}/>
-                    {t("Under the snow now. What's happening below: rhizomes are dormant, mycorrhizal partners still active. Outdoor garden is closed for maintenance — visit Romeo & Julia year-round.")}
+                    {t("Under the snow now. What's happening below: rhizomes are dormant, mycorrhizal partners still active. Outdoor garden is closed for maintenance - visit Romeo & Julia year-round.")}
                   </div>
                 )}
               </div>
@@ -171,7 +171,7 @@ const PlantScreen = ({ plantId, onBack, onNav, onAdopt }) => {
                       ["Coordinates (source)", "65.0617° N, 25.4661° E (anonymised)"],
                       ["Propagation method", "Seed (cold-stratified)"],
                       ["Conservation cohort", "LIFE+ ESCAPE (2012–2017)"],
-                      ["Last batch update", "Spring 2025 — T. Kauppila"],
+                      ["Last batch update", "Spring 2025 - T. Kauppila"],
                       [ t("BGCI PlantSearch") , "Listed · 12 partner gardens hold this taxon"],
                       ["GBIF occurrences", "1 247 observations"]
                     ].map(([k, v]) => (
@@ -214,7 +214,7 @@ const PlantScreen = ({ plantId, onBack, onNav, onAdopt }) => {
           </div>
         </div>
 
-        {/* RIGHT — sticky CTA panel */}
+        {/* RIGHT - sticky CTA panel */}
         <div style={{ position: "sticky", top: 140, alignSelf: "start" }}>
           <div className="card" style={{ overflow: "hidden", borderRadius: 24 }}>
             {/* Mode toggle */}

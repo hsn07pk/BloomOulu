@@ -1,4 +1,4 @@
-// AskTheGarden — RAG-grounded chat with citations
+// AskTheGarden - RAG-grounded chat with citations
 
 const AskScreen = ({ onNav, onOpenPlant }) => {
   const { t, lang, setLang } = useT();
@@ -30,7 +30,7 @@ const AskScreen = ({ onNav, onOpenPlant }) => {
 
   return (
     <div className="fade-in" style={{ display: "grid", gridTemplateColumns: "300px 1fr 320px", height: "calc(100vh - 65px)", overflow: "hidden" }}>
-      {/* LEFT — sessions / suggestions */}
+      {/* LEFT - sessions / suggestions */}
       <aside style={{ borderRight: "1px solid var(--line-soft)", background: "var(--paper)", padding: "24px 0", overflowY: "auto" }}>
         <div style={{ padding: "0 20px" }}>
           {/* Mode toggle */}
@@ -56,7 +56,7 @@ const AskScreen = ({ onNav, onOpenPlant }) => {
           <div className="tiny" style={{ marginTop: 28, marginBottom: 12 }}>{mode === "visitor" ? t("Trending today") : t("Quick staff actions")}</div>
           {(mode === "visitor" ? TRENDING_QUESTIONS : [
             "Draft school-tour script for yläkoulu (Saxifraga hirculus)",
-            "Generate signage text — Trollius europaeus (FI/SV/EN)",
+            "Generate signage text - Trollius europaeus (FI/SV/EN)",
             "Summarise this quarter's gardener notes",
             "Find a Kone Foundation grant template",
             "Identify a herbarium sample (image upload)"
@@ -68,13 +68,13 @@ const AskScreen = ({ onNav, onOpenPlant }) => {
             }}
               onMouseEnter={e => e.currentTarget.style.background = "rgba(31,58,44,0.05)"}
               onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-              {q}
+              {t(q)}
             </button>
           ))}
 
           <div style={{ borderTop: "1px solid var(--line-soft)", marginTop: 24, paddingTop: 20 }}>
             <div className="tiny" style={{ marginBottom: 12 }}>{t("Recent")}</div>
-            {[ t("What's blooming this week?") , "How is Pulsatilla doing?", "Adopters' Day — when?"].map((q, i) => (
+            {[ t("What's blooming this week?") , t("How is Pulsatilla doing?"), t("Adopters' Day - when?")].map((q, i) => (
               <div key={i} style={{ padding: "10px 12px", borderRadius: 10, fontSize: 13, color: "var(--ink-3)", lineHeight: 1.4 }}>
                 {q}
               </div>
@@ -83,7 +83,7 @@ const AskScreen = ({ onNav, onOpenPlant }) => {
         </div>
       </aside>
 
-      {/* CENTER — chat */}
+      {/* CENTER - chat */}
       <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, minWidth: 0, background: "var(--bg)" }}>
         {/* Header */}
         <div style={{ padding: "16px 32px", borderBottom: "1px solid var(--line-soft)", display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--bg)", flexShrink: 0 }}>
@@ -152,7 +152,7 @@ const AskScreen = ({ onNav, onOpenPlant }) => {
         </div>
       </div>
 
-      {/* RIGHT — context */}
+      {/* RIGHT - context */}
       <aside style={{ borderLeft: "1px solid var(--line-soft)", background: "var(--paper)", overflowY: "auto", padding: 24 }}>
         <div className="tiny">{t("Context · what's grounding this")}</div>
         <h3 className="serif" style={{ fontSize: 22, marginTop: 8 }}>{t("Live corpus")}</h3>
@@ -182,7 +182,7 @@ const AskScreen = ({ onNav, onOpenPlant }) => {
         <div style={{ marginTop: 16, padding: 16, background: "rgba(184,92,60,0.08)", borderRadius: 12 }}>
           <div className="tiny" style={{ color: "var(--rust)" }}>{t("Last curator audit")}</div>
           <div className="small" style={{ marginTop: 8, color: "var(--ink-2)" }}>
-            <b>2.1% error rate</b> {t("across 200-question test set. Below 5% threshold for public launch. Re-audited monthly.")}
+            <b>{t("2.1% error rate")}</b> {t("across 200-question test set. Below 5% threshold for public launch. Re-audited monthly.")}
           </div>
         </div>
       </aside>
@@ -201,10 +201,10 @@ const MessageBubble = ({ m, onOpenPlant }) => {
         <div style={{ flex: 1 }}>
           <div className="serif" style={{ fontSize: 32, fontStyle: "italic", color: "var(--forest)" }}>{t("Tervetuloa.")}</div>
           <p style={{ marginTop: 12, fontSize: 16, lineHeight: 1.6, color: "var(--ink-2)" }}>
-            {t("I'm AskTheGarden — the University of Oulu Botanical Garden's voice. I'm grounded in our accession database, the Biodiversity Unit's publications, and the LIFE+ ESCAPE conservation programme.")}
+            {t("I'm AskTheGarden - the University of Oulu Botanical Garden's voice. I'm grounded in our accession database, the Biodiversity Unit's publications, and the LIFE+ ESCAPE conservation programme.")}
           </p>
           <p style={{ marginTop: 12, fontSize: 14, color: "var(--ink-3)", lineHeight: 1.6 }}>
-            I differ from Pl@ntNet, iNaturalist, or general chatbots because I know <i>Oulu</i>. Every answer shows its source. If I'm not sure, I'll say so and offer to forward your question to Curator Anna Liisa Ruotsalainen.
+            {t("I differ from Pl@ntNet, iNaturalist, or general chatbots because I know Oulu. Every answer shows its source. If I'm not sure, I'll say so and offer to forward your question to Curator Anna Liisa Ruotsalainen.")}
           </p>
         </div>
       </div>
@@ -270,7 +270,7 @@ const MessageBubble = ({ m, onOpenPlant }) => {
   );
 };
 
-// Pre-canned answers — t is passed in for i18n
+// Pre-canned answers - t is passed in for i18n
 function buildAnswer(q, t) {
   const ql = q.toLowerCase();
   if (ql.includes("bloom") || ql.includes("blooming")) {
@@ -281,11 +281,11 @@ function buildAnswer(q, t) {
         <>
           <p>{t("This week (May 12 – May 18, 2026), three plants are in active bloom:")}</p>
           <ul style={{ marginTop: 10, paddingLeft: 20, color: "var(--ink-2)" }}>
-            <li><b>Pulsatilla patens</b> — {t("south slope, peak bloom expected through Sunday")}</li>
-            <li><b>Primula nutans</b> — {t("Bothnian Bay bed, first flush")}</li>
-            <li><b>Trollius europaeus</b> — {t("meadow bed 4, ~30% open")}</li>
+            <li><b>Pulsatilla patens</b> - {t("south slope, peak bloom expected through Sunday")}</li>
+            <li><b>Primula nutans</b> - {t("Bothnian Bay bed, first flush")}</li>
+            <li><b>Trollius europaeus</b> - {t("meadow bed 4, ~30% open")}</li>
           </ul>
-          <p style={{ marginTop: 12 }} className="small muted">{t("Based on Head Gardener Tuomas Kauppila's note from May 10. Greenhouse Victoria water lily not yet blooming — August evenings.")}</p>
+          <p style={{ marginTop: 12 }} className="small muted">{t("Based on Head Gardener Tuomas Kauppila's note from May 10. Greenhouse Victoria water lily not yet blooming - August evenings.")}</p>
         </>
       ),
       cards: ["puls-pat", "prim-nut"]
@@ -310,7 +310,7 @@ function buildAnswer(q, t) {
       citations: [ASK_CITATIONS[2]],
       body: (
         <>
-          <p>{t("The")} <b>Victoria amazonica</b> {t("in Romeo greenhouse blooms in")} <b>{t("August evenings")}</b> {t("only — the white flowers open at dusk and turn pink overnight. Bloom evenings are typically Tuesday–Sunday once flowering begins; we announce specific dates 48h ahead.")}</p>
+          <p>{t("The")} <b>Victoria amazonica</b> {t("in Romeo greenhouse blooms in")} <b>{t("August evenings")}</b> {t("only - the white flowers open at dusk and turn pink overnight. Bloom evenings are typically Tuesday–Sunday once flowering begins; we announce specific dates 48h ahead.")}</p>
           <p style={{ marginTop: 12 }} className="small muted">{t("Cultivated here since 1972; leaves currently 1.8 m across.")}</p>
         </>
       ),
@@ -323,7 +323,7 @@ function buildAnswer(q, t) {
       citations: [ASK_CITATIONS[2], ASK_CITATIONS[3]],
       body: (
         <>
-          <p>{t("The")} <b>Cypripedium calceolus</b> (tikankontti) {t("is in bed 7 of the outdoor garden, west of the Romeo greenhouse. Currently flowering — late May through mid-June.")}</p>
+          <p>{t("The")} <b>Cypripedium calceolus</b> (tikankontti) {t("is in bed 7 of the outdoor garden, west of the Romeo greenhouse. Currently flowering - late May through mid-June.")}</p>
           <p style={{ marginTop: 12 }}>{t("The specimen came from Kuusamo in 1995; the species is Vulnerable in Finland and strictly protected. Please don't touch the flowers.")}</p>
         </>
       ),
@@ -338,7 +338,7 @@ function buildAnswer(q, t) {
         <>
           <p>{t("The")} <b>LIFE+ ESCAPE</b> {t("project (LIFE11 BIO/FI/000917, 2012–2017) was a national programme on ex-situ conservation of Finnish native plants.")}</p>
           <p style={{ marginTop: 12 }}>{t("Headline results: ~1.7 million high-quality seeds collected, 175 taxa sampled in the field, 148 taxa banked in the Finnish national seed bank. Ex-situ coverage of threatened Finnish vascular plants rose from 11% to 56%.")}</p>
-          <p style={{ marginTop: 12 }}>{t("Oulu Botanical Garden was a partner. Adoption funds the next chapter — partnership with the Finnish Museum of Natural History (Luomus) continues.")}</p>
+          <p style={{ marginTop: 12 }}>{t("Oulu Botanical Garden was a partner. Adoption funds the next chapter - partnership with the Finnish Museum of Natural History (Luomus) continues.")}</p>
         </>
       )
     };
@@ -348,7 +348,7 @@ function buildAnswer(q, t) {
     citations: [ASK_CITATIONS[0]],
     body: (
       <>
-        <p>{t("That's outside what I can confidently answer from the Garden's corpus. I can give you a general response, or I can forward your question to Curator Anna Liisa Ruotsalainen — typical reply within 2 working days.")}</p>
+        <p>{t("That's outside what I can confidently answer from the Garden's corpus. I can give you a general response, or I can forward your question to Curator Anna Liisa Ruotsalainen - typical reply within 2 working days.")}</p>
         <p className="small muted" style={{ marginTop: 12 }}>{t("If you're identifying a plant from a photo, I can also pass it through Pl@ntNet and check the result against our accessions.")}</p>
       </>
     )

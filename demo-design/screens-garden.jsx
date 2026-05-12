@@ -1,4 +1,4 @@
-// My Garden — adopter dashboard (post-adoption)
+// My Garden - adopter dashboard (post-adoption)
 
 const GardenScreen = ({ onOpenPlant, onNav }) => {
   const { t, lang } = useT();
@@ -138,9 +138,9 @@ const GardenScreen = ({ onOpenPlant, onNav }) => {
                 <div style={{ marginTop: 16, padding: 14, background: "var(--cream-deep)", borderRadius: 8, fontSize: 13, lineHeight: 1.5 }}>
                   <div className="tiny" style={{ marginBottom: 6 }}>{[ t("3 days ago · Head Gardener") , t("Last week · Curator") , t("2 weeks ago · Gardener") ][i]}</div>
                   <span style={{ color: "var(--ink-soft)" }}>{[
-                    t("First buds opening on the south slope. Watch this week — peak bloom predicted Sat–Sun. We'll send the bloom alert email."),
+                    t("First buds opening on the south slope. Watch this week - peak bloom predicted Sat–Sun. We'll send the bloom alert email."),
                     t("Strong rosette growth this season. New fell-soil mix proving favourable; expect more flowers than 2024."),
-                    t("Rhizome divided into two pots — both healthy. Flowering not expected until 2027 (orchids are patient).")
+                    t("Rhizome divided into two pots - both healthy. Flowering not expected until 2027 (orchids are patient).")
                   ][i]}</span>
                 </div>
 
@@ -159,11 +159,11 @@ const GardenScreen = ({ onOpenPlant, onNav }) => {
             <h3 className="serif" style={{ fontSize: 28 }}>{t("Activity")}</h3>
             <div className="card" style={{ marginTop: 16, padding: 0 }}>
               {[
-                { icon: "flower", color: "var(--rust)", title: "Pulsatilla patens is blooming", time: t("3 hours ago"), body: t("First buds opened — peak this weekend. Tap to plan a visit.") },
+                { icon: "flower", color: "var(--rust)", title: "Pulsatilla patens is blooming", time: t("3 hours ago"), body: t("First buds opened - peak this weekend. Tap to plan a visit.") },
                 { icon: "gift", color: "var(--sage)", title: t("Your gift to Aino was opened"), time: t("Yesterday · 14:22"), body: t("She viewed the Trollius europaeus certificate. She hasn't sent a thank-you yet.") },
                 { icon: "leaf", color: "var(--teal)", title: t("Quarterly batch update posted"), time: t("May 1, 2026"), body: t("Gardener Kauppila's notes on all your plants. Read what changed this quarter.") },
-                { icon: "bell", color: "var(--amber)", title: t("Renewal upcoming — Campanula uniflora"), time: t("8 June"), body: t("Anniversary of your 2024 adoption. Renew at the same tier or upgrade.") },
-                { icon: "school", color: "var(--forest)", title: t("Class 5A adopted Trollius europaeus"), time: t("April 22"), body: t("Oulun normaalikoulu, Mrs. Mäkelä's class — your class-sponsorship was matched.") }
+                { icon: "bell", color: "var(--amber)", title: t("Renewal upcoming - Campanula uniflora"), time: t("8 June"), body: t("Anniversary of your 2024 adoption. Renew at the same tier or upgrade.") },
+                { icon: "school", color: "var(--forest)", title: t("Class 5A adopted Trollius europaeus"), time: t("April 22"), body: t("Oulun normaalikoulu, Mrs. Mäkelä's class - your class-sponsorship was matched.") }
               ].map((a, i) => (
                 <div key={i} style={{ padding: "18px 22px", borderBottom: i < 4 ? "1px solid var(--line)" : "none", display: "flex", gap: 14 }}>
                   <div style={{ width: 36, height: 36, borderRadius: "50%", background: "var(--cream-deep)", color: a.color, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -187,7 +187,7 @@ const GardenScreen = ({ onOpenPlant, onNav }) => {
             <div className="card card-pad" style={{ background: "linear-gradient(180deg, #fbf6e8 0%, var(--cream) 100%)" }}>
               <div className="eyebrow eyebrow--rust">{t("In memoriam")}</div>
               <div className="serif" style={{ fontSize: 22, fontStyle: "italic", marginTop: 12 }}>{t("For Eeva Karjalainen")}</div>
-              <p className="small" style={{ marginTop: 8, color: "var(--ink-soft)" }}>{t("1948 — 2023 · Who loved the lady's-slipper.")}</p>
+              <p className="small" style={{ marginTop: 8, color: "var(--ink-soft)" }}>{t("1948 - 2023 · Who loved the lady's-slipper.")}</p>
               <div style={{ marginTop: 16, padding: 14, background: "var(--paper)", borderRadius: 8, fontSize: 13, color: "var(--ink-soft)", lineHeight: 1.5 }}>
                 <Icon name="quote" size={13} style={{ color: "var(--rust)", marginRight: 6 }}/>
                 <i>{t("Cypripedium calceolus, bed 7 · Annual bloom alert sent each May to Eeva's family.")}</i>
@@ -201,7 +201,7 @@ const GardenScreen = ({ onOpenPlant, onNav }) => {
               <div className="col" style={{ marginTop: 14, gap: 12 }}>
                 {[
                   { to: "Aino Niemi", plant: "Trollius europaeus", date: "Jun 2025", status: t("Opened") },
-                  { to: "Luokka 5A — Oulun normaalikoulu", plant: "Saxifraga hirculus", date: "Sept 2024", status: t("Active") }
+                  { to: "Luokka 5A - Oulun normaalikoulu", plant: "Saxifraga hirculus", date: "Sept 2024", status: t("Active") }
                 ].map((g, i) => (
                   <div key={i} style={{ padding: 12, background: "var(--cream-deep)", borderRadius: 8, fontSize: 13 }}>
                     <div style={{ display: "flex", justifyContent: "space-between" }}>

@@ -1,4 +1,4 @@
-// Discover screen — homepage with hero, what's blooming, plant grid, conservation story
+// Discover screen - homepage with hero, what's blooming, plant grid, conservation story
 
 const DiscoverScreen = ({ onOpenPlant, onNav }) => {
   const { t, lang } = useT();
@@ -30,7 +30,7 @@ const DiscoverScreen = ({ onOpenPlant, onNav }) => {
                 <span style={{ fontStyle: "italic", color: "var(--lichen)" }}>{t("Keep Finland in bloom.")}</span>
               </h1>
               <p style={{ marginTop: 28, fontSize: 18, color: "rgba(248,244,230,0.78)", maxWidth: 540, lineHeight: 1.5 }}>
-                {t("Of 2,667 species on Finland's Red List, 175 live ex situ in this garden. Sponsor one — name it, follow it, watch it flower. Or just say hi to it through the QR code on its label.")}
+                {t("Of 2,667 species on Finland's Red List, 175 live ex situ in this garden. Sponsor one - name it, follow it, watch it flower. Or just say hi to it through the QR code on its label.")}
               </p>
               <div style={{ marginTop: 36, display: "flex", gap: 12, alignItems: "center" }}>
                 <button className="btn btn-lg" style={{ background: "var(--rust)", color: "var(--paper)" }} onClick={() => onNav("adopt")}>
@@ -57,7 +57,7 @@ const DiscoverScreen = ({ onOpenPlant, onNav }) => {
               </div>
             </div>
 
-            {/* Right column — what's blooming card */}
+            {/* Right column - what's blooming card */}
             <div className="card" style={{ background: "var(--paper)", padding: 0, overflow: "hidden", borderRadius: 24 }}>
               <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--line-soft)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
@@ -103,7 +103,7 @@ const DiscoverScreen = ({ onOpenPlant, onNav }) => {
           <div>
             <div className="tiny" style={{ color: "var(--rust)" }}>{t("The collection · 4 213 specimens")}</div>
             <h2 style={{ fontSize: 52, marginTop: 8 }}>{t("Browse the living index")}</h2>
-            <p className="muted" style={{ marginTop: 12, maxWidth: 520 }}>{t("Every plant in the outdoor garden and the Romeo & Julia greenhouses has its own page, its own audio narration, and — for many — a sponsorship invitation.")}</p>
+            <p className="muted" style={{ marginTop: 12, maxWidth: 520 }}>{t("Every plant in the outdoor garden and the Romeo & Julia greenhouses has its own page, its own audio narration, and - for many - a sponsorship invitation.")}</p>
           </div>
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
             <div style={{ position: "relative" }}>
@@ -210,7 +210,7 @@ const DiscoverScreen = ({ onOpenPlant, onNav }) => {
         <h2 style={{ fontSize: 48, marginTop: 12, marginBottom: 40 }}>{t("Scan · Ask · Adopt · Return")}</h2>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 24 }}>
           {[
-            { num: "01", icon: "qr", title: t("Scan a plant"), body: t("Every label has a QR — and an NFC tag for blind visitors. Tap or scan, get 30-second audio in Finnish, Swedish, or English.") },
+            { num: "01", icon: "qr", title: t("Scan a plant"), body: t("Every label has a QR - and an NFC tag for blind visitors. Tap or scan, get 30-second audio in Finnish, Swedish, or English.") },
             { num: "02", icon: "bot", title: t("Ask the Garden"), body: t("Our AI is grounded in the Garden's accession database and the Biodiversity Unit's publications. Every answer cites its source.") },
             { num: "03", icon: "seedling", title: t("Adopt"), body: t("From €25 for a digital certificate to €500 for an engraved plaque. Gift-flow first-class. Memorial adoptions supported.") },
             { num: "04", icon: "bell", title: t("Return"), body: t("When your plant flowers, we email you. Adopters' Day in June. Winter mode shows your dormant friend under the snow.") }

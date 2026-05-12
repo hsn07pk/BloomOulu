@@ -1,4 +1,4 @@
-// Lobby Kiosk view — full-bleed touchscreen display in the garden lobby
+// Lobby Kiosk view - full-bleed touchscreen display in the garden lobby
 
 const KioskScreen = ({ onNav }) => {
   const { t, lang } = useT();
@@ -8,7 +8,7 @@ const KioskScreen = ({ onNav }) => {
     return () => clearInterval(t);
   }, []);
 
-  // Stable QR module pattern — generated once, not on every clock tick
+  // Stable QR module pattern - generated once, not on every clock tick
   const qrModules = React.useMemo(() => {
     return Array.from({ length: 120 }, (_, i) => {
       const x = 12 + (i * 7) % 156;
@@ -49,7 +49,7 @@ const KioskScreen = ({ onNav }) => {
 
         {/* Main grid */}
         <div style={{ marginTop: 32, display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr", gap: 24 }}>
-          {/* Blooming now — feature card */}
+          {/* Blooming now - feature card */}
           <div style={{ background: "linear-gradient(160deg, rgba(250,247,238,0.06) 0%, rgba(250,247,238,0.02) 100%)", borderRadius: 16, border: "1px solid rgba(250,247,238,0.12)", padding: 32, position: "relative", overflow: "hidden" }}>
             <div className="eyebrow eyebrow--sage">{t("Blooming today")}</div>
             <h2 style={{ fontSize: 56, marginTop: 16, color: "var(--cream)", fontStyle: "italic" }}>Pulsatilla patens</h2>
@@ -91,7 +91,7 @@ const KioskScreen = ({ onNav }) => {
                     <rect x={x+16} y={y+16} width="16" height="16" fill="var(--forest-deep)"/>
                   </g>
                 ))}
-                {/* random modules — stable across re-renders */}
+                {/* random modules - stable across re-renders */}
                 {qrModules.map((m, i) => (
                   <rect key={i} x={m.x} y={m.y} width="6" height="6" fill={m.filled ? "var(--forest-deep)" : "transparent"}/>
                 ))}
@@ -141,7 +141,7 @@ const KioskScreen = ({ onNav }) => {
 
         {/* Bottom row */}
         <div style={{ marginTop: 24, display: "grid", gridTemplateColumns: "2fr 1.2fr", gap: 24 }}>
-          {/* Adopter wall — scrolling */}
+          {/* Adopter wall - scrolling */}
           <div style={{ background: "rgba(250,247,238,0.04)", borderRadius: 16, border: "1px solid rgba(250,247,238,0.12)", padding: 28, overflow: "hidden", position: "relative" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
               <div>

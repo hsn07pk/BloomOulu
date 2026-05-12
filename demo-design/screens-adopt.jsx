@@ -1,4 +1,4 @@
-// Adopt flow — tier ladder → checkout
+// Adopt flow - tier ladder → checkout
 
 const AdoptScreen = ({ presetPlantId, onNav }) => {
   const { t, lang } = useT();
@@ -148,7 +148,7 @@ const AdoptScreen = ({ presetPlantId, onNav }) => {
               <div>
                 <div className="tiny" style={{ color: "var(--rust)" }}>{t("Step 2 of 4")}</div>
                 <h1 style={{ fontSize: 56, marginTop: 12 }}>{t("Pick a plant")}</h1>
-                <p className="muted" style={{ marginTop: 12, maxWidth: 600 }}>{t("Some plants are nearly fully funded — co-adopt anyway, or pick one that needs you more.")}</p>
+                <p className="muted" style={{ marginTop: 12, maxWidth: 600 }}>{t("Some plants are nearly fully funded - co-adopt anyway, or pick one that needs you more.")}</p>
               </div>
               <span className="pill"><Icon name="seedling" size={13}/> {tier.name} tier · €{total}{recurring ? "/mo" : ""}</span>
             </div>
@@ -231,7 +231,7 @@ const AdoptScreen = ({ presetPlantId, onNav }) => {
                     <Field label={t("Email")} placeholder="mira@example.fi"/>
                   </div>
                   <div style={{ marginTop: 16 }}>
-                    <Field label={intent === "memorial" ? t("Dedication (e.g. In memory of…)") : t("Public dedication (shown on plant page, optional)")} placeholder={intent === "memorial" ? "In memory of Eeva — who loved the lady's-slipper." : "From Mira, summer 2026 🌱"} value={dedication} onChange={setDedication} maxLength={80}/>
+                    <Field label={intent === "memorial" ? t("Dedication (e.g. In memory of…)") : t("Public dedication (shown on plant page, optional)")} placeholder={intent === "memorial" ? "In memory of Eeva - who loved the lady's-slipper." : "From Mira, summer 2026 🌱"} value={dedication} onChange={setDedication} maxLength={80}/>
                     <div className="tiny" style={{ marginTop: 6, textAlign: "right" }}>{dedication.length}/80</div>
                   </div>
                 </div>
