@@ -51,10 +51,9 @@ const KioskScreen = ({ onNav }) => {
           <div style={{ background: "linear-gradient(160deg, rgba(250,247,238,0.06) 0%, rgba(250,247,238,0.02) 100%)", borderRadius: 16, border: "1px solid rgba(250,247,238,0.12)", padding: 32, position: "relative", overflow: "hidden" }}>
             <div className="eyebrow eyebrow--sage">{t("Blooming today")}</div>
             <h2 style={{ fontSize: 56, marginTop: 16, color: "var(--cream)", fontStyle: "italic" }}>Pulsatilla patens</h2>
-            <div className="serif" style={{ fontSize: 22, color: "var(--sage-bright)", marginTop: 4 }}>{t("Hämeenkylmänkukka · pasqueflower")}</div>
+            <div className="serif" style={{ fontSize: 22, color: "var(--sage-bright)", marginTop: 4 }}>{t("Kangasvuokko · pasqueflower")}</div>
             <p style={{ fontSize: 17, color: "rgba(250,247,238,0.78)", lineHeight: 1.5, marginTop: 20, maxWidth: 480 }}>
-              Critically endangered in Finland. First buds opening today on the south esker bed.
-              Walk 220m through the main gate, turn left at the meadow.
+              {t("Vulnerable on Finland's 2019 Red List. First buds opening today on the south esker bed. Walk 220m through the main gate, turn left at the meadow.")}
             </p>
             <div style={{ marginTop: 28, display: "flex", gap: 12 }}>
               <button className="btn btn-grad btn-lg" onClick={() => onNav("plant", "puls-pat")}>

@@ -578,7 +578,9 @@ const T = {
     "Lobby kiosk · Romeo & Julia entrance": "Aulakioski · Romeo & Julia -sisäänkäynti",
     "Tuesday · 12 May 2026": "Tiistai · 12.5.2026",
     "Blooming today": "Kukkii tänään",
-    "Hämeenkylmänkukka · pasqueflower": "Hämeenkylmänkukka",
+    "Hämeenkylmänkukka · pasqueflower": "Kangasvuokko",
+    "Kangasvuokko · pasqueflower": "Kangasvuokko",
+    "Vulnerable on Finland's 2019 Red List. First buds opening today on the south esker bed. Walk 220m through the main gate, turn left at the meadow.": "Vaarantunut Suomen vuoden 2019 punaisella listalla. Ensimmäiset silmut aukeavat tänään eteläisellä harjupenkillä. Kävele 220 m pääportilta ja käänny vasemmalle niityn kohdalla.",
     "Critically endangered in Finland. First buds opening today on the south esker bed. Walk 220m through the main gate, turn left at the meadow.":
       "Erittäin uhanalainen Suomessa. Ensimmäiset silmut avautuvat tänään etelärinteen harjupenkissä. Kävele 220 m pääportilta, käänny vasemmalle niittyalueella.",
     "Scan to begin tour": "Skannaa aloittaaksesi kierroksen",
@@ -1231,7 +1233,9 @@ const T = {
     "Lobby kiosk · Romeo & Julia entrance": "Lobbykiosk · Romeo & Julia-entrén",
     "Tuesday · 12 May 2026": "Tisdag · 12 maj 2026",
     "Blooming today": "Blommar idag",
-    "Hämeenkylmänkukka · pasqueflower": "Backsippa · Hämeenkylmänkukka",
+    "Hämeenkylmänkukka · pasqueflower": "Nipsippa",
+    "Kangasvuokko · pasqueflower": "Nipsippa",
+    "Vulnerable on Finland's 2019 Red List. First buds opening today on the south esker bed. Walk 220m through the main gate, turn left at the meadow.": "Sårbar på Finlands rödlista 2019. Första knopparna öppnar sig idag på södra åskanten. Gå 220 m från huvudporten, vänster vid ängen.",
     "Critically endangered in Finland. First buds opening today on the south esker bed. Walk 220m through the main gate, turn left at the meadow.":
       "Akut hotad i Finland. Första knopparna öppnar idag på södra åssängen. Gå 220 m från huvudporten, sväng vänster vid ängen.",
     "Scan to begin tour": "Skanna för att starta turen",
@@ -1337,7 +1341,7 @@ const translate = (s, lang) => {
 // ---- Plant story translations ----
 const PLANT_STORIES = {
   FI: {
-    "puls-pat": "Aikoinaan yleinen Suomen hiekkaharjuilla, hämeenkylmänkukka on vetäytynyt muutamalle suojelualueelle. Oulu kasvatti 230 tainta LIFE+ ESCAPE -ohjelman aikana.",
+    "puls-pat": "Vaarantunut laji Suomen vuoden 2019 punaisella listalla. Kangasvuokko oli aikoinaan yleinen Suomen hiekkaharjuilla, mutta paloesto on hävittänyt sen tarvitseman avoimen maan. Oulu kasvatti 230 tainta LIFE+ ESCAPE -ohjelman aikana (2012-2017).",
     "camp-uni": "Pikkuruinen taivaansininen kello, joka kukkii kolme viikkoa metsärajan yläpuolella. Herkkä porolaidunnukselle ja lämpeneville kesille.",
     "saxi-hirc": "Voipala-keltainen rikko, koskemattomien rehevien soiden kukka, terveyden ilmaisin. Oulu ylläpitää 5 lähtöpopulaatiota ex situ.",
     "prim-nut": "Vaaleanpunainen rantaesikko, joka on tiukasti sidoksissa Perämeren nouseviin rantoihin - ainutlaatuisesti suomalainen tarina jääkauden jälkeisestä noususta.",
@@ -1347,7 +1351,7 @@ const PLANT_STORIES = {
     "vict-am": "Romeo-kasvihuoneen valokuvatuin kasvi. Lehdet kasvavat 2,5 m halkaisijaltaan; kestävät 30 kg. Yön kukinta muuttaa valkoisen vaaleanpunaiseksi."
   },
   SV: {
-    "puls-pat": "En gång vanlig på Finlands sandiga åsar har backsippan dragit sig tillbaka till några skyddade platser. Uleåborg drog upp 230 plantor inom LIFE+ ESCAPE.",
+    "puls-pat": "Sårbar art på Finlands rödlista 2019. Nipsippan var en gång vanlig på Finlands sandiga åsar, men brandbekämpning har raderat den öppna jord den behöver för att gro. Uleåborg drog upp 230 plantor inom LIFE+ ESCAPE (2012-2017).",
     "camp-uni": "En liten azurblå klocka som blommar i tre veckor ovanför trädgränsen. Känslig för renbete och varmare somrar.",
     "saxi-hirc": "En smörgul stenbräcka från orörda rika kärr, indikatorart för friska mossar. Uleåborg upprätthåller 5 källpopulationer ex situ.",
     "prim-nut": "En rosa strandviva tätt knuten till Bottenvikens stigande stränder - en unikt finsk postglacial berättelse.",
@@ -1360,7 +1364,7 @@ const PLANT_STORIES = {
 
 const PLANT_NAMES_LOCAL = {
   FI: {
-    "puls-pat": "Hämeenkylmänkukka",
+    "puls-pat": "Kangasvuokko",
     "camp-uni": "Pohjankello",
     "saxi-hirc": "Lettorikko",
     "prim-nut": "Ruijanesikko",
