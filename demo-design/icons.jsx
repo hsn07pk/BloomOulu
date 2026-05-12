@@ -602,6 +602,142 @@ const FundsFlowModal = ({ open, onClose, t }) => {
 const openFundsFlow = () => {
   if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("bloom_open_funds_flow"));
 };
+
+// References & sources modal. Lists every external source backing the
+// data in BloomOulu's UI - matched against the BloomOulu research
+// document (Comprehensive Platform Reference & Deep Analysis).
+const REFERENCES = [
+  {
+    title: "Conservation evidence (Finland)",
+    items: [
+      { name: "Red List of Finnish Species (2019 assessment)", source: "Finnish Environment Institute · ymparisto.fi", url: "https://www.ymparisto.fi/en-US/Nature/Threatened_species" },
+      { name: "LIFE+ ESCAPE — Ex-situ conservation of Finnish native plant species (LIFE11 BIO/FI/000917, 2012–2017)", source: "European Commission LIFE programme", url: "https://webgate.ec.europa.eu/life/publicWebsite/project/LIFE11-BIO-FI-000917" },
+      { name: "FinBIF — Finnish Biodiversity Information Facility", source: "laji.fi", url: "https://laji.fi/" },
+      { name: "Annales Botanici Fennici / Nordic Journal of Botany", source: "Finnish Botanical Society · Wiley", url: "https://onlinelibrary.wiley.com/journal/17561051" },
+      { name: "Memoranda Societatis pro Fauna et Flora Fennica", source: "Societas pro Fauna et Flora Fennica", url: "https://journal.fi/msff" }
+    ]
+  },
+  {
+    title: "Oulu Botanical Garden",
+    items: [
+      { name: "Botanical Garden of the University of Oulu", source: "oulu.fi", url: "https://www.oulu.fi/en/university/botanical-garden" },
+      { name: "Visit listing", source: "Visit Oulu / Visit Finland", url: "https://www.visitoulu.fi/en/" },
+      { name: "BGCI GardenSearch entry", source: "Botanic Gardens Conservation International", url: "https://gardensearch.bgci.org/garden/3929" }
+    ]
+  },
+  {
+    title: "Peer adoption programmes (benchmarks)",
+    items: [
+      { name: "Adopt a Seed (Save a Species)", source: "Royal Botanic Gardens Kew", url: "https://www.kew.org/read-and-watch/adopt-a-seed-msb" },
+      { name: "Adoption / Örökbefogadás", source: "ELTE Füvészkert (Budapest)", url: "https://fuveszkert.org/adoption-program" },
+      { name: "Tree / Hope Tree sponsorship", source: "Royal Botanic Garden Edinburgh", url: "https://www.rbge.org.uk/support-us/celebrate-life/adopt-a-tree/" },
+      { name: "Adopt a Plant (€300/yr)", source: "Plantentuin Meise (Belgium)", url: "https://www.plantentuinmeise.be/en/adopt-a-plant-syx8" },
+      { name: "Adopt-A-Tree (from $7,500)", source: "Queens Botanical Garden (NYC)", url: "https://queensbotanical.org/adopt-a-tree" },
+      { name: "Adopt a Plant", source: "Brooklyn Botanic Garden", url: "https://www.bbg.org/support/adopt_a_plant" },
+      { name: "Honor & Memorial Gifts · Daffodil Hill", source: "New York Botanical Garden", url: "https://www.nybg.org/join-support/" },
+      { name: "Membership & Giving · Friends / Corporate", source: "Mount Auburn Cemetery", url: "https://mountauburn.org/" },
+      { name: "VIP Orchid Naming (1956–present)", source: "Singapore Botanic Gardens · National Parks Board", url: "https://www.nparks.gov.sg/sbg" },
+      { name: "Center for Plant Conservation — National Collection", source: "saveplants.org", url: "https://saveplants.org/" }
+    ]
+  },
+  {
+    title: "QR & visitor-engagement research",
+    items: [
+      { name: "QR Codes in Museums: Unlocking New Opportunities (2024–25)", source: "MuseumNext", url: "https://www.museumnext.com/article/qr-codes-are-experiencing-a-resurgence/" },
+      { name: "Life & Death of QR Codes in Museums", source: "Cuseum", url: "https://cuseum.com/blog/life-death-of-qr-codes-in-museums" },
+      { name: "QR codes in museums — worth the effort? (NMS typewriter case)", source: "National Museums Scotland blog", url: "https://blog.nms.ac.uk/" }
+    ]
+  },
+  {
+    title: "Image identification & plant ID context",
+    items: [
+      { name: "Pl@ntNet (image-based species ID, CNRS)", source: "plantnet.org", url: "https://plantnet.org/" },
+      { name: "iNaturalist / Seek", source: "California Academy of Sciences · National Geographic", url: "https://www.inaturalist.org/" }
+    ]
+  },
+  {
+    title: "Open data & technology",
+    items: [
+      { name: "OpenStreetMap (map tiles)", source: "© OpenStreetMap contributors", url: "https://www.openstreetmap.org/copyright" },
+      { name: "Open-Meteo (live weather)", source: "open-meteo.com (CC BY 4.0)", url: "https://open-meteo.com/" },
+      { name: "Wikimedia Commons (plant photographs, per-file licences)", source: "commons.wikimedia.org", url: "https://commons.wikimedia.org/" },
+      { name: "GBIF — Global Biodiversity Information Facility", source: "gbif.org", url: "https://www.gbif.org/" }
+    ]
+  },
+  {
+    title: "Standards & legal frameworks",
+    items: [
+      { name: "WCAG 2.2 AA accessibility guidelines", source: "W3C / WAI", url: "https://www.w3.org/WAI/WCAG22/quickref/" },
+      { name: "European Accessibility Act (Directive 2019/882, enforceable 28 June 2025)", source: "European Commission", url: "https://ec.europa.eu/social/main.jsp?catId=1202" },
+      { name: "BGCI Conservation Standards & reporting framework", source: "Botanic Gardens Conservation International", url: "https://www.bgci.org/our-work/projects-and-case-studies/" },
+      { name: "GDPR (General Data Protection Regulation)", source: "European Commission", url: "https://gdpr-info.eu/" },
+      { name: "TVL §57 — Finnish corporate gift deductibility", source: "Finnish Income Tax Act", url: "https://www.finlex.fi/fi/laki/ajantasa/1992/19921535" }
+    ]
+  }
+];
+
+const ReferencesModal = ({ open, onClose, t }) => {
+  React.useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+  if (!open) return null;
+  return (
+    <div onClick={onClose} role="dialog" aria-modal="true" aria-label={t("Sources & references")}
+      style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(5,10,7,0.78)", backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)", display: "grid", placeItems: "center", padding: 16, overflowY: "auto" }}>
+      <div onClick={e => e.stopPropagation()}
+        style={{ background: "var(--cream)", color: "var(--ink)", borderRadius: 18, padding: 28, maxWidth: 720, width: "100%", maxHeight: "calc(100vh - 32px)", overflowY: "auto", boxShadow: "var(--shadow-deep)", position: "relative", margin: "auto" }}>
+        <button onClick={onClose} className="icon-btn" aria-label={t("Close")} style={{ position: "absolute", top: 14, right: 14 }}>
+          <Icon name="close" size={14}/>
+        </button>
+        <div className="eyebrow">{t("References")}</div>
+        <h2 className="serif" style={{ fontSize: 32, marginTop: 8, lineHeight: 1.1 }}>{t("Sources & references")}</h2>
+        <p className="small muted" style={{ marginTop: 10, lineHeight: 1.6 }}>
+          {t("Every fact, figure, and benchmark in BloomOulu is taken from a published source. Numbers on the conservation strip come from the LIFE+ ESCAPE final report (2017); the Adopt-a-Plant tier ladder is benchmarked against the programmes listed below. AskTheGarden citations in the chat are illustrative placeholders for the real University of Oulu Biodiversity Unit corpus that production will wire up.")}
+        </p>
+
+        {REFERENCES.map(section => (
+          <div key={section.title} style={{ marginTop: 22 }}>
+            <h3 className="serif" style={{ fontSize: 18, color: "var(--forest-deep)", margin: 0 }}>{t(section.title)}</h3>
+            <ul style={{ marginTop: 10, paddingLeft: 20, listStyle: "disc" }}>
+              {section.items.map(it => (
+                <li key={it.name} style={{ fontSize: 13, lineHeight: 1.55, marginTop: 6, color: "var(--ink-soft)" }}>
+                  <a href={it.url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--forest)", textDecoration: "underline" }}>{it.name}</a>
+                  <span className="muted"> · {it.source}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+
+        <div style={{ marginTop: 22, padding: 16, background: "rgba(31,58,44,0.04)", borderRadius: 12, fontSize: 13, lineHeight: 1.55, color: "var(--ink-soft)" }}>
+          <div className="tiny" style={{ marginBottom: 6 }}>{t("Caveats")}</div>
+          {t("Numbers tied to specific Garden internals (annual visitor count, MobilePay yield, operating budget, headcount) are not published and would be confirmed directly with the Garden's Director's office before any live launch. RBGE specific sponsorship prices are reviewed regularly; figures shown here are indicative.")}
+        </div>
+
+        <div style={{ marginTop: 18, display: "flex", justifyContent: "flex-end" }}>
+          <button className="btn btn-secondary" onClick={onClose}>{t("Close")}</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const openReferences = () => {
+  if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("bloom_open_references"));
+};
+const ReferencesController = () => {
+  const { t } = (window.useT ? window.useT() : { t: s => s });
+  const [open, setOpen] = React.useState(false);
+  React.useEffect(() => {
+    const h = () => setOpen(true);
+    window.addEventListener("bloom_open_references", h);
+    return () => window.removeEventListener("bloom_open_references", h);
+  }, []);
+  return <ReferencesModal open={open} onClose={() => setOpen(false)} t={t}/>;
+};
 const FundsFlowController = () => {
   const { t } = (window.useT ? window.useT() : { t: s => s });
   const [open, setOpen] = React.useState(false);
@@ -613,4 +749,4 @@ const FundsFlowController = () => {
   return <FundsFlowModal open={open} onClose={() => setOpen(false)} t={t}/>;
 };
 
-Object.assign(window, { Icon, Progress, RarityBadge, Botanical, PlantImage, BloomMark, useIsMobile, useWeather, useSavedPlants, useStickerCollection, showToast, sharePlant, PlantMap, PLANT_BED, PLANT_COORDS, GARDEN_CENTER, QRCode, plantDeepLink, FundsFlowModal, FundsFlowController, openFundsFlow });
+Object.assign(window, { Icon, Progress, RarityBadge, Botanical, PlantImage, BloomMark, useIsMobile, useWeather, useSavedPlants, useStickerCollection, showToast, sharePlant, PlantMap, PLANT_BED, PLANT_COORDS, GARDEN_CENTER, QRCode, plantDeepLink, FundsFlowModal, FundsFlowController, openFundsFlow, ReferencesModal, ReferencesController, openReferences });

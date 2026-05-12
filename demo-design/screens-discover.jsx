@@ -38,7 +38,7 @@ const DiscoverScreen = ({ onOpenPlant, onNav }) => {
                 <span style={{ fontStyle: "italic", color: "var(--lichen)" }}>{t("Keep Finland in bloom.")}</span>
               </h1>
               <p style={{ marginTop: 28, fontSize: 18, color: "rgba(248,244,230,0.78)", maxWidth: 540, lineHeight: 1.5 }}>
-                {t("Of 2,667 species on Finland's Red List, 175 live ex situ in this garden. Sponsor one - name it, follow it, watch it flower. Or just say hi to it through the QR code on its label.")}
+                {t("Finland has 2,667 threatened species on the 2019 Red List. The LIFE+ ESCAPE programme banked 148 of them in the national seed bank, and the University of Oulu Botanical Garden was a partner. Sponsor one - name it, follow it, watch it flower.")}
               </p>
               <div style={{ marginTop: 36, display: "flex", gap: 12, alignItems: "center" }}>
                 <button className="btn btn-lg" style={{ background: "var(--rust)", color: "var(--paper)" }} onClick={() => onNav("adopt")}>
@@ -52,10 +52,10 @@ const DiscoverScreen = ({ onOpenPlant, onNav }) => {
               {/* Stat strip */}
               <div data-grid-mobile="2" style={{ marginTop: 64, display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 0, borderTop: "1px solid rgba(248,244,230,0.18)", paddingTop: 28 }}>
                 {[
-                  ["4 000+", t("plant species") ],
-                  ["175", t("threatened taxa ex situ") ],
-                  ["1.7M", t("seeds banked (LIFE+ ESCAPE)") ],
-                  ["56 %", t("ex-situ coverage achieved") ]
+                  ["4 000+", t("plant species in the Oulu collection") ],
+                  ["148", t("taxa banked nationally (LIFE+ ESCAPE)") ],
+                  ["1.7M", t("seeds collected (LIFE+ ESCAPE)") ],
+                  ["56 %", t("ex-situ coverage of threatened Finnish plants") ]
                 ].map(([n, l]) => (
                   <div key={l} style={{ paddingRight: 16 }}>
                     <div className="serif" style={{ fontSize: 36, color: "var(--lichen)", letterSpacing: "-0.02em" }}>{n}</div>

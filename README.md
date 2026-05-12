@@ -161,7 +161,6 @@ MIT — see [`LICENSE`](./LICENSE).
 - **University of Oulu Botanical Garden** — Director Jouni Aspi, Curator Anna Liisa Ruotsalainen, Head Gardener Tuomas Kauppila.
 - **University of Oulu Biodiversity Unit** — corpus grounding for AskTheGarden.
 - **BGCI** + **LIFE+ ESCAPE** project (LIFE11 BIO/FI/000917) — conservation framing.
-- Built with [Claude Code](https://www.anthropic.com/claude-code) (Claude Opus 4.7).
 
 <div align="center">
 

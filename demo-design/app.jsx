@@ -258,6 +258,9 @@ const App = () => {
       {/* Global funds-flow disclosure modal */}
       <FundsFlowController/>
 
+      {/* Global sources & references modal */}
+      <ReferencesController/>
+
       {/* Accessibility settings floating button + panel */}
       <button
         className="a11y-fab"
@@ -353,7 +356,7 @@ const App = () => {
             {[
               { title: "Garden", links: ["Plan a visit", "Romeo & Julia greenhouses", "What's blooming", "Garden map", "Accessibility (EAA 2025)"] },
               { title: "Support", links: ["Adopt a plant", "Memorial gifts", "Corporate sponsorship", "Legacy giving", "Tax & receipts"] },
-              { title: "Research", links: ["Biodiversity Unit", "LIFE+ ESCAPE", "Accession database", "BGCI PlantSearch", "Publications"] },
+              { title: "Research", links: ["Biodiversity Unit", "LIFE+ ESCAPE", "Accession database", "BGCI PlantSearch", "Sources & references"] },
               { title: "Platform", links: ["AskTheGarden", "Staff portal", "Kiosk view", "Privacy / GDPR", "Funds-flow policy"] }
             ].map(c => (
               <div key={c.title}>
@@ -361,9 +364,13 @@ const App = () => {
                 <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 16 }}>
                   {c.links.map(l => {
                     const onClick = l === "Funds-flow policy" ? (e => { e.preventDefault(); openFundsFlow(); })
+                      : l === "Sources & references" ? (e => { e.preventDefault(); openReferences(); })
                       : l === "Adopt a plant" ? (e => { e.preventDefault(); nav("adopt"); })
                       : l === "AskTheGarden" ? (e => { e.preventDefault(); nav("ask"); })
                       : l === "Kiosk view" ? (e => { e.preventDefault(); nav("kiosk"); })
+                      : l === "LIFE+ ESCAPE" ? (e => { e.preventDefault(); openReferences(); })
+                      : l === "Biodiversity Unit" ? (e => { e.preventDefault(); openReferences(); })
+                      : l === "BGCI PlantSearch" ? (e => { e.preventDefault(); openReferences(); })
                       : undefined;
                     return (
                       <a key={l} href="#" onClick={onClick} style={{ fontSize: 13, color: "rgba(250,247,238,0.78)", textDecoration: "none" }}>{t(l)}</a>
