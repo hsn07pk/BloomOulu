@@ -96,7 +96,7 @@ const AskScreen = ({ onNav, onOpenPlant, presetPlantId }) => {
             {[
               "What's blooming this week?",
               "How is Pulsatilla doing?",
-              "Adopters' Day - when?"
+              "Adopters' Open Day - when?"
             ].map((q, i) => (
               <button key={i} onClick={() => sendQuestion(t(q), q)} style={{
                 display: "block", width: "100%", textAlign: "left", padding: "10px 12px",

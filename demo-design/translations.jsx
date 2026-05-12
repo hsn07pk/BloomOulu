@@ -175,8 +175,12 @@ const T = {
     "From €25 for a digital certificate to €500 for an engraved plaque. Gift-flow first-class. Memorial adoptions supported.":
       "Alkaen 25 € digitaalisesta sertifikaatista 500 €:n kaiverrettuun laattaan. Lahjapolku ensiluokkainen. Muistoadoptiot tuettuja.",
     "Return": "Palaa",
+    "When your plant flowers, we email you. Adopters' Open Day in June. Winter mode shows your dormant friend under the snow.":
+      "Kun kasvisi kukkii, lähetämme sähköpostia. Adoptoijien avoin päivä kesäkuussa. Talvitila näyttää lepäävän ystäväsi lumen alla.",
     "When your plant flowers, we email you. Adopters' Day in June. Winter mode shows your dormant friend under the snow.":
-      "Kun kasvisi kukkii, lähetämme sähköpostia. Adoptoijien päivä kesäkuussa. Talvitila näyttää lepäävän ystäväsi lumen alla.",
+      "Kun kasvisi kukkii, lähetämme sähköpostia. Adoptoijien avoin päivä kesäkuussa. Talvitila näyttää lepäävän ystäväsi lumen alla.",
+    "Adopters' Open Day": "Adoptoijien avoin päivä",
+    "Adopters' Open Day - when?": "Adoptoijien avoin päivä - milloin?",
 
     // Plant detail
     "Scanned via QR · ": "Skannattu QR-koodilla · ",
@@ -392,7 +396,7 @@ const T = {
     "Where can I find the Lady's-slipper Orchid in the garden?": "Mistä löydän tikankontin puutarhasta?",
     "Tell me about the LIFE+ ESCAPE seed bank project.": "Kerro LIFE+ ESCAPE -siemenpankkihankkeesta.",
     "How is Pulsatilla doing?": "Mitä Pulsatillalle kuuluu?",
-    "Adopters' Day - when?": "Adoptoijien päivä - milloin?",
+    "Adopters' Day - when?": "Adoptoijien avoin päivä - milloin?",
     "2.1% error rate": "2,1 % virheprosentti",
     "Draft school-tour script for yläkoulu (Saxifraga hirculus)": "Laadi koulukierroksen käsikirjoitus yläkoululle (Saxifraga hirculus)",
     "Generate signage text - Trollius europaeus (FI/SV/EN)": "Tuota opasteteksti - Trollius europaeus (FI/SV/EN)",
@@ -460,7 +464,7 @@ const T = {
     "Garden operations": "Puutarhan toiminta",
     "Platform costs": "Alustakulut",
     "Coming up": "Tulossa",
-    "Adopters' Day": "Adoptoijien päivä",
+    "Adopters' Day": "Adoptoijien avoin päivä",
     "Saturday 21 June 2026 · 13:00": "Lauantai 21.6.2026 · 13:00",
     "Guided tour by Curator Anna Liisa Ruotsalainen + peak peony bloom + Romeo & Julia behind-the-scenes.":
       "Opastettu kierros kuraattori Anna Liisa Ruotsalaisen johdolla + pioniumäärän huippu + Romeo & Julia kulissien takana.",
@@ -828,8 +832,12 @@ const T = {
     "From €25 for a digital certificate to €500 for an engraved plaque. Gift-flow first-class. Memorial adoptions supported.":
       "Från 25 € för ett digitalt certifikat till 500 € för en graverad plakett. Gåvoflöde i toppklass. Minnesadoptioner stöds.",
     "Return": "Återvänd",
+    "When your plant flowers, we email you. Adopters' Open Day in June. Winter mode shows your dormant friend under the snow.":
+      "När din växt blommar mejlar vi dig. Adoptörernas öppna dag i juni. Vinterläge visar din vilande vän under snön.",
     "When your plant flowers, we email you. Adopters' Day in June. Winter mode shows your dormant friend under the snow.":
-      "När din växt blommar mejlar vi dig. Adoptörsdag i juni. Vinterläge visar din vilande vän under snön.",
+      "När din växt blommar mejlar vi dig. Adoptörernas öppna dag i juni. Vinterläge visar din vilande vän under snön.",
+    "Adopters' Open Day": "Adoptörernas öppna dag",
+    "Adopters' Open Day - when?": "Adoptörernas öppna dag - när?",
 
     // Plant
     "Scanned via QR · ": "Skannad via QR · ",
@@ -1041,7 +1049,7 @@ const T = {
     "Where can I find the Lady's-slipper Orchid in the garden?": "Var hittar jag guckusko i trädgården?",
     "Tell me about the LIFE+ ESCAPE seed bank project.": "Berätta om LIFE+ ESCAPE-fröbanksprojektet.",
     "How is Pulsatilla doing?": "Hur mår Pulsatilla?",
-    "Adopters' Day - when?": "Adoptanternas dag - när?",
+    "Adopters' Day - when?": "Adoptörernas öppna dag - när?",
     "2.1% error rate": "2,1 % felfrekvens",
     "Draft school-tour script for yläkoulu (Saxifraga hirculus)": "Utkast till skolutturmanus för högstadiet (Saxifraga hirculus)",
     "Generate signage text - Trollius europaeus (FI/SV/EN)": "Generera skylttext - Trollius europaeus (FI/SV/EN)",
@@ -1109,7 +1117,7 @@ const T = {
     "Garden operations": "Trädgårdens drift",
     "Platform costs": "Plattformskostnader",
     "Coming up": "Kommer",
-    "Adopters' Day": "Adoptörsdagen",
+    "Adopters' Day": "Adoptörernas öppna dag",
     "Saturday 21 June 2026 · 13:00": "Lördag 21 juni 2026 · 13:00",
     "Guided tour by Curator Anna Liisa Ruotsalainen + peak peony bloom + Romeo & Julia behind-the-scenes.":
       "Guidad tur av intendent Anna Liisa Ruotsalainen + pionernas topp + Romeo & Julia bakom kulisserna.",

@@ -247,7 +247,7 @@ const DiscoverScreen = ({ onOpenPlant, onNav }) => {
             { num: "01", icon: "qr", title: t("Scan a plant"), body: t("Every label has a QR - and an NFC tag for blind visitors. Tap or scan, get 30-second audio in Finnish, Swedish, or English.") },
             { num: "02", icon: "bot", title: t("Ask the Garden"), body: t("Our AI is grounded in the Garden's accession database and the Biodiversity Unit's publications. Every answer cites its source.") },
             { num: "03", icon: "seedling", title: t("Adopt"), body: t("From €25/yr Seedling to €750/yr Endangered with a plaque next to your plant. Every tier pairs with a plant from your home region (I@H). Gift, memorial, and corporate routes supported.") },
-            { num: "04", icon: "bell", title: t("Return"), body: t("When your plant flowers, we email you. Adopters' Day in June. Winter mode shows your dormant friend under the snow.") }
+            { num: "04", icon: "bell", title: t("Return"), body: t("When your plant flowers, we email you. Adopters' Open Day in June. Winter mode shows your dormant friend under the snow.") }
           ].map(step => (
             <div key={step.num} className="card card-pad" style={{ position: "relative" }}>
               <div className="tiny" style={{ color: "var(--rust)" }}>{step.num}</div>

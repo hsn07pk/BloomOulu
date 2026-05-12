@@ -99,7 +99,7 @@ const GardenScreen = ({ onOpenPlant, onNav }) => {
           {/* Next milestone */}
           <div className="card card-pad" style={{ background: "var(--sage-pale)" }}>
             <div className="eyebrow eyebrow--rust">{t("Coming up")}</div>
-            <div className="serif" style={{ fontSize: 28, marginTop: 12, lineHeight: 1.15 }}>{t("Adopters' Day")}</div>
+            <div className="serif" style={{ fontSize: 28, marginTop: 12, lineHeight: 1.15 }}>{t("Adopters' Open Day")}</div>
             <div className="small" style={{ marginTop: 4, color: "var(--ink-soft)" }}>{t("Saturday 21 June 2026 · 13:00")}</div>
             <p className="small" style={{ marginTop: 12, color: "var(--ink-soft)", lineHeight: 1.5 }}>
               {t("Guided tour by Curator Anna Liisa Ruotsalainen + peak peony bloom + Romeo & Julia behind-the-scenes.")}
