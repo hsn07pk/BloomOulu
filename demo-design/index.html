@@ -413,6 +413,31 @@
     accent-color: var(--forest);
   }
 
+  /* Toast notifications (live region) */
+  .bloom-toaster {
+    position: fixed; bottom: 24px; left: 50%;
+    transform: translateX(-50%);
+    z-index: 200;
+    display: flex; flex-direction: column; gap: 8px;
+    pointer-events: none;
+    max-width: calc(100vw - 32px);
+  }
+  @media (max-width: 768px) {
+    .bloom-toaster { bottom: 76px; }
+  }
+  .bloom-toast {
+    background: var(--forest-deep); color: var(--cream);
+    padding: 12px 18px; border-radius: 999px;
+    font-size: 14px; font-weight: 500;
+    box-shadow: var(--shadow-deep);
+    display: flex; align-items: center; gap: 10px;
+    animation: bloom-toast-in 0.2s ease-out, bloom-toast-out 0.2s ease-in 2.6s forwards;
+    pointer-events: auto;
+  }
+  @keyframes bloom-toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  @keyframes bloom-toast-out { to { opacity: 0; transform: translateY(8px); } }
+  body.bloom-reduced-motion .bloom-toast { animation: none; }
+
   /* ===================================================================
      MOBILE TAB BAR — visible only at <=768px (defined inside @media)
      =================================================================== */

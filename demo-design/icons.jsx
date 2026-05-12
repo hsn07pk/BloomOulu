@@ -300,6 +300,82 @@ const useWeather = () => {
   return w;
 };
 
+// Persistent saved-plants list (localStorage). Returns [savedIds, toggle, isSaved].
+const _getSaved = () => {
+  try { return JSON.parse(localStorage.getItem("bloom_saved") || "[]"); }
+  catch { return []; }
+};
+const _setSaved = (arr) => {
+  try { localStorage.setItem("bloom_saved", JSON.stringify(arr)); } catch {}
+  if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("bloom_saved_changed"));
+};
+const useSavedPlants = () => {
+  const [saved, setSaved] = React.useState(_getSaved);
+  React.useEffect(() => {
+    const h = () => setSaved(_getSaved());
+    window.addEventListener("bloom_saved_changed", h);
+    window.addEventListener("storage", h);
+    return () => {
+      window.removeEventListener("bloom_saved_changed", h);
+      window.removeEventListener("storage", h);
+    };
+  }, []);
+  const toggle = React.useCallback((id) => {
+    const cur = _getSaved();
+    const next = cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id];
+    _setSaved(next);
+    return next.includes(id);
+  }, []);
+  const isSaved = React.useCallback((id) => saved.includes(id), [saved]);
+  return { saved, toggle, isSaved };
+};
+
+// Toast: lightweight event bus. Call showToast("...") from anywhere.
+const showToast = (message, opts = {}) => {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent("bloom_toast", { detail: { message, ...opts } }));
+};
+
+// Share a plant. Uses Web Share API where available, falls back to clipboard.
+const sharePlant = async (plant) => {
+  const base = typeof window !== "undefined" ? `${window.location.origin}${window.location.pathname}` : "";
+  const url = `${base}#plant=${plant.id}`;
+  const title = `${plant.name} · BloomOulu`;
+  const text = plant.story || `${plant.name} - ${plant.rarityLabel || plant.rarity}`;
+  if (typeof navigator !== "undefined" && navigator.share) {
+    try { await navigator.share({ title, text, url }); return { ok: true, mode: "shared" }; }
+    catch (err) { if (err && err.name === "AbortError") return { ok: true, mode: "cancelled" }; }
+  }
+  if (typeof navigator !== "undefined" && navigator.clipboard) {
+    try { await navigator.clipboard.writeText(url); return { ok: true, mode: "copied" }; }
+    catch {}
+  }
+  return { ok: false, mode: "failed" };
+};
+
+// Sticker collection (Kid mode): persistent set of plant IDs scanned.
+const useStickerCollection = () => {
+  const get = () => {
+    try { return JSON.parse(localStorage.getItem("bloom_stickers") || "[]"); }
+    catch { return []; }
+  };
+  const [stickers, setStickers] = React.useState(get);
+  React.useEffect(() => {
+    const h = () => setStickers(get());
+    window.addEventListener("bloom_stickers_changed", h);
+    return () => window.removeEventListener("bloom_stickers_changed", h);
+  }, []);
+  const collect = React.useCallback((id) => {
+    const cur = get();
+    if (cur.includes(id)) return cur;
+    const next = [...cur, id];
+    try { localStorage.setItem("bloom_stickers", JSON.stringify(next)); } catch {}
+    window.dispatchEvent(new CustomEvent("bloom_stickers_changed"));
+    return next;
+  }, []);
+  return { stickers, collect, has: (id) => stickers.includes(id) };
+};
+
 // Responsive helper - true at <=768px viewport
 const useIsMobile = (breakpoint = 768) => {
   const get = () => typeof window !== "undefined" && window.innerWidth <= breakpoint;
@@ -315,4 +391,4 @@ const useIsMobile = (breakpoint = 768) => {
   return isMobile;
 };
 
-Object.assign(window, { Icon, Progress, RarityBadge, Botanical, PlantImage, BloomMark, useIsMobile, useWeather });
+Object.assign(window, { Icon, Progress, RarityBadge, Botanical, PlantImage, BloomMark, useIsMobile, useWeather, useSavedPlants, useStickerCollection, showToast, sharePlant });

@@ -4,6 +4,11 @@ const PlantScreen = ({ plantId, onBack, onNav, onAdopt }) => {
   const { t, lang } = useT();
   const plantRaw = PLANTS.find(p => p.id === plantId) || PLANTS[0];
   const plant = localisePlant(plantRaw, lang);
+  const { isSaved, toggle: toggleSaved } = useSavedPlants();
+  const isPlantSaved = isSaved(plant.id);
+  const { stickers, collect: collectSticker, has: hasSticker } = useStickerCollection();
+  const [readingLevel, setReadingLevel] = React.useState("middle"); // primary / middle / upper
+  const [quizOpen, setQuizOpen] = React.useState(false);
   const [audioPlaying, setAudioPlaying] = React.useState(false);
   const [audioCurrent, setAudioCurrent] = React.useState(0);
   const [audioDuration, setAudioDuration] = React.useState(0);
@@ -72,8 +77,32 @@ const PlantScreen = ({ plantId, onBack, onNav, onAdopt }) => {
           <button className="btn btn-ghost small" onClick={onBack} aria-label={t("Back")}><Icon name="back" size={14}/> {t("Back")}</button>
           <span className="tiny">{t("Scanned via QR · ")}{plant.accession}</span>
           <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-            <button className="icon-btn" aria-label={t("Bookmark")}><Icon name="bookmark" size={16}/></button>
-            <button className="icon-btn" aria-label={t("Share")}><Icon name="share" size={16}/></button>
+            <button
+              className="icon-btn"
+              aria-label={isPlantSaved ? t("Remove bookmark") : t("Save to My Garden")}
+              aria-pressed={isPlantSaved}
+              onClick={() => {
+                const nowSaved = toggleSaved(plant.id);
+                showToast(nowSaved ? t("Saved to My Garden") : t("Removed from My Garden"));
+              }}
+              style={{
+                background: isPlantSaved ? "var(--forest-deep)" : "var(--paper)",
+                color: isPlantSaved ? "var(--sage-bright)" : "var(--ink-soft)",
+                borderColor: isPlantSaved ? "var(--forest-deep)" : "var(--line)"
+              }}
+            >
+              <Icon name="bookmark" size={16} style={isPlantSaved ? { fill: "currentColor" } : undefined}/>
+            </button>
+            <button
+              className="icon-btn"
+              aria-label={t("Share this plant")}
+              onClick={async () => {
+                const r = await sharePlant(plant);
+                if (r.mode === "shared") showToast(t("Shared"));
+                else if (r.mode === "copied") showToast(t("Link copied to clipboard"));
+                else if (r.mode === "failed") showToast(t("Could not share"));
+              }}
+            ><Icon name="share" size={16}/></button>
           </div>
         </div>
       </div>
@@ -156,13 +185,19 @@ const PlantScreen = ({ plantId, onBack, onNav, onAdopt }) => {
             </div>
           </div>
 
-          {/* Why this plant matters */}
-          <div style={{ marginTop: 32, padding: "24px 28px", background: "var(--paper)", borderRadius: 18, borderLeft: `3px solid ${plant.color}` }}>
-            <Icon name="quote" size={16} style={{ color: plant.color }}/>
-            <p className="serif" style={{ fontSize: 22, lineHeight: 1.4, marginTop: 8, color: "var(--ink)" }}>
-              {plant.story}
-            </p>
-          </div>
+          {/* Mode-specific intro */}
+          {mode === "child" ? (
+            <KidModeIntro plant={plant} t={t} collectSticker={collectSticker} hasSticker={hasSticker(plant.id)} stickerCount={stickers.length}/>
+          ) : mode === "school" ? (
+            <SchoolModeIntro plant={plant} t={t} readingLevel={readingLevel} setReadingLevel={setReadingLevel} onQuiz={() => setQuizOpen(true)} onNav={onNav}/>
+          ) : (
+            <div style={{ marginTop: 32, padding: "24px 28px", background: "var(--paper)", borderRadius: 18, borderLeft: `3px solid ${plant.color}` }}>
+              <Icon name="quote" size={16} style={{ color: plant.color }}/>
+              <p className="serif" style={{ fontSize: 22, lineHeight: 1.4, marginTop: 8, color: "var(--ink)" }}>
+                {plant.story}
+              </p>
+            </div>
+          )}
 
           {/* Quick facts */}
           <div data-grid-mobile="2" style={{ marginTop: 32, display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 0, borderTop: "1px solid var(--line-soft)", borderBottom: "1px solid var(--line-soft)" }}>
@@ -399,6 +434,213 @@ const PlantScreen = ({ plantId, onBack, onNav, onAdopt }) => {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Quiz modal — School mode */}
+      {quizOpen && <QuizModal plant={plant} t={t} onClose={() => setQuizOpen(false)}/>}
+    </div>
+  );
+};
+
+// =====================================================================
+// Kid mode: plant-as-character intro + sticker collection
+// =====================================================================
+const KidModeIntro = ({ plant, t, collectSticker, hasSticker, stickerCount }) => {
+  const greeted = React.useRef(false);
+  React.useEffect(() => {
+    if (greeted.current) return;
+    greeted.current = true;
+    if (!hasSticker) {
+      const next = collectSticker(plant.id);
+      showToast(`⭐ ${t("Sticker collected!")} (${next.length}/10)`);
+    }
+  }, [plant.id]);
+  const goal = 10;
+  const pct = Math.min(100, (stickerCount / goal) * 100);
+  const facts = [
+    { emoji: "🌍", label: t("Where I'm from"), value: t(plant.origin) },
+    { emoji: "🌸", label: t("When I bloom"), value: t(plant.bloom) },
+    { emoji: "🛡️", label: t("How I'm doing"), value: t(plant.rarityLabel || plant.rarity) }
+  ];
+  return (
+    <div style={{ marginTop: 24, padding: "26px 28px", background: `linear-gradient(135deg, ${plant.accent} 0%, var(--paper) 100%)`, borderRadius: 22, border: `2px solid ${plant.color}` }}>
+      <div className="tiny" style={{ color: plant.color, marginBottom: 8 }}>🌱 {t("Kid mode")}</div>
+      <h2 className="serif" style={{ fontSize: 30, lineHeight: 1.1, color: "var(--ink)", margin: 0 }}>
+        {t("Hi! I'm")} <i>{plant.localName || plant.fi || plant.name}</i>!
+      </h2>
+      <p style={{ marginTop: 12, fontSize: 17, lineHeight: 1.5, color: "var(--ink-soft)" }}>
+        {t("I'm a flower from")} {t(plant.origin)}. {t("Scan me to add me to your sticker book.")}
+      </p>
+
+      {/* Sticker collection */}
+      <div style={{ marginTop: 18, padding: 14, background: "rgba(250,247,238,0.7)", borderRadius: 14, border: "1px solid var(--line)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+          <span className="small" style={{ fontWeight: 600 }}>⭐ {t("Your sticker book")}</span>
+          <span className="mono small">{stickerCount}/{goal}</span>
+        </div>
+        <div style={{ height: 8, background: "rgba(31,58,44,0.12)", borderRadius: 999, overflow: "hidden", marginTop: 8 }}>
+          <div style={{ width: `${pct}%`, height: "100%", background: plant.color, transition: "width 300ms" }}/>
+        </div>
+        <div className="tiny" style={{ marginTop: 6, textTransform: "none", letterSpacing: 0, fontFamily: "var(--f-body)" }}>
+          {stickerCount >= goal ? `🏆 ${t("Done! Show this at the gift shop for your badge.")}` : `${t("Scan")} ${goal - stickerCount} ${t("more plants to win a badge!")}`}
+        </div>
+      </div>
+
+      {/* Fun facts */}
+      <div style={{ marginTop: 18, display: "grid", gridTemplateColumns: "1fr", gap: 10 }} data-grid-mobile="keep">
+        {facts.map((f, i) => (
+          <div key={i} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 14px", background: "var(--paper)", borderRadius: 12 }}>
+            <div style={{ fontSize: 28, lineHeight: 1 }}>{f.emoji}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="tiny">{f.label}</div>
+              <div className="serif" style={{ fontSize: 17, marginTop: 2 }}>{f.value}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// =====================================================================
+// School mode: reading level + quiz + worksheet
+// =====================================================================
+const SchoolModeIntro = ({ plant, t, readingLevel, setReadingLevel, onQuiz, onNav }) => {
+  // Three reading-level retellings, generated from plant data.
+  const levels = {
+    primary: `${plant.name} is a ${(plant.rarityLabel || plant.rarity).toLowerCase()} plant from ${plant.origin}. It blooms in ${plant.bloom}.`,
+    middle: plant.story || `${plant.name} (${plant.rarityLabel}) grows in ${plant.habitat || plant.origin}. The Oulu specimen was ${plant.accessed.toLowerCase()}.`,
+    upper: `${plant.story} The Oulu accession (${plant.accession}) supports ex-situ conservation research, and is part of the LIFE+ ESCAPE programme cohort. Read the cited papers tab for the published taxonomic, distributional, and population-genetic literature.`
+  };
+  const printWorksheet = () => {
+    const w = window.open("", "_blank");
+    if (!w) { showToast(t("Pop-up blocked")); return; }
+    const body = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>${plant.name} worksheet</title>
+      <style>body{font-family:Georgia,serif;max-width:680px;margin:32px auto;padding:0 24px;color:#18271E;line-height:1.5}
+      h1{font-size:32px;font-style:italic}h2{font-size:18px;margin-top:24px;border-bottom:1px solid #ccc;padding-bottom:4px}
+      .row{display:flex;justify-content:space-between;margin:6px 0;border-bottom:1px dashed #ddd;padding:4px 0}
+      .blank{flex:1;border-bottom:1px solid #888;margin-left:8px;min-height:18px}
+      .q{margin:14px 0}@media print{body{margin:0}}</style></head><body>
+      <h1>${plant.name}</h1>
+      <p><b>Finnish:</b> ${plant.fi} &nbsp; <b>Swedish:</b> ${plant.sv}</p>
+      <h2>Quick facts</h2>
+      ${plant.quickFacts.map(([k,v]) => `<div class="row"><span>${k}</span><b>${v}</b></div>`).join("")}
+      <h2>Read</h2><p>${levels.middle}</p>
+      <h2>Answer</h2>
+      <div class="q">1. What is the scientific name of this plant? <div class="blank"></div></div>
+      <div class="q">2. When does it bloom? <div class="blank"></div></div>
+      <div class="q">3. What conservation status does it have? <div class="blank"></div></div>
+      <div class="q">4. Where in Finland was the Oulu specimen collected? <div class="blank"></div></div>
+      <div class="q">5. Name one threat to this plant: <div class="blank"></div></div>
+      <p style="margin-top:48px;font-size:11px;color:#666">BloomOulu &middot; University of Oulu Botanical Garden &middot; Accession ${plant.accession}</p>
+      <script>window.onload=()=>window.print()</script></body></html>`;
+    w.document.write(body);
+    w.document.close();
+  };
+  return (
+    <div style={{ marginTop: 24, padding: "22px 24px", background: "var(--paper)", borderRadius: 18, border: `2px solid var(--forest)` }}>
+      <div className="tiny" style={{ color: "var(--forest)", marginBottom: 8 }}>🏫 {t("School mode")}</div>
+      <h2 className="serif" style={{ fontSize: 26, lineHeight: 1.15, color: "var(--ink)", margin: 0 }}>{plant.name}</h2>
+      <div style={{ display: "flex", gap: 6, marginTop: 14, flexWrap: "wrap" }}>
+        {[
+          { id: "primary", label: t("Alakoulu") },
+          { id: "middle", label: t("Yläkoulu") },
+          { id: "upper", label: t("Lukio") }
+        ].map(l => (
+          <button key={l.id} onClick={() => setReadingLevel(l.id)} className="pill" style={{
+            cursor: "pointer", padding: "6px 12px", fontSize: 12,
+            background: readingLevel === l.id ? "var(--forest)" : "rgba(31,58,44,0.06)",
+            color: readingLevel === l.id ? "var(--paper)" : "var(--ink-2)"
+          }}>{l.label}</button>
+        ))}
+      </div>
+      <p style={{ marginTop: 14, fontSize: 15, lineHeight: 1.6, color: "var(--ink-soft)" }}>{levels[readingLevel]}</p>
+      <div style={{ marginTop: 18, display: "flex", gap: 10, flexWrap: "wrap" }}>
+        <button className="btn btn-primary small" onClick={onQuiz}>
+          <Icon name="sparkle" size={14}/> {t("Start quiz (3 questions)")}
+        </button>
+        <button className="btn btn-secondary small" onClick={printWorksheet}>
+          <Icon name="info" size={14}/> {t("Print worksheet")}
+        </button>
+        <button className="btn btn-secondary small" onClick={() => { showToast(`${t("Added to lesson plan")}: ${plant.name}`); }}>
+          <Icon name="plus" size={14}/> {t("Add to lesson plan")}
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// =====================================================================
+// Simple 3-question quiz modal — School mode
+// =====================================================================
+const QuizModal = ({ plant, t, onClose }) => {
+  const [step, setStep] = React.useState(0);
+  const [score, setScore] = React.useState(0);
+  const [picked, setPicked] = React.useState(null);
+  const others = PLANTS.filter(p => p.id !== plant.id);
+  const shuffle = (arr) => arr.map(x => [Math.random(), x]).sort((a,b)=>a[0]-b[0]).map(x => x[1]);
+  // Stable per-modal-open
+  const qs = React.useMemo(() => [
+    {
+      q: `${t("What is the scientific name of this plant?")}`,
+      options: shuffle([plant.name, others[0].name, others[1].name, others[2].name]),
+      answer: plant.name
+    },
+    {
+      q: `${t("When does it bloom?")}`,
+      options: shuffle([plant.bloom, "January", "December", "October"]),
+      answer: plant.bloom
+    },
+    {
+      q: `${t("What is its conservation status?")}`,
+      options: shuffle(["CR", "EN", "VU", "NT"]),
+      answer: plant.rarity
+    }
+  ], [plant.id]);
+  const done = step >= qs.length;
+  const handlePick = (opt) => {
+    if (picked) return;
+    setPicked(opt);
+    if (opt === qs[step].answer) setScore(s => s + 1);
+    setTimeout(() => { setPicked(null); setStep(s => s + 1); }, 900);
+  };
+  return (
+    <div onClick={onClose} role="dialog" aria-modal="true" aria-label={t("Plant quiz")}
+      style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(5,10,7,0.78)", backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)", display: "grid", placeItems: "center", padding: 16 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: "var(--paper)", color: "var(--ink)", borderRadius: 18, padding: 24, maxWidth: 480, width: "100%", boxShadow: "var(--shadow-deep)", position: "relative" }}>
+        <button onClick={onClose} className="icon-btn" aria-label={t("Close")} style={{ position: "absolute", top: 14, right: 14 }}><Icon name="close" size={14}/></button>
+        <div className="tiny" style={{ color: "var(--forest)" }}>🏫 {t("Quiz")}</div>
+        <h3 className="serif" style={{ fontSize: 22, marginTop: 8, fontStyle: "italic" }}>{plant.name}</h3>
+        {!done ? (
+          <>
+            <div className="tiny" style={{ marginTop: 18 }}>{t("Question")} {step + 1} / {qs.length}</div>
+            <p className="serif" style={{ fontSize: 18, marginTop: 8, color: "var(--ink)" }}>{qs[step].q}</p>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 8, marginTop: 16 }} data-grid-mobile="keep">
+              {qs[step].options.map(opt => {
+                const isAnswer = opt === qs[step].answer;
+                const isPicked = picked === opt;
+                const showColor = picked && (isAnswer || isPicked);
+                return (
+                  <button key={opt} onClick={() => handlePick(opt)} disabled={!!picked} style={{
+                    padding: "14px 18px", border: "1px solid var(--line)", borderRadius: 12,
+                    background: showColor ? (isAnswer ? "var(--sage-pale)" : "var(--rust-soft)") : "var(--paper)",
+                    color: showColor ? (isAnswer ? "var(--forest)" : "var(--rust)") : "var(--ink)",
+                    textAlign: "left", cursor: picked ? "default" : "pointer", fontSize: 15,
+                    transition: "all 200ms"
+                  }}>{opt}{showColor && isAnswer && "  ✓"}</button>
+                );
+              })}
+            </div>
+          </>
+        ) : (
+          <div style={{ marginTop: 20, textAlign: "center" }}>
+            <div className="serif" style={{ fontSize: 48 }}>{score} / {qs.length}</div>
+            <div className="muted" style={{ marginTop: 6 }}>
+              {score === qs.length ? `🏆 ${t("Perfect!")}` : score >= 2 ? `🌱 ${t("Nice work!")}` : t("Try again - learning is fun!")}
+            </div>
+            <button onClick={onClose} className="btn btn-primary" style={{ marginTop: 20 }}>{t("Close")}</button>
+          </div>
+        )}
       </div>
     </div>
   );

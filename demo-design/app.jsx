@@ -216,6 +216,9 @@ const App = () => {
         {route.screen === "kiosk" && <KioskScreen onNav={nav}/>}
       </main>
 
+      {/* Live toast announcer */}
+      <Toaster/>
+
       {/* Accessibility settings floating button + panel */}
       <button
         className="a11y-fab"
@@ -293,9 +296,18 @@ const App = () => {
                 {t("One platform for the University of Oulu Botanical Garden - adoption, AI-grounded answers, and the QR plant experience. Built with Team Meraki for GrowthHack 2026.")}
               </p>
               <div style={{ marginTop: 24, display: "flex", gap: 10 }}>
-                <button className="icon-btn" style={{ background: "transparent", color: "var(--cream)", borderColor: "rgba(250,247,238,0.2)" }}><Icon name="share" size={14}/></button>
-                <button className="icon-btn" style={{ background: "transparent", color: "var(--cream)", borderColor: "rgba(250,247,238,0.2)" }}><Icon name="globe" size={14}/></button>
-                <button className="icon-btn" style={{ background: "transparent", color: "var(--cream)", borderColor: "rgba(250,247,238,0.2)" }}><Icon name="info" size={14}/></button>
+                <button
+                  className="icon-btn"
+                  aria-label={t("Share BloomOulu")}
+                  onClick={async () => {
+                    const r = await sharePlant({ name: "BloomOulu", story: "Adopt a plant. Keep Finland in bloom.", id: "" });
+                    if (r.mode === "shared") showToast(t("Shared"));
+                    else if (r.mode === "copied") showToast(t("Link copied to clipboard"));
+                  }}
+                  style={{ background: "transparent", color: "var(--cream)", borderColor: "rgba(250,247,238,0.2)" }}
+                ><Icon name="share" size={14}/></button>
+                <button className="icon-btn" aria-label={t("Language")} style={{ background: "transparent", color: "var(--cream)", borderColor: "rgba(250,247,238,0.2)" }}><Icon name="globe" size={14}/></button>
+                <button className="icon-btn" aria-label={t("About")} style={{ background: "transparent", color: "var(--cream)", borderColor: "rgba(250,247,238,0.2)" }}><Icon name="info" size={14}/></button>
               </div>
             </div>
 
@@ -334,6 +346,28 @@ const App = () => {
     </LangContext.Provider>
   );
 };
+
+// Toaster: listens for "bloom_toast" CustomEvents and renders them.
+const Toaster = () => {
+  const [toasts, setToasts] = React.useState([]);
+  React.useEffect(() => {
+    const handler = (e) => {
+      const id = Math.random().toString(36).slice(2);
+      const message = e.detail?.message || "";
+      setToasts(t => [...t, { id, message }]);
+      setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 3000);
+    };
+    window.addEventListener("bloom_toast", handler);
+    return () => window.removeEventListener("bloom_toast", handler);
+  }, []);
+  if (!toasts.length) return null;
+  return (
+    <div className="bloom-toaster" role="status" aria-live="polite" aria-atomic="true">
+      {toasts.map(t => <div key={t.id} className="bloom-toast">{t.message}</div>)}
+    </div>
+  );
+};
+window.Toaster = Toaster;
 
 // Shared dropdown styling
 const dropdownStyle = {

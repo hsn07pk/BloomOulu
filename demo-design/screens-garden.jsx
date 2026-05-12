@@ -4,6 +4,12 @@ const GardenScreen = ({ onOpenPlant, onNav }) => {
   const { t, lang } = useT();
   const myPlants = [PLANTS[0], PLANTS[1], PLANTS[5]].map(p => localisePlant(p, lang)); // Pulsatilla, Campanula, Cypripedium
   const [celebrate, setCelebrate] = React.useState(true);
+  const { saved: savedIds, toggle: toggleSaved } = useSavedPlants();
+  const savedPlants = savedIds
+    .map(id => PLANTS.find(p => p.id === id))
+    .filter(Boolean)
+    .filter(p => !myPlants.some(my => my.id === p.id))
+    .map(p => localisePlant(p, lang));
 
   return (
     <div className="fade-in">
@@ -146,12 +152,45 @@ const GardenScreen = ({ onOpenPlant, onNav }) => {
 
                 <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16 }}>
                   <button className="btn btn-secondary small" onClick={() => onOpenPlant(p.id)}>{t("View page")}</button>
-                  <button className="btn btn-ghost small"><Icon name="share" size={13}/> {t("Share")}</button>
+                  <button className="btn btn-ghost small" onClick={async () => {
+                    const r = await sharePlant(p);
+                    if (r.mode === "shared") showToast(t("Shared"));
+                    else if (r.mode === "copied") showToast(t("Link copied to clipboard"));
+                  }}><Icon name="share" size={13}/> {t("Share")}</button>
                 </div>
               </div>
             </div>
           ))}
         </div>
+
+        {/* Saved for later - bookmarked plants */}
+        {savedPlants.length > 0 && (
+          <div style={{ marginTop: 48 }}>
+            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 16 }}>
+              <h3 className="serif" style={{ fontSize: 24 }}>📑 {t("Saved for later")}</h3>
+              <span className="tiny">{savedPlants.length} {savedPlants.length === 1 ? t("plant") : t("plants")}</span>
+            </div>
+            <div data-grid-mobile="2" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
+              {savedPlants.map(p => (
+                <div key={p.id} className="card" style={{ padding: 0, overflow: "hidden" }}>
+                  <button onClick={() => onOpenPlant(p.id)} style={{ display: "block", width: "100%", padding: 0, border: 0, background: "transparent", cursor: "pointer", textAlign: "left" }}>
+                    <div style={{ height: 140, background: p.accent, overflow: "hidden" }}>
+                      <PlantImage plant={p} style={{ width: "100%", height: "100%" }}/>
+                    </div>
+                    <div style={{ padding: 14 }}>
+                      <div className="serif" style={{ fontSize: 16, fontStyle: "italic", lineHeight: 1.1 }}>{p.name}</div>
+                      <div className="tiny" style={{ marginTop: 4 }}>{p.fi || p.localName} · {p.rarity}</div>
+                    </div>
+                  </button>
+                  <div style={{ display: "flex", borderTop: "1px solid var(--line)", fontSize: 12 }}>
+                    <button onClick={() => onOpenPlant(p.id)} style={{ flex: 1, padding: "10px 8px", background: "transparent", border: 0, borderRight: "1px solid var(--line)", color: "var(--ink-soft)", cursor: "pointer" }}>{t("View")}</button>
+                    <button onClick={() => { toggleSaved(p.id); showToast(t("Removed from My Garden")); }} style={{ flex: 1, padding: "10px 8px", background: "transparent", border: 0, color: "var(--rust)", cursor: "pointer" }}>{t("Remove")}</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Activity feed + memorials side by side */}
         <div style={{ marginTop: 56, display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 24 }}>
