@@ -76,8 +76,8 @@ const KioskScreen = ({ onNav }) => {
               </button>
             </div>
 
-            {/* Botanical illustration */}
-            <div style={{ position: "absolute", right: -40, bottom: -40, width: 320, height: 380, opacity: 0.5 }}>
+            {/* Botanical illustration (decorative; must not intercept clicks) */}
+            <div style={{ position: "absolute", right: -40, bottom: -40, width: 320, height: 380, opacity: 0.5, pointerEvents: "none" }} aria-hidden="true">
               <Botanical color="#A8C060" accent="rgba(168,192,96,0.2)" variant={0} style={{ width: "100%", height: "100%" }}/>
             </div>
           </div>

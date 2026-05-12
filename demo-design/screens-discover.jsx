@@ -96,8 +96,8 @@ const DiscoverScreen = ({ onOpenPlant, onNav }) => {
           </div>
         </div>
 
-        {/* Decorative botanical sketch */}
-        <svg style={{ position: "absolute", right: -120, top: -40, opacity: 0.08, width: 600, height: 600 }} viewBox="0 0 200 200" stroke="white" fill="none" strokeWidth="0.5">
+        {/* Decorative botanical sketch (must not intercept clicks) */}
+        <svg aria-hidden="true" style={{ position: "absolute", right: -120, top: -40, opacity: 0.08, width: 600, height: 600, pointerEvents: "none" }} viewBox="0 0 200 200" stroke="white" fill="none" strokeWidth="0.5">
           <g transform="translate(100, 180)">
             <path d="M0 0 V-180"/>
             {[20, 50, 80, 110, 140].flatMap((y, i) => [
