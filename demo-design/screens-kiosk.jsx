@@ -3,10 +3,17 @@
 const KioskScreen = ({ onNav }) => {
   const { t, lang } = useT();
   const [time, setTime] = React.useState(new Date());
+  const [showMap, setShowMap] = React.useState(false);
   React.useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 30000);
     return () => clearInterval(t);
   }, []);
+  React.useEffect(() => {
+    if (!showMap) return;
+    const onKey = (e) => { if (e.key === "Escape") setShowMap(false); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [showMap]);
 
   // Stable QR module pattern - generated once, not on every clock tick
   const qrModules = React.useMemo(() => {
@@ -62,7 +69,7 @@ const KioskScreen = ({ onNav }) => {
               <button className="btn btn-grad btn-lg" onClick={() => onNav("plant", "puls-pat")}>
                 <Icon name="qr" size={16}/> {t("Scan to begin tour")}
               </button>
-              <button className="btn pill-on-dark" style={{ color: "var(--cream)" }}>
+              <button className="btn pill-on-dark" style={{ color: "var(--cream)", cursor: "pointer" }} onClick={() => setShowMap(true)}>
                 <Icon name="map" size={14}/> {t("Show on map")}
               </button>
             </div>
@@ -210,6 +217,93 @@ const KioskScreen = ({ onNav }) => {
           <span>BloomOulu v1.0 · {time.toLocaleDateString("fi-FI")}</span>
         </div>
       </div>
+
+      {/* Garden map overlay */}
+      {showMap && (
+        <div
+          onClick={() => setShowMap(false)}
+          style={{
+            position: "fixed", inset: 0, zIndex: 200,
+            background: "rgba(5, 10, 7, 0.78)",
+            backdropFilter: "blur(10px)",
+            WebkitBackdropFilter: "blur(10px)",
+            display: "grid", placeItems: "center", padding: 24
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "var(--cream)", color: "var(--ink)",
+              borderRadius: 18, padding: 28, maxWidth: 760, width: "100%",
+              boxShadow: "var(--shadow-deep)", position: "relative"
+            }}
+          >
+            <button
+              onClick={() => setShowMap(false)}
+              className="icon-btn"
+              aria-label={t("Close")}
+              style={{ position: "absolute", top: 16, right: 16 }}
+            >
+              <Icon name="close" size={16}/>
+            </button>
+            <div className="eyebrow">{t("Garden map")}</div>
+            <h3 className="serif" style={{ fontSize: 28, marginTop: 10, fontStyle: "italic" }}>Pulsatilla patens</h3>
+            <div className="small muted" style={{ marginTop: 6 }}>{t("South esker bed · 220m from the main gate, left at the meadow")}</div>
+
+            {/* Stylised garden map */}
+            <svg viewBox="0 0 600 360" style={{ width: "100%", marginTop: 22, borderRadius: 12, background: "linear-gradient(180deg, #E8EEDE 0%, #D6EBE3 100%)", border: "1px solid var(--line)" }}>
+              {/* Paths */}
+              <path d="M50 320 Q 150 280 200 250 T 350 200 T 520 140" stroke="#88A050" strokeWidth="3" fill="none" strokeDasharray="6 4"/>
+              <path d="M200 250 L 200 100" stroke="#88A050" strokeWidth="2" fill="none" strokeDasharray="6 4" opacity="0.5"/>
+              <path d="M350 200 L 480 200" stroke="#88A050" strokeWidth="2" fill="none" strokeDasharray="6 4" opacity="0.5"/>
+
+              {/* Beds */}
+              <rect x="80" y="240" width="80" height="56" rx="6" fill="rgba(168,192,96,0.45)"/>
+              <rect x="280" y="160" width="100" height="60" rx="6" fill="rgba(95,176,160,0.35)"/>
+              <rect x="420" y="100" width="120" height="70" rx="6" fill="rgba(168,192,96,0.55)"/>
+              <rect x="180" y="100" width="60" height="80" rx="6" fill="rgba(201,161,74,0.3)"/>
+
+              {/* Romeo & Julia greenhouses */}
+              <g transform="translate(40, 30)">
+                <rect width="120" height="58" rx="8" fill="#3D6A52"/>
+                <text x="60" y="32" textAnchor="middle" fill="#FAF7EE" fontSize="11" fontFamily="var(--f-mono)" letterSpacing="0.12em">ROMEO &amp; JULIA</text>
+                <text x="60" y="48" textAnchor="middle" fill="rgba(250,247,238,0.7)" fontSize="9">{t("Greenhouses")}</text>
+              </g>
+
+              {/* Main gate */}
+              <g transform="translate(20, 320)">
+                <circle r="6" fill="#1F3C2D"/>
+                <text x="14" y="4" fontSize="10" fill="#1F3C2D" fontFamily="var(--f-mono)" letterSpacing="0.08em">{t("Main gate")}</text>
+              </g>
+
+              {/* The plant pin - south esker bed */}
+              <g transform="translate(440, 130)">
+                <circle r="22" fill="#B25C3A" opacity="0.25">
+                  <animate attributeName="r" values="22;30;22" dur="2s" repeatCount="indefinite"/>
+                  <animate attributeName="opacity" values="0.25;0;0.25" dur="2s" repeatCount="indefinite"/>
+                </circle>
+                <circle r="10" fill="#B25C3A" stroke="#FAF7EE" strokeWidth="3"/>
+                <text x="0" y="-30" textAnchor="middle" fontSize="11" fontFamily="var(--f-mono)" fontWeight="600" fill="#1F3C2D" letterSpacing="0.08em">{t("YOU ARE GOING HERE")}</text>
+              </g>
+
+              {/* You are here marker */}
+              <g transform="translate(50, 50)">
+                <circle r="6" fill="#5FB0A0" stroke="#FAF7EE" strokeWidth="2"/>
+                <text x="14" y="4" fontSize="10" fill="#1F3C2D" fontFamily="var(--f-mono)" letterSpacing="0.08em">{t("You are here")}</text>
+              </g>
+            </svg>
+
+            <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+              <button className="btn btn-primary" onClick={() => { setShowMap(false); onNav("plant", "puls-pat"); }}>
+                <Icon name="qr" size={14}/> {t("Open plant page")}
+              </button>
+              <button className="btn btn-secondary" onClick={() => setShowMap(false)}>
+                {t("Close")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -13,14 +13,17 @@ const AskScreen = ({ onNav, onOpenPlant }) => {
   const [mode, setMode] = React.useState("visitor");
   const scrollRef = React.useRef(null);
 
-  const sendQuestion = (q) => {
-    if (!q.trim()) return;
-    setMessages(m => [...m, { role: "user", text: q }]);
+  // displayText = what shows in the user bubble (already localised when from a
+  // trending/recent button). sourceKey = the English source string used for
+  // intent matching in buildAnswer; falls back to displayText for free typing.
+  const sendQuestion = (displayText, sourceKey) => {
+    if (!displayText || !displayText.trim()) return;
+    setMessages(m => [...m, { role: "user", text: displayText }]);
     setInput("");
     setThinking(true);
     setTimeout(() => {
       setThinking(false);
-      setMessages(m => [...m, buildAnswer(q, t)]);
+      setMessages(m => [...m, buildAnswer(sourceKey || displayText, t)]);
     }, 1100);
   };
 
@@ -61,10 +64,10 @@ const AskScreen = ({ onNav, onOpenPlant }) => {
             "Find a Kone Foundation grant template",
             "Identify a herbarium sample (image upload)"
           ]).map((q, i) => (
-            <button key={i} onClick={() => sendQuestion(q)} style={{
+            <button key={i} onClick={() => sendQuestion(t(q), q)} style={{
               display: "block", width: "100%", textAlign: "left", padding: "10px 12px",
               borderRadius: 10, fontSize: 13, color: "var(--ink-2)", marginBottom: 4,
-              background: "transparent", lineHeight: 1.4
+              background: "transparent", lineHeight: 1.4, border: 0, cursor: "pointer"
             }}
               onMouseEnter={e => e.currentTarget.style.background = "rgba(31,58,44,0.05)"}
               onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
@@ -74,10 +77,20 @@ const AskScreen = ({ onNav, onOpenPlant }) => {
 
           <div style={{ borderTop: "1px solid var(--line-soft)", marginTop: 24, paddingTop: 20 }}>
             <div className="tiny" style={{ marginBottom: 12 }}>{t("Recent")}</div>
-            {[ t("What's blooming this week?") , t("How is Pulsatilla doing?"), t("Adopters' Day - when?")].map((q, i) => (
-              <div key={i} style={{ padding: "10px 12px", borderRadius: 10, fontSize: 13, color: "var(--ink-3)", lineHeight: 1.4 }}>
-                {q}
-              </div>
+            {[
+              "What's blooming this week?",
+              "How is Pulsatilla doing?",
+              "Adopters' Day - when?"
+            ].map((q, i) => (
+              <button key={i} onClick={() => sendQuestion(t(q), q)} style={{
+                display: "block", width: "100%", textAlign: "left", padding: "10px 12px",
+                borderRadius: 10, fontSize: 13, color: "var(--ink-3)", lineHeight: 1.4,
+                background: "transparent", border: 0, cursor: "pointer"
+              }}
+                onMouseEnter={e => e.currentTarget.style.background = "rgba(31,58,44,0.05)"}
+                onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                {t(q)}
+              </button>
             ))}
           </div>
         </div>
@@ -270,10 +283,12 @@ const MessageBubble = ({ m, onOpenPlant }) => {
   );
 };
 
-// Pre-canned answers - t is passed in for i18n
+// Pre-canned answers - t is passed in for i18n.
+// Each trigger matches EN + FI + SV keyword stems so the same canned response
+// is reachable regardless of which language the user is typing in.
 function buildAnswer(q, t) {
   const ql = q.toLowerCase();
-  if (ql.includes("bloom") || ql.includes("blooming")) {
+  if (ql.includes("bloom") || ql.includes("blooming") || ql.includes("kukk") || ql.includes("blomma")) {
     return {
       role: "assistant",
       citations: [ASK_CITATIONS[2]],
@@ -291,7 +306,7 @@ function buildAnswer(q, t) {
       cards: ["puls-pat", "prim-nut"]
     };
   }
-  if (ql.includes("endangered") || ql.includes("critically")) {
+  if (ql.includes("endangered") || ql.includes("critically") || ql.includes("uhanal") || ql.includes("kriitti") || ql.includes("hotad") || ql.includes("akut")) {
     return {
       role: "assistant",
       citations: [ASK_CITATIONS[3], ASK_CITATIONS[1]],
@@ -304,7 +319,7 @@ function buildAnswer(q, t) {
       cards: ["puls-pat", "saxi-hirc"]
     };
   }
-  if (ql.includes("water lily") || ql.includes("victoria")) {
+  if (ql.includes("water lily") || ql.includes("victoria") || ql.includes("vesilij") || ql.includes("näckros")) {
     return {
       role: "assistant",
       citations: [ASK_CITATIONS[2]],
@@ -317,7 +332,7 @@ function buildAnswer(q, t) {
       cards: ["vict-am"]
     };
   }
-  if (ql.includes("ladys") || ql.includes("lady") || ql.includes("orchid")) {
+  if (ql.includes("ladys") || ql.includes("lady") || ql.includes("orchid") || ql.includes("tikankontti") || ql.includes("guckusko") || ql.includes("orkide")) {
     return {
       role: "assistant",
       citations: [ASK_CITATIONS[2], ASK_CITATIONS[3]],
@@ -330,7 +345,7 @@ function buildAnswer(q, t) {
       cards: ["cyp-cal"]
     };
   }
-  if (ql.includes("life+") || ql.includes("escape") || ql.includes("seed bank")) {
+  if (ql.includes("life+") || ql.includes("escape") || ql.includes("seed bank") || ql.includes("siemenpank") || ql.includes("fröbank")) {
     return {
       role: "assistant",
       citations: [ASK_CITATIONS[1]],
