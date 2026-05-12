@@ -62,6 +62,21 @@ const App = () => {
         {route.screen === "kiosk" && <KioskScreen onNav={nav}/>}
       </main>
 
+      {/* Mobile bottom tab bar - shown via CSS at <=768px */}
+      <nav className="mobile-tabs" aria-label="Primary">
+        {navItems.map(n => (
+          <button
+            key={n.id}
+            className={route.screen === n.id || (route.screen === "plant" && n.id === "discover") ? "active" : ""}
+            onClick={() => nav(n.id)}
+            aria-current={route.screen === n.id ? "page" : undefined}
+          >
+            <Icon name={n.icon} size={20}/>
+            <span>{n.label}</span>
+          </button>
+        ))}
+      </nav>
+
       {/* Footer - hide on full-bleed screens */}
       {!isFullBleed && (
         <footer style={{ background: "var(--forest-deep)", color: "var(--cream)", marginTop: 64, padding: "56px 0 40px", position: "relative", overflow: "hidden" }}>

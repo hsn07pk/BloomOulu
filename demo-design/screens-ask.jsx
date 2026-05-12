@@ -153,7 +153,7 @@ const AskScreen = ({ onNav, onOpenPlant }) => {
       </div>
 
       {/* RIGHT - context */}
-      <aside style={{ borderLeft: "1px solid var(--line-soft)", background: "var(--paper)", overflowY: "auto", padding: 24 }}>
+      <aside className="ask-context" style={{ borderLeft: "1px solid var(--line-soft)", background: "var(--paper)", overflowY: "auto", padding: 24 }}>
         <div className="tiny">{t("Context · what's grounding this")}</div>
         <h3 className="serif" style={{ fontSize: 22, marginTop: 8 }}>{t("Live corpus")}</h3>
 

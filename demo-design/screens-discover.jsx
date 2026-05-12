@@ -42,7 +42,7 @@ const DiscoverScreen = ({ onOpenPlant, onNav }) => {
               </div>
 
               {/* Stat strip */}
-              <div style={{ marginTop: 64, display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 0, borderTop: "1px solid rgba(248,244,230,0.18)", paddingTop: 28 }}>
+              <div data-grid-mobile="2" style={{ marginTop: 64, display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 0, borderTop: "1px solid rgba(248,244,230,0.18)", paddingTop: 28 }}>
                 {[
                   ["4 000+", t("plant species") ],
                   ["175", t("threatened taxa ex situ") ],
@@ -131,7 +131,7 @@ const DiscoverScreen = ({ onOpenPlant, onNav }) => {
           ))}
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20 }}>
+        <div data-grid-mobile="2" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20 }}>
           {visible.map(p => (
             <button key={p.id} onClick={() => onOpenPlant(p.id)} className="card" style={{ padding: 0, overflow: "hidden", textAlign: "left", transition: "all 200ms", cursor: "pointer" }}
               onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.boxShadow = "var(--shadow-lg)"; }}
@@ -208,7 +208,7 @@ const DiscoverScreen = ({ onOpenPlant, onNav }) => {
       <section className="container" style={{ paddingTop: 64, paddingBottom: 80 }}>
         <div className="tiny" style={{ color: "var(--rust)" }}>{t("How BloomOulu works")}</div>
         <h2 style={{ fontSize: 48, marginTop: 12, marginBottom: 40 }}>{t("Scan · Ask · Adopt · Return")}</h2>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 24 }}>
+        <div data-grid-mobile="2" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 24 }}>
           {[
             { num: "01", icon: "qr", title: t("Scan a plant"), body: t("Every label has a QR - and an NFC tag for blind visitors. Tap or scan, get 30-second audio in Finnish, Swedish, or English.") },
             { num: "02", icon: "bot", title: t("Ask the Garden"), body: t("Our AI is grounded in the Garden's accession database and the Biodiversity Unit's publications. Every answer cites its source.") },

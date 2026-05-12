@@ -230,4 +230,19 @@ const RarityBadge = ({ rarity, label, compact = false }) => {
   return <span className={`badge ${cls}`}>{compact ? rarity : <>{rarity} · {t(label)}</>}</span>;
 };
 
-Object.assign(window, { Icon, Progress, RarityBadge, Botanical, BloomMark });
+// Responsive helper - true at <=768px viewport
+const useIsMobile = (breakpoint = 768) => {
+  const get = () => typeof window !== "undefined" && window.innerWidth <= breakpoint;
+  const [isMobile, setIsMobile] = React.useState(get);
+  React.useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${breakpoint}px)`);
+    const handler = (e) => setIsMobile(e.matches);
+    mq.addEventListener ? mq.addEventListener("change", handler) : mq.addListener(handler);
+    return () => {
+      mq.removeEventListener ? mq.removeEventListener("change", handler) : mq.removeListener(handler);
+    };
+  }, [breakpoint]);
+  return isMobile;
+};
+
+Object.assign(window, { Icon, Progress, RarityBadge, Botanical, BloomMark, useIsMobile });

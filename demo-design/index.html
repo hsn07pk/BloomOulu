@@ -292,6 +292,136 @@
   .veining {
     background-image: repeating-linear-gradient(115deg, transparent, transparent 80px, rgba(168,192,96,.04) 80px, rgba(168,192,96,.04) 81px);
   }
+
+  /* ===================================================================
+     MOBILE TAB BAR — visible only at <=768px (defined inside @media)
+     =================================================================== */
+  .mobile-tabs { display: none; }
+
+  /* ===================================================================
+     RESPONSIVE — phone & small tablet (<=768px)
+     Uses !important to override inline grid/width/sticky styles.
+     =================================================================== */
+  @media (max-width: 768px) {
+    html, body { font-size: 14px; }
+    body { padding-bottom: 64px; }
+
+    /* Container: tighter padding, full width */
+    .container { padding: 20px 16px !important; max-width: 100% !important; }
+
+    /* Heading sizes - fluid scaling */
+    h1 { font-size: clamp(30px, 8vw, 44px) !important; line-height: 1.05 !important; }
+    h2 { font-size: clamp(24px, 6.5vw, 34px) !important; line-height: 1.1 !important; }
+    h3 { font-size: clamp(20px, 5.5vw, 28px) !important; line-height: 1.15 !important; }
+
+    /* Top bar: hide desktop nav (replaced by bottom tabs), shrink chrome */
+    .topbar-inner { padding: 10px 14px !important; gap: 10px !important; }
+    .nav { display: none !important; }
+    .brand { font-size: 18px !important; }
+    .brand-mark { width: 28px !important; height: 28px !important; }
+    .topbar-right { gap: 6px !important; margin-left: auto !important; }
+    .lang-pill { font-size: 10px !important; }
+    .lang-pill button { padding: 3px 7px !important; }
+    .icon-btn { width: 34px !important; height: 34px !important; }
+
+    /* All inline grids collapse to single column.
+       React renders camelCase style props as kebab-case in the DOM,
+       so the attribute selector must match the kebab-case form. */
+    [style*="grid-template-columns"] {
+      grid-template-columns: 1fr !important;
+      gap: 16px !important;
+    }
+    [data-grid-mobile="2"] { grid-template-columns: 1fr 1fr !important; }
+    [data-grid-mobile="keep"] { /* preserve original grid */ }
+
+    /* Side sticky panels (top: 140) become inline on mobile; top bars stay sticky */
+    [style*="position: sticky"][style*="top: 140"] {
+      position: static !important;
+      top: auto !important;
+    }
+
+    /* 100vh containers become natural-height */
+    [style*="100vh - 65px"], [style*="100vh-65px"] {
+      height: auto !important;
+      min-height: auto !important;
+      overflow: visible !important;
+    }
+
+    /* Fixed-width side panels become full-width */
+    [style*="width: 280px"], [style*="width: 300px"], [style*="width: 320px"],
+    [style*="width: 360px"], [style*="width: 380px"], [style*="width: 460px"],
+    [style*="width: 480px"], [style*="width: 520px"], [style*="width: 540px"],
+    [style*="width: 560px"], [style*="width: 600px"], [style*="width: 760px"],
+    [style*="max-width: 320"], [style*="max-width: 460"], [style*="max-width: 480"],
+    [style*="max-width: 520"], [style*="max-width: 540"], [style*="max-width: 560"],
+    [style*="max-width: 600"], [style*="max-width: 760"], [style*="max-width: 800"] {
+      width: 100% !important;
+      max-width: 100% !important;
+    }
+    [style*="min-width: 180"] { min-width: 0 !important; }
+
+    /* Tables: tighter */
+    table td { padding: 8px 0 !important; font-size: 12px !important; }
+    table td:first-child { width: 45% !important; }
+
+    /* Buttons: tappable */
+    .btn { min-height: 44px; padding: 12px 16px !important; }
+    .btn-lg { padding: 14px 20px !important; font-size: 14px !important; }
+    .btn-block { width: 100% !important; }
+    .icon-btn { min-width: 38px; min-height: 38px; }
+
+    /* Disable heavy decoration on small screens */
+    .veining { background-image: none !important; }
+
+    /* Footer copyright row stacks */
+    footer .container[style*="space-between"]:last-child {
+      flex-wrap: wrap !important; gap: 8px !important;
+      flex-direction: column !important; align-items: flex-start !important;
+    }
+
+    /* Bottom tab bar */
+    .mobile-tabs {
+      display: flex;
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: rgba(250, 247, 238, 0.96);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border-top: 1px solid var(--line);
+      z-index: 100;
+      padding: 6px 4px calc(8px + env(safe-area-inset-bottom));
+    }
+    .mobile-tabs button {
+      flex: 1;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 3px;
+      padding: 4px 2px;
+      color: var(--ink-mute);
+      font-size: 9.5px;
+      font-weight: 500;
+      background: transparent;
+      border: 0;
+      letter-spacing: 0.02em;
+    }
+    .mobile-tabs button.active { color: var(--forest-deep); }
+    .mobile-tabs button.active svg { stroke: var(--forest-deep); }
+
+    /* Reduce big hero stats strip gap */
+    section [style*="grid-template-columns: repeat(4, 1fr)"] { gap: 12px !important; }
+
+    /* Ask screen: hide right context aside on mobile (informational only) */
+    .ask-context { display: none !important; }
+
+    /* Ask screen: left sidebar gets less padding */
+    .ask-context + aside, aside[style*="borderRight"] { padding: 16px 0 !important; }
+  }
+
+  /* Tablet (769-1024px): some grids stay 2-col */
+  @media (min-width: 769px) and (max-width: 1024px) {
+    [style*="grid-template-columns: repeat(4, 1fr)"] { grid-template-columns: repeat(2, 1fr) !important; }
+    [style*="grid-template-columns: repeat(3, 1fr)"] { grid-template-columns: repeat(2, 1fr) !important; }
+    .container { padding: 24px !important; }
+  }
 </style>
 </head>
 <body>
