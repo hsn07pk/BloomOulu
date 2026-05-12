@@ -4,7 +4,7 @@ const PLANTS = [
   {
     id: "puls-pat",
     accession: "OULU-1998-0421",
-    image: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e7/Pulsatilla_patens01%28js%29.jpg/800px-Pulsatilla_patens01%28js%29.jpg",
+    image: "plants/pulsatilla-patens.jpg",
     name: "Pulsatilla patens",
     fi: "Hämeenkylmänkukka",
     sv: "Nipsippa",
@@ -34,7 +34,7 @@ const PLANTS = [
   {
     id: "camp-uni",
     accession: "OULU-2014-0033",
-    image: "https://upload.wikimedia.org/wikipedia/commons/thumb/6/68/Campanula_uniflora_upernavik_2007-07-11_1.jpg/800px-Campanula_uniflora_upernavik_2007-07-11_1.jpg",
+    image: "plants/campanula-uniflora.jpg",
     name: "Campanula uniflora",
     fi: "Pohjankello",
     sv: "Höga klockor",
@@ -63,7 +63,7 @@ const PLANTS = [
   },
   {
     id: "saxi-hirc",
-    image: "https://upload.wikimedia.org/wikipedia/commons/thumb/0/05/Skaftafell_-_Gelbe_Bl%C3%BCten.jpg/800px-Skaftafell_-_Gelbe_Bl%C3%BCten.jpg",
+    image: "plants/saxifraga-hirculus.jpg",
     accession: "OULU-2009-0117",
     name: "Saxifraga hirculus",
     fi: "Lettorikko",
@@ -93,7 +93,7 @@ const PLANTS = [
   },
   {
     id: "prim-nut",
-    image: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Primula_nutans_Simo%2C_Finland_03.06.2013.jpg/800px-Primula_nutans_Simo%2C_Finland_03.06.2013.jpg",
+    image: "plants/primula-nutans.jpg",
     accession: "OULU-2002-0288",
     name: "Primula nutans",
     fi: "Ruijanesikko",
@@ -123,7 +123,7 @@ const PLANTS = [
   },
   {
     id: "trol-eur",
-    image: "https://upload.wikimedia.org/wikipedia/commons/thumb/2/29/Trollius_europaeus_flower_-_Keila.jpg/800px-Trollius_europaeus_flower_-_Keila.jpg",
+    image: "plants/trollius-europaeus.jpg",
     accession: "OULU-1987-0044",
     name: "Trollius europaeus",
     fi: "Kullero",
@@ -153,7 +153,7 @@ const PLANTS = [
   },
   {
     id: "cyp-cal",
-    image: "https://upload.wikimedia.org/wikipedia/commons/thumb/7/74/Cypripedium_calceolus_wiki_mg-k01.jpg/800px-Cypripedium_calceolus_wiki_mg-k01.jpg",
+    image: "plants/cypripedium-calceolus.jpg",
     accession: "OULU-1995-0009",
     name: "Cypripedium calceolus",
     fi: "Tikankontti",
@@ -183,7 +183,7 @@ const PLANTS = [
   },
   {
     id: "lob-pul",
-    image: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/da/Lobaria_pulmonaria_010108c.jpg/800px-Lobaria_pulmonaria_010108c.jpg",
+    image: "plants/lobaria-pulmonaria.jpg",
     accession: "OULU-2017-0204",
     name: "Lobaria pulmonaria",
     fi: "Raidankeuhkojäkälä",
@@ -213,7 +213,7 @@ const PLANTS = [
   },
   {
     id: "vict-am",
-    image: "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b4/Victoria_amazonica_edit_1.jpg/800px-Victoria_amazonica_edit_1.jpg",
+    image: "plants/victoria-amazonica.jpg",
     accession: "OULU-1972-0001",
     name: "Victoria amazonica",
     fi: "Amazonin jättivesilumme",
