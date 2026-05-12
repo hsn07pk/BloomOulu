@@ -226,7 +226,7 @@ const PlantScreen = ({ plantId, onBack, onNav, onAdopt }) => {
           )}
 
           {/* Quick facts */}
-          <div data-grid-mobile="2" style={{ marginTop: 32, display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 0, borderTop: "1px solid var(--line-soft)", borderBottom: "1px solid var(--line-soft)" }}>
+          <div className="plant-quickfacts" data-grid-mobile="2" style={{ marginTop: 32, display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 0, borderTop: "1px solid var(--line-soft)", borderBottom: "1px solid var(--line-soft)" }}>
             {plant.quickFacts.map(([k, v], i) => (
               <div key={i} style={{ padding: "20px 24px 20px 0", borderRight: i < 3 ? "1px solid var(--line-soft)" : "none", paddingLeft: i > 0 ? 24 : 0 }}>
                 <div className="tiny">{t(k)}</div>
@@ -236,7 +236,7 @@ const PlantScreen = ({ plantId, onBack, onNav, onAdopt }) => {
           </div>
 
           {/* Tabs */}
-          <div style={{ marginTop: 40, display: "flex", gap: 4, borderBottom: "1px solid var(--line-soft)" }}>
+          <div className="plant-tabs" style={{ marginTop: 40, display: "flex", gap: 4, borderBottom: "1px solid var(--line-soft)" }}>
             {[
               ["story", t("The story") ],
               ["season", t("Seasonal view") ],

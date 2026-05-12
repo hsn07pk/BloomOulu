@@ -566,6 +566,88 @@
       gap: 8px !important;
     }
 
+    /* Plant hero overlay padding compaction */
+    [style*="aspectRatio: \"16/10\""] [style*="position: absolute"][style*="bottom: 20"] {
+      bottom: 12px !important; left: 12px !important; right: 12px !important;
+    }
+    [style*="aspectRatio: \"16/10\""] [style*="position: absolute"][style*="top: 20"] {
+      top: 12px !important; left: 12px !important; right: 12px !important;
+    }
+
+    /* Adopt sticky progress bar: hide labels + right spacer; show only step circles */
+    .adopt-progress .step-label { display: none !important; }
+    .adopt-progress .step-spacer { display: none !important; }
+    .adopt-progress .container { padding: 10px 14px !important; gap: 10px !important; }
+    .adopt-progress .step-connector { width: 16px !important; }
+
+    /* Plant tabs: horizontal scroll instead of wrap so they always fit */
+    .plant-tabs {
+      overflow-x: auto !important;
+      flex-wrap: nowrap !important;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    .plant-tabs::-webkit-scrollbar { display: none; }
+    .plant-tabs button { white-space: nowrap; padding: 10px 14px !important; font-size: 13px !important; flex-shrink: 0; }
+
+    /* Plant Quick Facts: clean borders in the 2x2 layout */
+    .plant-quickfacts > div { padding: 16px 14px !important; border-right: 0 !important; border-bottom: 1px solid var(--line) !important; }
+    .plant-quickfacts > div:nth-child(2n-1) { border-right: 1px solid var(--line) !important; padding-left: 0 !important; }
+    .plant-quickfacts > div:nth-child(2n) { padding-left: 14px !important; }
+    .plant-quickfacts > div:nth-last-child(-n+2) { border-bottom: 0 !important; }
+
+    /* Page-header rows (title + action buttons) wrap to two lines on mobile */
+    section [style*="justify-content: \"space-between\""][style*="align-items: \"end\""],
+    .container [style*="justify-content: \"space-between\""][style*="align-items: \"end\""],
+    [style*="display: \"flex\""][style*="space-between"][style*="align-items: \"end\""] {
+      flex-wrap: wrap !important;
+      gap: 14px !important;
+    }
+
+    /* My Garden header h1 was 72px; clamp it */
+    [style*="fontSize: 72"] { font-size: 38px !important; line-height: 1.05 !important; }
+
+    /* Plant page title h1 was 64px italic */
+    [style*="fontSize: 64"] { font-size: 36px !important; line-height: 1.05 !important; }
+
+    /* Discover hero h1 inline 92px; covered by global h1 clamp but reinforce */
+    [style*="fontSize: 92"] { font-size: clamp(34px, 9vw, 48px) !important; line-height: 1.0 !important; }
+    [style*="fontSize: 56"] { font-size: clamp(28px, 7vw, 38px) !important; line-height: 1.1 !important; }
+    [style*="fontSize: 52"] { font-size: clamp(26px, 6.5vw, 36px) !important; line-height: 1.1 !important; }
+    [style*="fontSize: 48"] { font-size: clamp(24px, 6vw, 34px) !important; line-height: 1.1 !important; }
+
+    /* Kiosk: tighter outer padding */
+    [style*="padding: \"32px 48px\""] { padding: 16px !important; }
+
+    /* Forms / fieldsets: ensure inputs are full-width */
+    input[type="text"], input[type="email"], input[type="date"], input[type="search"], select {
+      max-width: 100% !important; box-sizing: border-box !important;
+    }
+
+    /* Prevent horizontal overflow anywhere */
+    html, body { overflow-x: hidden; }
+
+    /* Modals get extra max-height room on mobile */
+    [role="dialog"] > div[style*="boxShadow"] {
+      max-height: calc(100vh - 80px) !important;
+      overflow-y: auto !important;
+    }
+  }
+
+  /* Very small phones (≤360px / iPhone SE 1st gen, older Androids) */
+  @media (max-width: 360px) {
+    .topbar-inner { padding: 8px 10px !important; gap: 6px !important; }
+    .brand span { display: none !important; }
+    .lang-pill { font-size: 9px !important; }
+    .lang-pill button { padding: 2px 5px !important; }
+    .icon-btn { width: 30px !important; height: 30px !important; }
+    .mobile-tabs button { font-size: 8.5px !important; gap: 2px !important; padding: 4px 1px !important; letter-spacing: 0 !important; }
+    .mobile-tabs button span { font-weight: 600; }
+    .container { padding: 14px 12px !important; }
+    h1 { font-size: clamp(26px, 8vw, 34px) !important; }
+    h2 { font-size: clamp(22px, 6.5vw, 28px) !important; }
+  }
+
     /* Plant page season tab caption: smaller font on mobile */
     .small.muted[style*="italic"] { font-size: 12px !important; }
 

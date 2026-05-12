@@ -21,9 +21,9 @@ const AdoptScreen = ({ presetPlantId, presetIntent, onNav }) => {
   return (
     <div className="fade-in">
       {/* Progress bar */}
-      <div style={{ background: "var(--paper)", borderBottom: "1px solid var(--line-soft)", position: "sticky", top: 65, zIndex: 30 }}>
+      <div className="adopt-progress" style={{ background: "var(--paper)", borderBottom: "1px solid var(--line-soft)", position: "sticky", top: 65, zIndex: 30 }}>
         <div className="container" style={{ padding: "16px 32px", display: "flex", alignItems: "center", gap: 24 }}>
-          <button className="btn btn-ghost small" onClick={() => step > 1 ? setStep(step - 1) : onNav("discover")}>
+          <button className="btn btn-ghost small" onClick={() => step > 1 ? setStep(step - 1) : onNav("discover")} aria-label={step === 1 ? t("Back to garden") : t("Previous")}>
             <Icon name="back" size={14}/> {step === 1 ? t("Back to garden") : t("Previous")}
           </button>
           <div style={{ display: "flex", gap: 4, alignItems: "center", flex: 1, justifyContent: "center" }}>
@@ -40,15 +40,15 @@ const AdoptScreen = ({ presetPlantId, presetIntent, onNav }) => {
                       color: done || active ? "var(--paper)" : "var(--ink-3)",
                       display: "flex", alignItems: "center", justifyContent: "center",
                       fontSize: 11, fontWeight: 600
-                    }}>{done ? <Icon name="check" size={12}/> : n}</div>
-                    <span className="small" style={{ color: active ? "var(--ink)" : "var(--ink-3)", fontWeight: active ? 500 : 400 }}>{label}</span>
+                    }} aria-label={`Step ${n}: ${label}`}>{done ? <Icon name="check" size={12}/> : n}</div>
+                    <span className="small step-label" style={{ color: active ? "var(--ink)" : "var(--ink-3)", fontWeight: active ? 500 : 400 }}>{label}</span>
                   </div>
-                  {n < 4 && <div style={{ width: 40, height: 1, background: "var(--line)" }}/>}
+                  {n < 4 && <div className="step-connector" style={{ width: 40, height: 1, background: "var(--line)" }}/>}
                 </React.Fragment>
               );
             })}
           </div>
-          <div style={{ width: 100 }}/>
+          <div className="step-spacer" style={{ width: 100 }}/>
         </div>
       </div>
 
@@ -153,7 +153,7 @@ const AdoptScreen = ({ presetPlantId, presetIntent, onNav }) => {
               <span className="pill"><Icon name="seedling" size={13}/> {tier.name} tier · €{total}{recurring ? "/mo" : ""}</span>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
+            <div data-grid-mobile="2" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
               {plants.map(p => {
                 const selected = plantId === p.id;
                 const needs = p.funded < 80;
