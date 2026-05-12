@@ -16,17 +16,6 @@ const KioskScreen = ({ onNav }) => {
     return () => document.removeEventListener("keydown", onKey);
   }, [showMap]);
 
-  // Stable QR module pattern - generated once, not on every clock tick
-  const qrModules = React.useMemo(() => {
-    return Array.from({ length: 120 }, (_, i) => {
-      const x = 12 + (i * 7) % 156;
-      const y = 70 + Math.floor((i * 11) / 24) * 6;
-      if ((x < 60 && y < 60) || (x > 120 && y < 60) || (x < 60 && y > 120)) return null;
-      // Deterministic pseudo-random based on index
-      const filled = ((i * 2654435761) >>> 0) % 100 > 45;
-      return { x, y, filled };
-    }).filter(Boolean);
-  }, []);
 
   return (
     <div className="fade-in" style={{ background: "var(--forest-deep)", minHeight: "calc(100vh - 65px)", color: "var(--cream)", padding: "32px 48px", position: "relative", overflow: "hidden" }}>
@@ -88,28 +77,18 @@ const KioskScreen = ({ onNav }) => {
             <h3 className="serif" style={{ fontSize: 32, marginTop: 12 }}>{t("Scan any plant.")}</h3>
             <p className="small muted" style={{ marginTop: 8 }}>{t("3-language audio narration.")}</p>
 
-            <div style={{ marginTop: 28, alignSelf: "center", padding: 24, background: "var(--paper)", borderRadius: 12, boxShadow: "var(--shadow-soft)" }}>
-              {/* Stylised QR */}
-              <svg width="180" height="180" viewBox="0 0 180 180">
-                <rect width="180" height="180" fill="white"/>
-                {/* 3 finders */}
-                {[[12, 12], [120, 12], [12, 120]].map(([x, y], i) => (
-                  <g key={i}>
-                    <rect x={x} y={y} width="48" height="48" fill="var(--forest-deep)"/>
-                    <rect x={x+8} y={y+8} width="32" height="32" fill="var(--cream)"/>
-                    <rect x={x+16} y={y+16} width="16" height="16" fill="var(--forest-deep)"/>
-                  </g>
-                ))}
-                {/* random modules - stable across re-renders */}
-                {qrModules.map((m, i) => (
-                  <rect key={i} x={m.x} y={m.y} width="6" height="6" fill={m.filled ? "var(--forest-deep)" : "transparent"}/>
-                ))}
-                <g transform="translate(72, 72)">
-                  <rect width="36" height="36" fill="var(--cream)"/>
-                  <g transform="translate(2, 2)"><BloomMark size={32}/></g>
-                </g>
-              </svg>
-            </div>
+            {/* Real scannable QR — encodes the deep-link URL for Pulsatilla patens.
+                Tapping it also navigates so the demo works on a phone screen. */}
+            <button
+              onClick={() => onNav("plant", "puls-pat")}
+              aria-label={t("Scan or tap to open Pulsatilla patens")}
+              style={{ marginTop: 28, alignSelf: "center", padding: 18, background: "var(--paper)", borderRadius: 12, boxShadow: "var(--shadow-soft)", border: "1px solid var(--line)", cursor: "pointer" }}
+            >
+              <QRCode value={plantDeepLink("puls-pat")} size={180} ecLevel="H"/>
+              <div className="tiny" style={{ marginTop: 10, textAlign: "center", color: "var(--ink-mute)" }}>
+                {t("Scan with your phone camera")}
+              </div>
+            </button>
             <div style={{ marginTop: 20 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: "var(--ink-soft)" }}>
                 <span style={{ width: 24, height: 24, borderRadius: "50%", background: "var(--forest)", color: "var(--cream)", display: "inline-flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--f-mono)", fontSize: 11, fontWeight: 600 }}>1</span>

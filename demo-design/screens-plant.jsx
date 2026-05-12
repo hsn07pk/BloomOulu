@@ -10,6 +10,7 @@ const PlantScreen = ({ plantId, onBack, onNav, onAdopt }) => {
   const [readingLevel, setReadingLevel] = React.useState("middle"); // primary / middle / upper
   const [quizOpen, setQuizOpen] = React.useState(false);
   const [showMap, setShowMap] = React.useState(false);
+  const [showQR, setShowQR] = React.useState(false);
 
   React.useEffect(() => {
     if (!showMap) return;
@@ -85,6 +86,12 @@ const PlantScreen = ({ plantId, onBack, onNav, onAdopt }) => {
           <button className="btn btn-ghost small" onClick={onBack} aria-label={t("Back")}><Icon name="back" size={14}/> {t("Back")}</button>
           <span className="tiny">{t("Scanned via QR · ")}{plant.accession}</span>
           <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+            <button
+              className="icon-btn"
+              aria-label={t("Show QR code for this plant")}
+              onClick={() => setShowQR(true)}
+              title={t("Show QR code for this plant")}
+            ><Icon name="qr" size={16}/></button>
             <button
               className="icon-btn"
               aria-label={isPlantSaved ? t("Remove bookmark") : t("Save to My Garden")}
@@ -451,6 +458,49 @@ const PlantScreen = ({ plantId, onBack, onNav, onAdopt }) => {
 
       {/* Quiz modal — School mode */}
       {quizOpen && <QuizModal plant={plant} t={t} onClose={() => setQuizOpen(false)}/>}
+
+      {/* QR code modal — shareable deep link for this plant */}
+      {showQR && (
+        <div
+          onClick={() => setShowQR(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-label={t("QR code")}
+          style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(5,10,7,0.78)", backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)", display: "grid", placeItems: "center", padding: 16 }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{ background: "var(--cream)", color: "var(--ink)", borderRadius: 18, padding: 24, maxWidth: 380, width: "100%", boxShadow: "var(--shadow-deep)", position: "relative", textAlign: "center" }}
+          >
+            <button onClick={() => setShowQR(false)} className="icon-btn" aria-label={t("Close")} style={{ position: "absolute", top: 14, right: 14 }}>
+              <Icon name="close" size={14}/>
+            </button>
+            <div className="eyebrow" style={{ justifyContent: "center" }}>{t("QR code")}</div>
+            <h3 className="serif" style={{ fontSize: 22, marginTop: 8, fontStyle: "italic" }}>{plant.name}</h3>
+            <div className="small muted" style={{ marginTop: 4 }}>{plant.accession}</div>
+            <div style={{ marginTop: 18, padding: 16, background: "var(--paper)", borderRadius: 12, border: "1px solid var(--line)", display: "inline-block" }}>
+              <QRCode value={plantDeepLink(plant.id)} size={220} ecLevel="H"/>
+            </div>
+            <p className="small muted" style={{ marginTop: 14, lineHeight: 1.5 }}>
+              {t("Print this on the plant's physical label. Visitors scan it with their phone camera to open this exact page.")}
+            </p>
+            <div style={{ marginTop: 16, padding: 10, background: "rgba(31,58,44,0.06)", borderRadius: 8, fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--ink-soft)", wordBreak: "break-all" }}>
+              {plantDeepLink(plant.id)}
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 14, justifyContent: "center", flexWrap: "wrap" }}>
+              <button className="btn btn-secondary small" onClick={async () => {
+                try { await navigator.clipboard.writeText(plantDeepLink(plant.id)); showToast(t("Link copied to clipboard")); }
+                catch { showToast(t("Could not share")); }
+              }}>
+                <Icon name="share" size={13}/> {t("Copy link")}
+              </button>
+              <button className="btn btn-secondary small" onClick={() => window.print()}>
+                <Icon name="info" size={13}/> {t("Print")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Map overlay — opens from the origin pill */}
       {showMap && (

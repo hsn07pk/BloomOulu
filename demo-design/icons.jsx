@@ -472,4 +472,55 @@ const PlantMap = ({ plant, height = 360 }) => {
   );
 };
 
-Object.assign(window, { Icon, Progress, RarityBadge, Botanical, PlantImage, BloomMark, useIsMobile, useWeather, useSavedPlants, useStickerCollection, showToast, sharePlant, PlantMap, PLANT_BED, PLANT_COORDS, GARDEN_CENTER });
+// Real scannable QR code via qrcode-generator (loaded in index.html).
+// Renders an SVG with a centred BloomOulu mark.
+const QRCode = ({ value, size = 180, ecLevel = "H", logoSize = 0.22, color = "#1F3C2D", bg = "#FFFFFF" }) => {
+  const ref = React.useRef(null);
+  React.useEffect(() => {
+    if (!ref.current || typeof qrcode === "undefined" || !value) return;
+    const qr = qrcode(0, ecLevel);
+    qr.addData(value);
+    qr.make();
+    const count = qr.getModuleCount();
+    const cell = size / (count + 2); // include 1-cell quiet zone on each side
+    const offset = cell;
+    let path = "";
+    for (let r = 0; r < count; r++) {
+      for (let c = 0; c < count; c++) {
+        if (qr.isDark(r, c)) {
+          path += `M${(c * cell + offset).toFixed(2)},${(r * cell + offset).toFixed(2)}h${cell.toFixed(2)}v${cell.toFixed(2)}h-${cell.toFixed(2)}z`;
+        }
+      }
+    }
+    const logo = logoSize > 0 ? Math.round(size * logoSize) : 0;
+    ref.current.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" role="img" aria-label="QR code">
+        <rect width="${size}" height="${size}" fill="${bg}"/>
+        <path d="${path}" fill="${color}"/>
+        ${logo ? `
+        <rect x="${(size - logo) / 2}" y="${(size - logo) / 2}" width="${logo}" height="${logo}" fill="${bg}" rx="4"/>
+        <g transform="translate(${(size - logo) / 2 + logo * 0.1}, ${(size - logo) / 2 + logo * 0.1}) scale(${logo * 0.8 / 100})">
+          <defs>
+            <linearGradient id="qrlogo" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#2D5440"/>
+              <stop offset="50%" stop-color="#5FB0A0"/>
+              <stop offset="100%" stop-color="#A8C060"/>
+            </linearGradient>
+          </defs>
+          <circle cx="50" cy="50" r="42" fill="url(#qrlogo)"/>
+        </g>
+        ` : ""}
+      </svg>
+    `;
+  }, [value, size, ecLevel, logoSize, color, bg]);
+  return <div ref={ref} style={{ lineHeight: 0 }}/>;
+};
+
+// Build a deep-link URL for a plant. When scanned, the app reads the hash
+// and routes to that plant page on load.
+const plantDeepLink = (plantId) => {
+  if (typeof window === "undefined") return `#plant=${plantId}`;
+  return `${window.location.origin}${window.location.pathname}#plant=${plantId}`;
+};
+
+Object.assign(window, { Icon, Progress, RarityBadge, Botanical, PlantImage, BloomMark, useIsMobile, useWeather, useSavedPlants, useStickerCollection, showToast, sharePlant, PlantMap, PLANT_BED, PLANT_COORDS, GARDEN_CENTER, QRCode, plantDeepLink });

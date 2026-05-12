@@ -1,7 +1,18 @@
 // Main app - top nav + screen routing
 
+// Read a hash like "#plant=puls-pat" or "#screen=adopt" into a route object.
+const routeFromHash = () => {
+  if (typeof window === "undefined") return null;
+  const hash = window.location.hash || "";
+  const m = hash.match(/#(?:.*&)?plant=([^&]+)/);
+  if (m) return { screen: "plant", plantId: decodeURIComponent(m[1]) };
+  const s = hash.match(/#(?:.*&)?screen=([^&]+)/);
+  if (s) return { screen: decodeURIComponent(s[1]) };
+  return null;
+};
+
 const App = () => {
-  const [route, setRoute] = React.useState({ screen: "discover" });
+  const [route, setRoute] = React.useState(() => routeFromHash() || { screen: "discover" });
   const [lang, setLang] = React.useState("EN");
   const [openMenu, setOpenMenu] = React.useState(null); // "notif" | "account" | "a11y" | null
   const [a11y, setA11y] = React.useState(() => {
@@ -24,8 +35,32 @@ const App = () => {
     else if (screen === "adopt") setRoute({ screen, plantId: args[0], intent: args[1] });
     else setRoute({ screen });
     setOpenMenu(null);
+    // Update URL hash so the page is shareable and reload-safe (the
+    // kiosk QR points at the same hash).
+    if (typeof window !== "undefined") {
+      let newHash = "";
+      if (screen === "plant") newHash = `#plant=${encodeURIComponent(args[0])}`;
+      else if (screen !== "discover") newHash = `#screen=${encodeURIComponent(screen)}`;
+      if (newHash !== window.location.hash) {
+        history.replaceState(null, "", newHash || window.location.pathname);
+      }
+    }
     window.scrollTo({ top: 0, behavior: "instant" });
   };
+
+  // Listen to back/forward and external hash changes (e.g. user pastes a deep link)
+  React.useEffect(() => {
+    const handle = () => {
+      const r = routeFromHash();
+      if (r) setRoute(r);
+    };
+    window.addEventListener("hashchange", handle);
+    window.addEventListener("popstate", handle);
+    return () => {
+      window.removeEventListener("hashchange", handle);
+      window.removeEventListener("popstate", handle);
+    };
+  }, []);
 
   // Close dropdowns on click-outside or Escape
   React.useEffect(() => {
