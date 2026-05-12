@@ -1,6 +1,6 @@
 // AskTheGarden - RAG-grounded chat with citations
 
-const AskScreen = ({ onNav, onOpenPlant }) => {
+const AskScreen = ({ onNav, onOpenPlant, presetPlantId }) => {
   const { t, lang } = useT();
   const [messages, setMessages] = React.useState([
     {
@@ -12,6 +12,22 @@ const AskScreen = ({ onNav, onOpenPlant }) => {
   const [thinking, setThinking] = React.useState(false);
   const [mode, setMode] = React.useState("visitor");
   const scrollRef = React.useRef(null);
+  const consumedPreset = React.useRef(null);
+
+  // When the user clicked "Ask about this plant" on a Plant page, seed the chat.
+  React.useEffect(() => {
+    if (!presetPlantId || consumedPreset.current === presetPlantId) return;
+    const plant = PLANTS.find(p => p.id === presetPlantId);
+    if (!plant) return;
+    consumedPreset.current = presetPlantId;
+    const question = `${t("Tell me about")} ${plant.name}`;
+    setMessages(m => [...m, { role: "user", text: question }]);
+    setThinking(true);
+    setTimeout(() => {
+      setThinking(false);
+      setMessages(m => [...m, buildPlantAnswer(plant, t)]);
+    }, 1100);
+  }, [presetPlantId]);
 
   // displayText = what shows in the user bubble (already localised when from a
   // trending/recent button). sourceKey = the English source string used for
@@ -345,6 +361,34 @@ const MessageBubble = ({ m, onOpenPlant }) => {
     </div>
   );
 };
+
+// Build a plant-specific answer using the plant's own data + transcript.
+function buildPlantAnswer(plant, t) {
+  const localTranscript = (plant.transcript && typeof plant.transcript === "object")
+    ? plant.transcript.en
+    : plant.transcript;
+  return {
+    role: "assistant",
+    citations: [ASK_CITATIONS[2], ASK_CITATIONS[3]],
+    body: (
+      <>
+        <p>
+          <b>{plant.name}</b> ({plant.fi || plant.localName}) — <i>{plant.family}</i>. {plant.rarityLabel || plant.rarity}.
+        </p>
+        <p style={{ marginTop: 10 }}>{plant.story}</p>
+        {localTranscript && (
+          <p style={{ marginTop: 10 }} className="small muted">
+            {localTranscript}
+          </p>
+        )}
+        <p style={{ marginTop: 10 }}>
+          {t("Origin")}: {plant.origin}. {t("Blooms")}: {plant.bloom}. {t("Accession")}: <span className="mono">{plant.accession}</span>.
+        </p>
+      </>
+    ),
+    cards: [plant.id]
+  };
+}
 
 // Pre-canned answers - t is passed in for i18n.
 // Each trigger matches EN + FI + SV keyword stems so the same canned response

@@ -523,4 +523,94 @@ const plantDeepLink = (plantId) => {
   return `${window.location.origin}${window.location.pathname}#plant=${plantId}`;
 };
 
-Object.assign(window, { Icon, Progress, RarityBadge, Botanical, PlantImage, BloomMark, useIsMobile, useWeather, useSavedPlants, useStickerCollection, showToast, sharePlant, PlantMap, PLANT_BED, PLANT_COORDS, GARDEN_CENTER, QRCode, plantDeepLink });
+// Funds-flow policy modal: transparent breakdown of where adoption money goes.
+// Triggered from Discover's "Read where your money goes", Plant page's
+// "Read the policy", and the footer "Funds-flow policy" link. Sources the
+// research PDF section 12 (transparency policy) + section 3.3 (VAT split).
+const FundsFlowModal = ({ open, onClose, t }) => {
+  React.useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+  if (!open) return null;
+  const breakdown = [
+    { label: t("Direct ex-situ work"), pct: 62, color: "var(--forest)", note: t("Propagation, seed collection, fieldwork, mycorrhizal partnerships") },
+    { label: t("Seed bank deposits (Luomus)"), pct: 18, color: "var(--moss)", note: t("Long-term storage in the Finnish national gene bank under LIFE+ ESCAPE protocols") },
+    { label: t("Garden operations & signage"), pct: 12, color: "var(--bloom)", note: t("Curator time, label production, weatherproof QR refresh, accessibility tags") },
+    { label: t("Payment & platform costs"), pct: 8, color: "var(--ink-mute)", note: t("MobilePay / Stripe fees, hosting, audit") }
+  ];
+  return (
+    <div onClick={onClose} role="dialog" aria-modal="true" aria-label={t("Funds-flow policy")}
+      style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(5,10,7,0.78)", backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)", display: "grid", placeItems: "center", padding: 16, overflowY: "auto" }}>
+      <div onClick={e => e.stopPropagation()}
+        style={{ background: "var(--cream)", color: "var(--ink)", borderRadius: 18, padding: 28, maxWidth: 640, width: "100%", boxShadow: "var(--shadow-deep)", position: "relative", margin: "auto" }}>
+        <button onClick={onClose} className="icon-btn" aria-label={t("Close")} style={{ position: "absolute", top: 14, right: 14 }}>
+          <Icon name="close" size={14}/>
+        </button>
+        <div className="eyebrow">{t("Transparency")}</div>
+        <h2 className="serif" style={{ fontSize: 32, marginTop: 8, lineHeight: 1.1 }}>{t("Where your money goes")}</h2>
+        <p className="small muted" style={{ marginTop: 8, lineHeight: 1.55 }}>
+          {t("Every adoption is split as follows. Numbers audited annually; the full ledger is published every January.")}
+        </p>
+
+        <div style={{ marginTop: 22, padding: "18px 20px", background: "var(--paper)", borderRadius: 14, border: "1px solid var(--line)" }}>
+          <div className="tiny" style={{ marginBottom: 14 }}>{t("Of every €100 adopted")}</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {breakdown.map(b => (
+              <div key={b.label}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, alignItems: "baseline" }}>
+                  <span style={{ fontWeight: 500 }}>{b.label}</span>
+                  <span className="serif" style={{ fontSize: 22, color: b.color }}>€{b.pct}</span>
+                </div>
+                <Progress pct={b.pct} color={b.color} height={4}/>
+                <div className="tiny" style={{ marginTop: 4, textTransform: "none", letterSpacing: 0, fontFamily: "var(--f-body)", color: "var(--ink-mute)" }}>{b.note}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ marginTop: 18, padding: 16, background: "rgba(31,58,44,0.04)", borderRadius: 12, fontSize: 13, lineHeight: 1.55, color: "var(--ink-soft)" }}>
+          <div className="tiny" style={{ marginBottom: 6 }}>{t("How we account for individual plants")}</div>
+          {t("Your adoption supports the Garden's conservation programme overall rather than the specific seed you adopted. This mirrors the Royal Botanic Gardens Kew Adopt-a-Seed policy and is recommended by BGCI. If your sponsored plant dies, we offer a replacement in year 1 and a transfer to an equal-or-higher-rarity plant in subsequent years.")}
+        </div>
+
+        <div style={{ marginTop: 14, padding: 16, background: "rgba(178,92,58,0.06)", borderRadius: 12, fontSize: 13, lineHeight: 1.55, color: "var(--ink-soft)" }}>
+          <div className="tiny" style={{ marginBottom: 6, color: "var(--rust)" }}>{t("Tax & VAT")}</div>
+          {t("Donations to the University of Oulu (a public foundation) are outside VAT. Tangible adopter benefits (plaques, gift-shop vouchers, greenhouse passes) are treated as a taxable supply at 24% VAT, split at checkout. Finnish corporates may deduct gifts under TVL §57.")}
+        </div>
+
+        <div style={{ marginTop: 14, padding: 16, background: "rgba(168,192,96,0.08)", borderRadius: 12, fontSize: 13, lineHeight: 1.55, color: "var(--ink-soft)" }}>
+          <div className="tiny" style={{ marginBottom: 6, color: "var(--forest)" }}>{t("Audit & reporting")}</div>
+          {t("The annual ledger is published every January, aligned with the BGCI Conservation Standards reporting format so the Garden's data feeds international comparisons. Adopters receive a personal year-end PDF receipt with TVL §57 reference text.")}
+        </div>
+
+        <div style={{ display: "flex", gap: 10, marginTop: 18, flexWrap: "wrap" }}>
+          <button className="btn btn-secondary small" onClick={onClose}>{t("Close")}</button>
+          <a className="btn btn-secondary small" href="https://www.bgci.org/our-work/projects-and-case-studies/" target="_blank" rel="noopener noreferrer">
+            <Icon name="info" size={13}/> {t("BGCI Conservation Standards")}
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Global controller for the funds-flow modal. Any component can call
+// `openFundsFlow()` and a single root listener will show the modal.
+const openFundsFlow = () => {
+  if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("bloom_open_funds_flow"));
+};
+const FundsFlowController = () => {
+  const { t } = (window.useT ? window.useT() : { t: s => s });
+  const [open, setOpen] = React.useState(false);
+  React.useEffect(() => {
+    const h = () => setOpen(true);
+    window.addEventListener("bloom_open_funds_flow", h);
+    return () => window.removeEventListener("bloom_open_funds_flow", h);
+  }, []);
+  return <FundsFlowModal open={open} onClose={() => setOpen(false)} t={t}/>;
+};
+
+Object.assign(window, { Icon, Progress, RarityBadge, Botanical, PlantImage, BloomMark, useIsMobile, useWeather, useSavedPlants, useStickerCollection, showToast, sharePlant, PlantMap, PLANT_BED, PLANT_COORDS, GARDEN_CENTER, QRCode, plantDeepLink, FundsFlowModal, FundsFlowController, openFundsFlow });

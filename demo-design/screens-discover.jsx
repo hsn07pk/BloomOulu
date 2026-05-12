@@ -210,7 +210,7 @@ const DiscoverScreen = ({ onOpenPlant, onNav }) => {
             <p className="muted" style={{ marginTop: 20, fontSize: 16, lineHeight: 1.6, maxWidth: 480 }}>
               {t("Between 2012 and 2017, the LIFE+ ESCAPE programme lifted ex-situ coverage of Finland's threatened plants from 11% to 56%, banked 1.7 million seeds across 175 taxa, and seeded the Finnish national gene bank with 148 species. Oulu was a partner garden then. Adoption funds the next chapter.")}
             </p>
-            <button className="btn btn-secondary" style={{ marginTop: 28 }}><Icon name="info" size={14}/> {t("Read where your money goes")}</button>
+            <button className="btn btn-secondary" style={{ marginTop: 28 }} onClick={() => openFundsFlow()}><Icon name="info" size={14}/> {t("Read where your money goes")}</button>
           </div>
           <div className="card card-pad" style={{ background: "var(--bg)", borderRadius: 24 }}>
             <div className="tiny">{t("Of every €100 adopted")}</div>

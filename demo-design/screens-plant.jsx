@@ -1,9 +1,15 @@
 // Plant detail - the QR scan experience
 
+// "Endangered Finnish Natives" trail = all CR/EN/VU plants in PLANTS order
+const TRAIL_IDS = PLANTS.filter(p => ["CR","EN","VU"].includes(p.rarity)).map(p => p.id);
+
 const PlantScreen = ({ plantId, onBack, onNav, onAdopt }) => {
   const { t, lang } = useT();
   const plantRaw = PLANTS.find(p => p.id === plantId) || PLANTS[0];
   const plant = localisePlant(plantRaw, lang);
+  const trailIdx = TRAIL_IDS.indexOf(plant.id);
+  const onTrail = trailIdx >= 0;
+  const nextTrailId = onTrail ? TRAIL_IDS[(trailIdx + 1) % TRAIL_IDS.length] : TRAIL_IDS[0];
   const { isSaved, toggle: toggleSaved } = useSavedPlants();
   const isPlantSaved = isSaved(plant.id);
   const { stickers, collect: collectSticker, has: hasSticker } = useStickerCollection();
@@ -258,7 +264,11 @@ const PlantScreen = ({ plantId, onBack, onNav, onAdopt }) => {
                 <p style={{ fontSize: 15, lineHeight: 1.7, color: "var(--ink-2)" }}>
                   {t("Head Gardener Tuomas Kauppila notes in the spring 2025 batch update: \"Strong rhizome growth this season; flowering predicted to be vigorous. Watch the south-facing slope for the first flush.\"")}
                 </p>
-                <button className="btn btn-secondary" style={{ alignSelf: "start", marginTop: 12 }}>
+                <button
+                  className="btn btn-secondary"
+                  style={{ alignSelf: "start", marginTop: 12 }}
+                  onClick={() => onNav("ask", null, plant.id)}
+                >
                   <Icon name="bot" size={14}/> {t("Ask the Garden about this plant")}
                 </button>
               </div>
@@ -362,16 +372,25 @@ const PlantScreen = ({ plantId, onBack, onNav, onAdopt }) => {
           </div>
 
           {/* Trail recommendation */}
-          <div style={{ marginTop: 40, padding: "20px 24px", background: "var(--forest)", color: "var(--paper)", borderRadius: 18, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 24 }}>
-            <div>
-              <div className="tiny" style={{ color: "var(--lichen)" }}>{t("You're on the trail")}</div>
-              <div className="serif" style={{ fontSize: 26, marginTop: 4 }}>{t("Endangered Finnish Natives")}</div>
-              <div className="small" style={{ color: "rgba(248,244,230,0.7)", marginTop: 4 }}>{t("Stop 3 of 10 · 18 minutes to next")}</div>
+          {onTrail && (
+            <div style={{ marginTop: 40, padding: "20px 24px", background: "var(--forest)", color: "var(--paper)", borderRadius: 18, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 24, flexWrap: "wrap" }}>
+              <div>
+                <div className="tiny" style={{ color: "var(--lichen)" }}>{t("You're on the trail")}</div>
+                <div className="serif" style={{ fontSize: 26, marginTop: 4 }}>{t("Endangered Finnish Natives")}</div>
+                <div className="small" style={{ color: "rgba(248,244,230,0.7)", marginTop: 4 }}>
+                  {t("Stop")} {trailIdx + 1} / {TRAIL_IDS.length}
+                </div>
+              </div>
+              <button
+                className="btn"
+                style={{ background: "var(--paper)", color: "var(--forest)" }}
+                onClick={() => onNav("plant", nextTrailId)}
+                aria-label={t("Go to next stop on the trail")}
+              >
+                {t("Next stop")} <Icon name="arrow" size={14}/>
+              </button>
             </div>
-            <button className="btn" style={{ background: "var(--paper)", color: "var(--forest)" }}>
-              {t("Next stop")} <Icon name="arrow" size={14}/>
-            </button>
-          </div>
+          )}
         </div>
 
         {/* RIGHT - sticky CTA panel */}
@@ -432,7 +451,7 @@ const PlantScreen = ({ plantId, onBack, onNav, onAdopt }) => {
             <div style={{ borderTop: "1px solid var(--line-soft)", padding: 20, background: "rgba(31,58,44,0.03)" }}>
               <div className="tiny">{t("Where your money goes")}</div>
               <div className="small" style={{ marginTop: 8, color: "var(--ink-2)" }}>{t("Of every €100: €62 direct ex-situ work, €18 to Luomus seed bank, €12 garden operations, €8 platform.")}</div>
-              <button className="btn btn-ghost small" style={{ marginTop: 8, padding: "6px 0" }}>{t("Read the policy →")}</button>
+              <button className="btn btn-ghost small" style={{ marginTop: 8, padding: "6px 0" }} onClick={() => openFundsFlow()}>{t("Read the policy →")}</button>
             </div>
           </div>
 

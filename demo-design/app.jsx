@@ -33,6 +33,7 @@ const App = () => {
   const nav = (screen, ...args) => {
     if (screen === "plant") setRoute({ screen, plantId: args[0] });
     else if (screen === "adopt") setRoute({ screen, plantId: args[0], intent: args[1] });
+    else if (screen === "ask") setRoute({ screen, askPlantId: args[1] || null });
     else setRoute({ screen });
     setOpenMenu(null);
     // Update URL hash so the page is shareable and reload-safe (the
@@ -246,13 +247,16 @@ const App = () => {
         {route.screen === "discover" && <DiscoverScreen onOpenPlant={id => nav("plant", id)} onNav={nav}/>}
         {route.screen === "plant" && <PlantScreen plantId={route.plantId} onBack={() => nav("discover")} onNav={nav} onAdopt={(id, intent) => nav("adopt", id, intent)}/>}
         {route.screen === "adopt" && <AdoptScreen presetPlantId={route.plantId} presetIntent={route.intent} onNav={nav}/>}
-        {route.screen === "ask" && <AskScreen onNav={nav} onOpenPlant={id => nav("plant", id)}/>}
+        {route.screen === "ask" && <AskScreen onNav={nav} onOpenPlant={id => nav("plant", id)} presetPlantId={route.askPlantId}/>}
         {route.screen === "garden" && <GardenScreen onOpenPlant={id => nav("plant", id)} onNav={nav}/>}
         {route.screen === "kiosk" && <KioskScreen onNav={nav}/>}
       </main>
 
       {/* Live toast announcer */}
       <Toaster/>
+
+      {/* Global funds-flow disclosure modal */}
+      <FundsFlowController/>
 
       {/* Accessibility settings floating button + panel */}
       <button
@@ -355,9 +359,16 @@ const App = () => {
               <div key={c.title}>
                 <div className="eyebrow eyebrow--sage">{t(c.title)}</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 16 }}>
-                  {c.links.map(l => (
-                    <a key={l} href="#" style={{ fontSize: 13, color: "rgba(250,247,238,0.78)", textDecoration: "none" }}>{t(l)}</a>
-                  ))}
+                  {c.links.map(l => {
+                    const onClick = l === "Funds-flow policy" ? (e => { e.preventDefault(); openFundsFlow(); })
+                      : l === "Adopt a plant" ? (e => { e.preventDefault(); nav("adopt"); })
+                      : l === "AskTheGarden" ? (e => { e.preventDefault(); nav("ask"); })
+                      : l === "Kiosk view" ? (e => { e.preventDefault(); nav("kiosk"); })
+                      : undefined;
+                    return (
+                      <a key={l} href="#" onClick={onClick} style={{ fontSize: 13, color: "rgba(250,247,238,0.78)", textDecoration: "none" }}>{t(l)}</a>
+                    );
+                  })}
                 </div>
               </div>
             ))}
