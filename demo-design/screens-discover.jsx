@@ -2,6 +2,7 @@
 
 const DiscoverScreen = ({ onOpenPlant, onNav }) => {
   const { t, lang } = useT();
+  const weather = useWeather();
   const filterOptions = [
     { id: t("All"), label: t("All") },
     { id: "CR", label: t("Critically Endangered") },
@@ -71,7 +72,10 @@ const DiscoverScreen = ({ onOpenPlant, onNav }) => {
                   <div className="tiny">{t("This week in the garden")}</div>
                   <div className="serif" style={{ fontSize: 22, color: "var(--ink)", marginTop: 2 }}>{t("What's blooming")}</div>
                 </div>
-                <span className="pill"><Icon name="sun" size={13}/> {t("12 °C · partly sun")}</span>
+                <span className="pill">
+                  <Icon name={weather?.icon || "sun"} size={13}/>
+                  {weather ? ` ${weather.temp} °C · ${t(weather.labelKey)}` : ` ${t("Loading weather…")}`}
+                </span>
               </div>
               {plants.slice(0, 3).map((p, i) => (
                 <button key={p.id} onClick={() => onOpenPlant(p.id)} style={{ display: "flex", gap: 14, padding: "16px 24px", width: "100%", textAlign: "left", borderBottom: i < 2 ? "1px solid var(--line-soft)" : "none", alignItems: "center" }}>

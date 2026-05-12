@@ -251,6 +251,55 @@ const PlantImage = ({ plant, style = {}, alt }) => {
   return <Botanical color={plant.color} accent={plant.accent} variant={plant.variant} style={style}/>;
 };
 
+// Live weather from Open-Meteo (free, no API key). Cached at module scope so
+// every screen shares one HTTP call per page load. Returns null while loading
+// or on error; otherwise { temp:number, labelKey:string, icon:string }.
+let __weatherCache = null;
+let __weatherPromise = null;
+const __wmoMap = {
+  0: ["Clear", "sun"], 1: ["Mostly clear", "sun"], 2: ["Partly cloudy", "sun"], 3: ["Overcast", "sun"],
+  45: ["Foggy", "sun"], 48: ["Foggy", "sun"],
+  51: ["Light drizzle", "sun"], 53: ["Drizzle", "sun"], 55: ["Drizzle", "sun"],
+  61: ["Light rain", "sun"], 63: ["Rain", "sun"], 65: ["Heavy rain", "sun"],
+  66: ["Freezing rain", "snow"], 67: ["Freezing rain", "snow"],
+  71: ["Light snow", "snow"], 73: ["Snow", "snow"], 75: ["Heavy snow", "snow"], 77: ["Snow grains", "snow"],
+  80: ["Rain showers", "sun"], 81: ["Rain showers", "sun"], 82: ["Heavy showers", "sun"],
+  85: ["Snow showers", "snow"], 86: ["Snow showers", "snow"],
+  95: ["Thunderstorm", "sun"], 96: ["Thunderstorm", "sun"], 99: ["Thunderstorm", "sun"]
+};
+const fetchWeather = () => {
+  if (__weatherCache && Date.now() - __weatherCache.fetchedAt < 10 * 60 * 1000) {
+    return Promise.resolve(__weatherCache);
+  }
+  if (__weatherPromise) return __weatherPromise;
+  // Oulu Botanical Garden: 65.0617°N, 25.4661°E
+  const url = "https://api.open-meteo.com/v1/forecast?latitude=65.0617&longitude=25.4661&current=temperature_2m,weather_code&timezone=Europe%2FHelsinki";
+  __weatherPromise = fetch(url)
+    .then(r => r.json())
+    .then(d => {
+      const code = d && d.current ? d.current.weather_code : 0;
+      const [labelKey, icon] = __wmoMap[code] || ["Clear", "sun"];
+      __weatherCache = {
+        temp: Math.round((d && d.current ? d.current.temperature_2m : 0)),
+        labelKey, icon,
+        fetchedAt: Date.now()
+      };
+      __weatherPromise = null;
+      return __weatherCache;
+    })
+    .catch(() => { __weatherPromise = null; return null; });
+  return __weatherPromise;
+};
+const useWeather = () => {
+  const [w, setW] = React.useState(__weatherCache);
+  React.useEffect(() => {
+    let cancelled = false;
+    fetchWeather().then(data => { if (!cancelled && data) setW(data); });
+    return () => { cancelled = true; };
+  }, []);
+  return w;
+};
+
 // Responsive helper - true at <=768px viewport
 const useIsMobile = (breakpoint = 768) => {
   const get = () => typeof window !== "undefined" && window.innerWidth <= breakpoint;
@@ -266,4 +315,4 @@ const useIsMobile = (breakpoint = 768) => {
   return isMobile;
 };
 
-Object.assign(window, { Icon, Progress, RarityBadge, Botanical, PlantImage, BloomMark, useIsMobile });
+Object.assign(window, { Icon, Progress, RarityBadge, Botanical, PlantImage, BloomMark, useIsMobile, useWeather });

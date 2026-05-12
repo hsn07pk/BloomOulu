@@ -2,6 +2,7 @@
 
 const KioskScreen = ({ onNav }) => {
   const { t, lang } = useT();
+  const weather = useWeather();
   const [time, setTime] = React.useState(new Date());
   const [showMap, setShowMap] = React.useState(false);
   React.useEffect(() => {
@@ -49,7 +50,8 @@ const KioskScreen = ({ onNav }) => {
               <div className="eyebrow eyebrow--sage">{t("Tuesday · 12 May 2026")}</div>
             </div>
             <div className="pill pill-on-dark" style={{ padding: "10px 18px", fontSize: 14 }}>
-              <Icon name="sun" size={16}/> 12 °C · partly sunny
+              <Icon name={weather?.icon || "sun"} size={16}/>
+              {weather ? ` ${weather.temp} °C · ${t(weather.labelKey)}` : ` ${t("Loading weather…")}`}
             </div>
           </div>
         </div>
