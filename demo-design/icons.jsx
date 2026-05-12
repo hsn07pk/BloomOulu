@@ -611,8 +611,8 @@ const REFERENCES = [
     title: "Conservation evidence (Finland)",
     items: [
       { name: "Red List of Finnish Species (2019 assessment)", source: "Finnish Environment Institute · ymparisto.fi", url: "https://www.ymparisto.fi/en-US/Nature/Threatened_species" },
-      { name: "LIFE+ ESCAPE — Ex-situ conservation of Finnish native plant species (LIFE11 BIO/FI/000917, 2012–2017)", source: "European Commission LIFE programme", url: "https://webgate.ec.europa.eu/life/publicWebsite/project/LIFE11-BIO-FI-000917" },
-      { name: "FinBIF — Finnish Biodiversity Information Facility", source: "laji.fi", url: "https://laji.fi/" },
+      { name: "LIFE+ ESCAPE - Ex-situ conservation of Finnish native plant species (LIFE11 BIO/FI/000917, 2012–2017)", source: "European Commission LIFE programme", url: "https://webgate.ec.europa.eu/life/publicWebsite/project/LIFE11-BIO-FI-000917" },
+      { name: "FinBIF - Finnish Biodiversity Information Facility", source: "laji.fi", url: "https://laji.fi/" },
       { name: "Annales Botanici Fennici / Nordic Journal of Botany", source: "Finnish Botanical Society · Wiley", url: "https://onlinelibrary.wiley.com/journal/17561051" },
       { name: "Memoranda Societatis pro Fauna et Flora Fennica", source: "Societas pro Fauna et Flora Fennica", url: "https://journal.fi/msff" }
     ]
@@ -637,7 +637,7 @@ const REFERENCES = [
       { name: "Honor & Memorial Gifts · Daffodil Hill", source: "New York Botanical Garden", url: "https://www.nybg.org/join-support/" },
       { name: "Membership & Giving · Friends / Corporate", source: "Mount Auburn Cemetery", url: "https://mountauburn.org/" },
       { name: "VIP Orchid Naming (1956–present)", source: "Singapore Botanic Gardens · National Parks Board", url: "https://www.nparks.gov.sg/sbg" },
-      { name: "Center for Plant Conservation — National Collection", source: "saveplants.org", url: "https://saveplants.org/" }
+      { name: "Center for Plant Conservation - National Collection", source: "saveplants.org", url: "https://saveplants.org/" }
     ]
   },
   {
@@ -645,7 +645,7 @@ const REFERENCES = [
     items: [
       { name: "QR Codes in Museums: Unlocking New Opportunities (2024–25)", source: "MuseumNext", url: "https://www.museumnext.com/article/qr-codes-are-experiencing-a-resurgence/" },
       { name: "Life & Death of QR Codes in Museums", source: "Cuseum", url: "https://cuseum.com/blog/life-death-of-qr-codes-in-museums" },
-      { name: "QR codes in museums — worth the effort? (NMS typewriter case)", source: "National Museums Scotland blog", url: "https://blog.nms.ac.uk/" }
+      { name: "QR codes in museums - worth the effort? (NMS typewriter case)", source: "National Museums Scotland blog", url: "https://blog.nms.ac.uk/" }
     ]
   },
   {
@@ -661,7 +661,7 @@ const REFERENCES = [
       { name: "OpenStreetMap (map tiles)", source: "© OpenStreetMap contributors", url: "https://www.openstreetmap.org/copyright" },
       { name: "Open-Meteo (live weather)", source: "open-meteo.com (CC BY 4.0)", url: "https://open-meteo.com/" },
       { name: "Wikimedia Commons (plant photographs, per-file licences)", source: "commons.wikimedia.org", url: "https://commons.wikimedia.org/" },
-      { name: "GBIF — Global Biodiversity Information Facility", source: "gbif.org", url: "https://www.gbif.org/" }
+      { name: "GBIF - Global Biodiversity Information Facility", source: "gbif.org", url: "https://www.gbif.org/" }
     ]
   },
   {
@@ -671,7 +671,7 @@ const REFERENCES = [
       { name: "European Accessibility Act (Directive 2019/882, enforceable 28 June 2025)", source: "European Commission", url: "https://ec.europa.eu/social/main.jsp?catId=1202" },
       { name: "BGCI Conservation Standards & reporting framework", source: "Botanic Gardens Conservation International", url: "https://www.bgci.org/our-work/projects-and-case-studies/" },
       { name: "GDPR (General Data Protection Regulation)", source: "European Commission", url: "https://gdpr-info.eu/" },
-      { name: "TVL §57 — Finnish corporate gift deductibility", source: "Finnish Income Tax Act", url: "https://www.finlex.fi/fi/laki/ajantasa/1992/19921535" }
+      { name: "TVL §57 - Finnish corporate gift deductibility", source: "Finnish Income Tax Act", url: "https://www.finlex.fi/fi/laki/ajantasa/1992/19921535" }
     ]
   }
 ];

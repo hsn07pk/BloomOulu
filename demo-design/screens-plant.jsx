@@ -179,7 +179,7 @@ const PlantScreen = ({ plantId, onBack, onNav, onAdopt }) => {
             </div>
           </div>
 
-          {/* Captions / transcript — toggled by the CC button on the hero */}
+          {/* Captions / transcript - toggled by the CC button on the hero */}
           {captionsOn && transcript && (
             <div
               role="region"
@@ -289,7 +289,7 @@ const PlantScreen = ({ plantId, onBack, onNav, onAdopt }) => {
                   const seasonalSrc = plant.seasons && plant.seasons[season];
                   const hasSeasonalAlt = seasonalSrc && seasonalSrc !== plant.image;
                   const captions = {
-                    spring: hasSeasonalAlt ? t("First leaves emerge") : t("Early growth — out of bloom"),
+                    spring: hasSeasonalAlt ? t("First leaves emerge") : t("Early growth - out of bloom"),
                     summer: t("Peak bloom"),
                     autumn: hasSeasonalAlt ? t("Setting seed") : t("Post-bloom"),
                     winter: t("Under the snow")
@@ -475,10 +475,10 @@ const PlantScreen = ({ plantId, onBack, onNav, onAdopt }) => {
         </div>
       </div>
 
-      {/* Quiz modal — School mode */}
+      {/* Quiz modal - School mode */}
       {quizOpen && <QuizModal plant={plant} t={t} onClose={() => setQuizOpen(false)}/>}
 
-      {/* QR code modal — shareable deep link for this plant */}
+      {/* QR code modal - shareable deep link for this plant */}
       {showQR && (
         <div
           onClick={() => setShowQR(false)}
@@ -521,7 +521,7 @@ const PlantScreen = ({ plantId, onBack, onNav, onAdopt }) => {
         </div>
       )}
 
-      {/* Map overlay — opens from the origin pill */}
+      {/* Map overlay - opens from the origin pill */}
       {showMap && (
         <div
           onClick={() => setShowMap(false)}
@@ -732,7 +732,7 @@ const SchoolModeIntro = ({ plant, t, readingLevel, setReadingLevel, onQuiz, onNa
 };
 
 // =====================================================================
-// Simple 3-question quiz modal — School mode
+// Simple 3-question quiz modal - School mode
 // =====================================================================
 const QuizModal = ({ plant, t, onClose }) => {
   const [step, setStep] = React.useState(0);

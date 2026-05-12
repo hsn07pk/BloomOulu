@@ -373,7 +373,7 @@ function buildPlantAnswer(plant, t) {
     body: (
       <>
         <p>
-          <b>{plant.name}</b> ({plant.fi || plant.localName}) — <i>{plant.family}</i>. {plant.rarityLabel || plant.rarity}.
+          <b>{plant.name}</b> ({plant.fi || plant.localName}) - <i>{plant.family}</i>. {plant.rarityLabel || plant.rarity}.
         </p>
         <p style={{ marginTop: 10 }}>{plant.story}</p>
         {localTranscript && (

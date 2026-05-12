@@ -1,4 +1,4 @@
-# BloomOulu — local serving via nginx.
+# BloomOulu - local serving via nginx.
 #
 # Build:  docker compose build
 # Run:    docker compose up -d

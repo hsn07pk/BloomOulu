@@ -1,4 +1,4 @@
-# BloomOulu — one-command local serving.
+# BloomOulu - one-command local serving.
 #
 #   docker compose up -d        # build + run in the background
 #   docker compose logs -f      # tail logs

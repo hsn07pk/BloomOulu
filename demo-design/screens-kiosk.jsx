@@ -77,7 +77,7 @@ const KioskScreen = ({ onNav }) => {
             <h3 className="serif" style={{ fontSize: 32, marginTop: 12 }}>{t("Scan any plant.")}</h3>
             <p className="small muted" style={{ marginTop: 8 }}>{t("3-language audio narration.")}</p>
 
-            {/* Real scannable QR — encodes the deep-link URL for Pulsatilla patens.
+            {/* Real scannable QR - encodes the deep-link URL for Pulsatilla patens.
                 Tapping it also navigates so the demo works on a phone screen. */}
             <button
               onClick={() => onNav("plant", "puls-pat")}

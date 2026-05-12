@@ -107,7 +107,7 @@ const AdoptScreen = ({ presetPlantId, presetIntent, onNav }) => {
 
             {/* Corporate tier strip (single tier per pitch) */}
             <div className="card" style={{ marginTop: 32, padding: 0, overflow: "hidden", background: "var(--forest)", color: "var(--paper)" }}>
-              <div data-grid-mobile="keep" style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 0 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 0 }}>
                 <div style={{ padding: 32 }}>
                   <div className="tiny" style={{ color: "var(--lichen)" }}>{t("Yritys · Corporate")}</div>
                   <h3 className="serif" style={{ fontSize: 32, marginTop: 8, color: "var(--paper)" }}>{t("For companies")}</h3>
@@ -240,7 +240,7 @@ const AdoptScreen = ({ presetPlantId, presetIntent, onNav }) => {
                   </div>
                 </div>
 
-                {/* Internationalisation@Home (I@H) — pitch-defining feature */}
+                {/* Internationalisation@Home (I@H) - pitch-defining feature */}
                 <div className="card card-pad" style={{ background: "linear-gradient(135deg, rgba(168,192,96,0.10) 0%, rgba(95,176,160,0.10) 100%)", borderColor: "var(--sage)" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
                     <span style={{ fontFamily: "var(--f-mono)", fontSize: 13, fontWeight: 700, color: "var(--forest)", padding: "3px 8px", background: "var(--cream)", borderRadius: 4, letterSpacing: "0.04em" }}>I@H</span>

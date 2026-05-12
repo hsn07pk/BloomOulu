@@ -242,7 +242,7 @@ const PLANTS = [
     accessed: "Collected 1995, Kuusamo",
     audio: "0:28",
     transcript: {
-      en: "Cypripedium calceolus, the lady's-slipper orchid. In Finnish, tikankontti. Europe's most iconic temperate orchid. Each yellow shoe-shaped flower is a trap that briefly captures small bees, dusting them with pollen as they escape. This Vulnerable species is slow-growing — a single rhizome can live a century. The Oulu specimen was rescued from a roadworks site in Kuusamo in 1995. Please do not touch the flowers.",
+      en: "Cypripedium calceolus, the lady's-slipper orchid. In Finnish, tikankontti. Europe's most iconic temperate orchid. Each yellow shoe-shaped flower is a trap that briefly captures small bees, dusting them with pollen as they escape. This Vulnerable species is slow-growing - a single rhizome can live a century. The Oulu specimen was rescued from a roadworks site in Kuusamo in 1995. Please do not touch the flowers.",
       fi: "Cypripedium calceolus, tikankontti. Vaarantunut laji. Euroopan ikonisin lauhkean vyöhykkeen orkidea. Keltainen kenkämäinen kukka vangitsee hetkeksi pienet mehiläiset siitepölytykseen. Hidaskasvuinen - yksi juurakko voi elää sata vuotta. Pelastettu tietyömaalta Kuusamossa vuonna 1995. Älä koske kukkiin.",
       sv: "Cypripedium calceolus, guckusko. Sårbar art. Europas mest ikoniska tempererade orkidé. Varje gul skoformad blomma är en fälla som kort fångar små bin och pudrar dem med pollen när de flyr. Långsamt växande - en rotstock kan leva i ett sekel. Räddad från ett vägarbete i Kuusamo 1995. Rör inte blommorna."
     },
@@ -284,7 +284,7 @@ const PLANTS = [
     accessed: "Collected 2017, Syöte NP",
     audio: "0:25",
     transcript: {
-      en: "Lobaria pulmonaria, the tree lungwort. Raidankeuhkojäkälä in Finnish. Not a plant at all, but a leafy lichen — a symbiosis of fungus, alga, and cyanobacteria. Its presence on a tree signals ancient, undisturbed forest, because Lobaria cannot tolerate logging or air pollution. This Near Threatened species was collected in 2017 from an old-growth spruce stand.",
+      en: "Lobaria pulmonaria, the tree lungwort. Raidankeuhkojäkälä in Finnish. Not a plant at all, but a leafy lichen - a symbiosis of fungus, alga, and cyanobacteria. Its presence on a tree signals ancient, undisturbed forest, because Lobaria cannot tolerate logging or air pollution. This Near Threatened species was collected in 2017 from an old-growth spruce stand.",
       fi: "Lobaria pulmonaria, raidankeuhkojäkälä. Silmälläpidettävä. Ei kasvi, vaan lehtimäinen jäkälä - sienen, levän ja syanobakteerin symbioosi. Sen läsnäolo puussa kertoo vanhasta koskemattomasta metsästä, sillä se ei siedä hakkuita tai ilmansaasteita. Kerätty Syötteen kansallispuistosta vuonna 2017.",
       sv: "Lobaria pulmonaria, lunglav. Nära hotad. Inte en växt utan en bladlav - en symbios av svamp, alg och cyanobakterie. Dess närvaro på ett träd signalerar gammal ostörd skog, eftersom lunglav inte tål avverkning eller luftföroreningar. Insamlad 2017 från en gammal granskog."
     },
