@@ -9,6 +9,14 @@ const PlantScreen = ({ plantId, onBack, onNav, onAdopt }) => {
   const { stickers, collect: collectSticker, has: hasSticker } = useStickerCollection();
   const [readingLevel, setReadingLevel] = React.useState("middle"); // primary / middle / upper
   const [quizOpen, setQuizOpen] = React.useState(false);
+  const [showMap, setShowMap] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!showMap) return;
+    const onKey = (e) => { if (e.key === "Escape") setShowMap(false); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [showMap]);
   const [audioPlaying, setAudioPlaying] = React.useState(false);
   const [audioCurrent, setAudioCurrent] = React.useState(0);
   const [audioDuration, setAudioDuration] = React.useState(0);
@@ -180,7 +188,12 @@ const PlantScreen = ({ plantId, onBack, onNav, onAdopt }) => {
               <div className="muted" style={{ marginTop: 12, fontSize: 16 }}>{plant.en} · {plant.family}</div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "end" }}>
-              <div className="pill"><Icon name="map" size={13}/> {t(plant.origin)}</div>
+              <button
+                className="pill"
+                style={{ cursor: "pointer", border: 0 }}
+                onClick={() => setShowMap(true)}
+                aria-label={t("Show on map")}
+              ><Icon name="map" size={13}/> {t(plant.origin)}</button>
               <div className="pill"><Icon name="calendar" size={13}/> {t("Blooms")} {t(plant.bloom)}</div>
             </div>
           </div>
@@ -438,6 +451,41 @@ const PlantScreen = ({ plantId, onBack, onNav, onAdopt }) => {
 
       {/* Quiz modal — School mode */}
       {quizOpen && <QuizModal plant={plant} t={t} onClose={() => setQuizOpen(false)}/>}
+
+      {/* Map overlay — opens from the origin pill */}
+      {showMap && (
+        <div
+          onClick={() => setShowMap(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-label={t("Garden map")}
+          style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(5,10,7,0.78)", backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)", display: "grid", placeItems: "center", padding: 16 }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{ background: "var(--cream)", color: "var(--ink)", borderRadius: 18, padding: 22, maxWidth: 760, width: "100%", boxShadow: "var(--shadow-deep)", position: "relative" }}
+          >
+            <button onClick={() => setShowMap(false)} className="icon-btn" aria-label={t("Close")} style={{ position: "absolute", top: 14, right: 14 }}>
+              <Icon name="close" size={14}/>
+            </button>
+            <div className="eyebrow">{t("Garden map")}</div>
+            <h3 className="serif" style={{ fontSize: 24, marginTop: 8, fontStyle: "italic" }}>{plant.name}</h3>
+            <div className="small muted" style={{ marginTop: 4 }}>{PLANT_BED[plant.id] || t(plant.origin)}</div>
+            <div style={{ marginTop: 14 }}>
+              <PlantMap plant={plant} height={360}/>
+            </div>
+            <div style={{ display: "flex", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
+              <a
+                href={`https://www.openstreetmap.org/?mlat=${(PLANT_COORDS && PLANT_COORDS[plant.id] || GARDEN_CENTER)[0]}&mlon=${(PLANT_COORDS && PLANT_COORDS[plant.id] || GARDEN_CENTER)[1]}&zoom=18`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn btn-secondary small"
+              ><Icon name="map" size={14}/> {t("Open in OpenStreetMap")}</a>
+              <button className="btn btn-secondary small" onClick={() => setShowMap(false)}>{t("Close")}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

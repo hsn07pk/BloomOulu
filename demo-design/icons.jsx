@@ -391,4 +391,85 @@ const useIsMobile = (breakpoint = 768) => {
   return isMobile;
 };
 
-Object.assign(window, { Icon, Progress, RarityBadge, Botanical, PlantImage, BloomMark, useIsMobile, useWeather, useSavedPlants, useStickerCollection, showToast, sharePlant });
+// Garden centroid (Oulu Botanical Garden, Linnanmaa)
+const GARDEN_CENTER = [65.0617, 25.4661];
+
+// Plant-specific micro-coordinates within the garden (small offsets from centroid).
+// In a real deployment these would come from the accession DB; for the demo each
+// plant has a deterministic, plausible position so the map markers don't overlap.
+const PLANT_COORDS = {
+  "puls-pat":  [65.0619, 25.4664], // south esker bed
+  "camp-uni":  [65.0623, 25.4658], // alpine fell bed
+  "saxi-hirc": [65.0615, 25.4669], // mire / wetland section
+  "prim-nut":  [65.0613, 25.4655], // Bothnian Bay bed
+  "trol-eur":  [65.0620, 25.4670], // meadow bed 4
+  "cyp-cal":   [65.0617, 25.4672], // limestone bed
+  "lob-pul":   [65.0625, 25.4663], // aspen stand
+  "vict-am":   [65.0617, 25.4661]  // Romeo & Julia greenhouse (centre)
+};
+const PLANT_BED = {
+  "puls-pat":  "South esker bed · 220m through main gate, left at the meadow",
+  "camp-uni":  "Alpine / fell bed · north-west of the main path",
+  "saxi-hirc": "Wetland (mire) section",
+  "prim-nut":  "Bothnian Bay coastal bed",
+  "trol-eur":  "Meadow bed 4",
+  "cyp-cal":   "Limestone forest bed · bed 7",
+  "lob-pul":   "Aspen stand · east edge",
+  "vict-am":   "Romeo & Julia greenhouse · main pond"
+};
+
+// Interactive Leaflet map of the garden with a marker for the highlighted plant.
+const PlantMap = ({ plant, height = 360 }) => {
+  const ref = React.useRef(null);
+  React.useEffect(() => {
+    if (!ref.current || typeof L === "undefined") return;
+    const coord = (plant && PLANT_COORDS[plant.id]) || GARDEN_CENTER;
+    const m = L.map(ref.current, { scrollWheelZoom: false, attributionControl: true })
+      .setView(coord, 17);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+    }).addTo(m);
+
+    // Garden centre + a soft circle marking the garden grounds
+    L.circle(GARDEN_CENTER, { radius: 200, color: "#2D5440", weight: 1, fillColor: "#88A050", fillOpacity: 0.18 }).addTo(m);
+
+    if (plant) {
+      // Custom marker styled like the BloomOulu pin
+      const icon = L.divIcon({
+        className: "bloom-pin",
+        html: `<div style="
+          width:28px;height:28px;border-radius:50%;
+          background:#B25C3A;border:3px solid #FAF7EE;
+          box-shadow:0 4px 10px rgba(0,0,0,0.4);
+          display:flex;align-items:center;justify-content:center;
+          color:#FAF7EE;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700">${plant.rarity || "•"}</div>`,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14]
+      });
+      const marker = L.marker(coord, { icon, title: plant.name }).addTo(m);
+      const bed = PLANT_BED[plant.id] || "Oulu Botanical Garden";
+      marker.bindPopup(`<b><i>${plant.name}</i></b><br><span style="font-size:12px;color:#5C6E60">${bed}</span>`).openPopup();
+    } else {
+      L.marker(GARDEN_CENTER, { title: "Oulu Botanical Garden" })
+        .addTo(m)
+        .bindPopup("<b>University of Oulu Botanical Garden</b><br>65.0617&deg; N, 25.4661&deg; E")
+        .openPopup();
+    }
+
+    // Resize once layout settles
+    setTimeout(() => m.invalidateSize(), 100);
+
+    return () => { try { m.remove(); } catch {} };
+  }, [plant && plant.id]);
+  return (
+    <div
+      ref={ref}
+      role="img"
+      aria-label={plant ? `Map of ${plant.name}` : "Map of Oulu Botanical Garden"}
+      style={{ width: "100%", height, borderRadius: 12, overflow: "hidden", border: "1px solid var(--line)" }}
+    />
+  );
+};
+
+Object.assign(window, { Icon, Progress, RarityBadge, Botanical, PlantImage, BloomMark, useIsMobile, useWeather, useSavedPlants, useStickerCollection, showToast, sharePlant, PlantMap, PLANT_BED, PLANT_COORDS, GARDEN_CENTER });
