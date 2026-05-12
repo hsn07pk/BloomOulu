@@ -400,33 +400,36 @@ const fieldStyle = {
   outline: "none"
 };
 
-const SummaryCard = ({ plant, tier, recurring, intent, total, dedication }) => (
-  <div className="card" style={{ overflow: "hidden" }}>
-    <div style={{ padding: 24, background: "var(--paper)", borderBottom: "1px solid var(--line-soft)" }}>
-      <div style={{ display: "flex", gap: 14 }}>
-        <div style={{ width: 60, height: 76, borderRadius: 10, background: plant.accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-          <Botanical color={plant.color} accent={plant.accent} variant={plant.variant} style={{ width: 48, height: 64 }}/>
+const SummaryCard = ({ plant, tier, recurring, intent, total, dedication }) => {
+  const { t } = useT();
+  return (
+    <div className="card" style={{ overflow: "hidden" }}>
+      <div style={{ padding: 24, background: "var(--paper)", borderBottom: "1px solid var(--line-soft)" }}>
+        <div style={{ display: "flex", gap: 14 }}>
+          <div style={{ width: 60, height: 76, borderRadius: 10, background: plant.accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <Botanical color={plant.color} accent={plant.accent} variant={plant.variant} style={{ width: 48, height: 64 }}/>
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="tiny">{plant.fi}</div>
+            <div className="serif" style={{ fontSize: 22, fontStyle: "italic", lineHeight: 1.1, marginTop: 2 }}>{plant.name}</div>
+            <div style={{ marginTop: 6 }}><RarityBadge rarity={plant.rarity} label={plant.rarityLabel}/></div>
+          </div>
         </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div className="tiny">{plant.fi}</div>
-          <div className="serif" style={{ fontSize: 22, fontStyle: "italic", lineHeight: 1.1, marginTop: 2 }}>{plant.name}</div>
-          <div style={{ marginTop: 6 }}><RarityBadge rarity={plant.rarity} label={plant.rarityLabel}/></div>
+      </div>
+      <div style={{ padding: 24 }}>
+        <Row label={`${tier.name} tier`} value={`€${recurring ? tier.monthly : tier.price}${recurring ? "/mo" : ""}`}/>
+        <Row label={t("Intent")} value={{ self: t("Personal"), gift: t("Gift"), memorial: t("Memorial (5-yr)"), class: t("Class / School") }[intent]}/>
+        {dedication && <Row label={t("Dedication")} value={`"${dedication.slice(0, 30)}${dedication.length > 30 ? "…" : ""}"`}/>}
+        <Row label={t("Billing")} value={recurring ? t("Monthly · cancel anytime") : t("One-off")}/>
+        <div style={{ borderTop: "1px dashed var(--line)", margin: "16px 0" }}/>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+          <div style={{ fontWeight: 500 }}>{t("Total today")}</div>
+          <div className="serif" style={{ fontSize: 32 }}>€{total}{recurring ? <span style={{ fontSize: 14, color: "var(--ink-3)" }}>/mo</span> : ""}</div>
         </div>
       </div>
     </div>
-    <div style={{ padding: 24 }}>
-      <Row label={`${tier.name} tier`} value={`€${recurring ? tier.monthly : tier.price}${recurring ? "/mo" : ""}`}/>
-      <Row label={t("Intent")} value={{ self: t("Personal"), gift: t("Gift"), memorial: t("Memorial (5-yr)"), class: t("Class / School") }[intent]}/>
-      {dedication && <Row label={t("Dedication")} value={`"${dedication.slice(0, 30)}${dedication.length > 30 ? "…" : ""}"`}/>}
-      <Row label={t("Billing")} value={recurring ? t("Monthly · cancel anytime") : t("One-off")}/>
-      <div style={{ borderTop: "1px dashed var(--line)", margin: "16px 0" }}/>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-        <div style={{ fontWeight: 500 }}>{t("Total today")}</div>
-        <div className="serif" style={{ fontSize: 32 }}>€{total}{recurring ? <span style={{ fontSize: 14, color: "var(--ink-3)" }}>/mo</span> : ""}</div>
-      </div>
-    </div>
-  </div>
-);
+  );
+};
 
 const Row = ({ label, value }) => (
   <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", fontSize: 13 }}>
