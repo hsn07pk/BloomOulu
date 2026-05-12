@@ -42,7 +42,7 @@ const PlantScreen = ({ plantId, onBack, onNav, onAdopt }) => {
         <div>
           {/* Hero */}
           <div className="card" style={{ background: plant.accent, padding: 0, overflow: "hidden", borderRadius: 24, position: "relative", aspectRatio: "16/10" }}>
-            <Botanical color={plant.color} accent={plant.accent} variant={plant.variant} style={{ width: "100%", height: "100%", position: "absolute", inset: 0 }}/>
+            <PlantImage plant={plant} style={{ width: "100%", height: "100%", position: "absolute", inset: 0 }}/>
             <div style={{ position: "absolute", top: 20, left: 20, right: 20, display: "flex", gap: 8, flexWrap: "wrap" }}>
               <RarityBadge rarity={plant.rarity} label={plant.rarityLabel}/>
               <span className="badge" style={{ background: "rgba(255,255,255,0.7)", color: "var(--ink-2)" }}>{plant.family}</span>
@@ -147,8 +147,12 @@ const PlantScreen = ({ plantId, onBack, onNav, onAdopt }) => {
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                   {[1,2].map(i => (
-                    <div key={i} style={{ aspectRatio: "4/3", borderRadius: 14, background: season === "winter" ? "linear-gradient(180deg, #e7ecf0 0%, #cbd4d8 100%)" : plant.accent, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <Botanical color={season === "winter" ? "#9DA8B4" : plant.color} accent={season === "winter" ? "#cbd4d8" : plant.accent} variant={plant.variant} style={{ width: "70%", height: "85%" }}/>
+                    <div key={i} style={{ aspectRatio: "4/3", borderRadius: 14, background: season === "winter" ? "linear-gradient(180deg, #e7ecf0 0%, #cbd4d8 100%)" : plant.accent, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                      {season === "winter" ? (
+                        <Botanical color="#9DA8B4" accent="#cbd4d8" variant={plant.variant} style={{ width: "70%", height: "85%" }}/>
+                      ) : (
+                        <PlantImage plant={plant} style={{ width: "100%", height: "100%" }}/>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -282,8 +286,8 @@ const PlantScreen = ({ plantId, onBack, onNav, onAdopt }) => {
             <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
               {PLANTS.filter(p => p.id !== plant.id && p.family === plant.family).slice(0, 2).concat(PLANTS.filter(p => p.id !== plant.id).slice(0, 2)).slice(0, 3).map(p => (
                 <button key={p.id} onClick={() => onNav("plant", p.id)} className="card" style={{ display: "flex", gap: 12, padding: 12, alignItems: "center", textAlign: "left" }}>
-                  <div style={{ width: 48, height: 48, borderRadius: 8, background: p.accent, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <Botanical color={p.color} accent={p.accent} variant={p.variant} style={{ width: 38, height: 46 }}/>
+                  <div style={{ width: 48, height: 48, borderRadius: 8, background: p.accent, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                    <PlantImage plant={p} style={{ width: "100%", height: "100%" }}/>
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div className="serif" style={{ fontSize: 16, fontStyle: "italic" }}>{p.name}</div>

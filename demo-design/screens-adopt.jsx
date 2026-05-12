@@ -165,8 +165,8 @@ const AdoptScreen = ({ presetPlantId, onNav }) => {
                     boxShadow: selected ? "var(--shadow-lg)" : "var(--shadow-sm)",
                     transition: "all 200ms"
                   }}>
-                    <div style={{ height: 140, background: p.accent, position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <Botanical color={p.color} accent={p.accent} variant={p.variant} style={{ width: "70%", height: "85%" }}/>
+                    <div style={{ height: 140, background: p.accent, position: "relative", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                      <PlantImage plant={p} style={{ width: "100%", height: "100%" }}/>
                       {needs && <div className="badge" style={{ background: "var(--rust)", color: "var(--paper)", position: "absolute", top: 10, left: 10 }}>{t("Needs adopters")}</div>}
                       {selected && <div style={{ position: "absolute", top: 10, right: 10, width: 28, height: 28, borderRadius: "50%", background: tier.color, color: "white", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="check" size={14}/></div>}
                     </div>
@@ -405,8 +405,8 @@ const SummaryCard = ({ plant, tier, recurring, intent, total, dedication }) => {
     <div className="card" style={{ overflow: "hidden" }}>
       <div style={{ padding: 24, background: "var(--paper)", borderBottom: "1px solid var(--line-soft)" }}>
         <div style={{ display: "flex", gap: 14 }}>
-          <div style={{ width: 60, height: 76, borderRadius: 10, background: plant.accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            <Botanical color={plant.color} accent={plant.accent} variant={plant.variant} style={{ width: 48, height: 64 }}/>
+          <div style={{ width: 60, height: 76, borderRadius: 10, background: plant.accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden" }}>
+            <PlantImage plant={plant} style={{ width: "100%", height: "100%" }}/>
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div className="tiny">{plant.fi}</div>

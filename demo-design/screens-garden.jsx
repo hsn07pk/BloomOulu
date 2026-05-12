@@ -117,8 +117,8 @@ const GardenScreen = ({ onOpenPlant, onNav }) => {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20 }}>
           {myPlants.map((p, i) => (
             <div key={p.id} className="card" style={{ padding: 0, overflow: "hidden" }}>
-              <div style={{ height: 220, background: p.accent, position: "relative" }}>
-                <Botanical color={p.color} accent={p.accent} variant={p.variant} style={{ width: "100%", height: "100%" }}/>
+              <div style={{ height: 220, background: p.accent, position: "relative", overflow: "hidden" }}>
+                <PlantImage plant={p} style={{ width: "100%", height: "100%" }}/>
                 {i === 0 && (
                   <div style={{ position: "absolute", top: 14, right: 14, padding: "6px 12px", background: "var(--rust)", color: "var(--cream)", borderRadius: 999, fontSize: 11, fontFamily: "var(--f-mono)", display: "flex", alignItems: "center", gap: 6 }}>
                     <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--cream)", display: "inline-block", animation: "blink 1.6s infinite" }}/>

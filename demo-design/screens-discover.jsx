@@ -68,8 +68,8 @@ const DiscoverScreen = ({ onOpenPlant, onNav }) => {
               </div>
               {plants.slice(0, 3).map((p, i) => (
                 <button key={p.id} onClick={() => onOpenPlant(p.id)} style={{ display: "flex", gap: 14, padding: "16px 24px", width: "100%", textAlign: "left", borderBottom: i < 2 ? "1px solid var(--line-soft)" : "none", alignItems: "center" }}>
-                  <div style={{ width: 56, height: 56, borderRadius: 12, background: p.accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    <Botanical color={p.color} accent={p.accent} variant={p.variant} style={{ width: 44, height: 56 }}/>
+                  <div style={{ width: 56, height: 56, borderRadius: 12, background: p.accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden" }}>
+                    <PlantImage plant={p} style={{ width: "100%", height: "100%" }}/>
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div className="serif" style={{ fontSize: 18, color: "var(--ink)" }}>{p.name}</div>
@@ -136,8 +136,8 @@ const DiscoverScreen = ({ onOpenPlant, onNav }) => {
             <button key={p.id} onClick={() => onOpenPlant(p.id)} className="card" style={{ padding: 0, overflow: "hidden", textAlign: "left", transition: "all 200ms", cursor: "pointer" }}
               onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.boxShadow = "var(--shadow-lg)"; }}
               onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = ""; }}>
-              <div style={{ height: 220, background: p.accent, position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <Botanical color={p.color} accent={p.accent} variant={p.variant} style={{ width: "70%", height: "90%" }}/>
+              <div style={{ height: 220, background: p.accent, position: "relative", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                <PlantImage plant={p} style={{ width: "100%", height: "100%" }}/>
                 <div style={{ position: "absolute", top: 14, left: 14 }}>
                   <RarityBadge rarity={p.rarity} label={p.rarityLabel} compact/>
                 </div>

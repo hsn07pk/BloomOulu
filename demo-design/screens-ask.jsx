@@ -259,8 +259,8 @@ const MessageBubble = ({ m, onOpenPlant }) => {
                 const p = localisePlant(pRaw, lang);
                 return (
                   <button key={c} onClick={() => onOpenPlant(p.id)} className="card" style={{ padding: 10, display: "flex", gap: 10, alignItems: "center", textAlign: "left", border: "1px solid var(--line)" }}>
-                    <div style={{ width: 44, height: 54, borderRadius: 8, background: p.accent, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <Botanical color={p.color} accent={p.accent} variant={p.variant} style={{ width: 36, height: 46 }}/>
+                    <div style={{ width: 44, height: 54, borderRadius: 8, background: p.accent, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                      <PlantImage plant={p} style={{ width: "100%", height: "100%" }}/>
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div className="serif" style={{ fontSize: 15, fontStyle: "italic" }}>{p.name}</div>

@@ -230,6 +230,27 @@ const RarityBadge = ({ rarity, label, compact = false }) => {
   return <span className={`badge ${cls}`}>{compact ? rarity : <>{rarity} · {t(label)}</>}</span>;
 };
 
+// Plant image with graceful fallback to the Botanical SVG.
+// Real images come from Wikimedia Commons (CC-licensed) per plant in data.jsx;
+// if no image URL exists or the image fails to load, the stylised SVG renders.
+const PlantImage = ({ plant, style = {}, alt }) => {
+  const [errored, setErrored] = React.useState(false);
+  if (!plant) return null;
+  const hasImage = plant.image && !errored;
+  if (hasImage) {
+    return (
+      <img
+        src={plant.image}
+        alt={alt || plant.name}
+        loading="lazy"
+        onError={() => setErrored(true)}
+        style={{ objectFit: "cover", display: "block", ...style }}
+      />
+    );
+  }
+  return <Botanical color={plant.color} accent={plant.accent} variant={plant.variant} style={style}/>;
+};
+
 // Responsive helper - true at <=768px viewport
 const useIsMobile = (breakpoint = 768) => {
   const get = () => typeof window !== "undefined" && window.innerWidth <= breakpoint;
@@ -245,4 +266,4 @@ const useIsMobile = (breakpoint = 768) => {
   return isMobile;
 };
 
-Object.assign(window, { Icon, Progress, RarityBadge, Botanical, BloomMark, useIsMobile });
+Object.assign(window, { Icon, Progress, RarityBadge, Botanical, PlantImage, BloomMark, useIsMobile });
