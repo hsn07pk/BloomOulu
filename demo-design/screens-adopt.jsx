@@ -1,13 +1,13 @@
 // Adopt flow - tier ladder → checkout
 
-const AdoptScreen = ({ presetPlantId, onNav }) => {
+const AdoptScreen = ({ presetPlantId, presetIntent, onNav }) => {
   const { t, lang } = useT();
   const [step, setStep] = React.useState(1);
   const [tierId, setTierId] = React.useState("vulnerable");
   const [plantId, setPlantId] = React.useState(presetPlantId || "puls-pat");
   const [recurring, setRecurring] = React.useState(false);
   const [isGift, setIsGift] = React.useState(false);
-  const [intent, setIntent] = React.useState("self"); // self / gift / memorial / class
+  const [intent, setIntent] = React.useState(presetIntent || "self"); // self / gift / memorial / class
   const [pay, setPay] = React.useState("mobilepay");
   const [dedication, setDedication] = React.useState("");
 
@@ -63,7 +63,7 @@ const AdoptScreen = ({ presetPlantId, onNav }) => {
             {/* Recurring toggle */}
             <div style={{ display: "inline-flex", padding: 4, background: "var(--paper)", borderRadius: 999, marginBottom: 28 }}>
               <button onClick={() => setRecurring(false)} className="pill" style={{ padding: "8px 18px", background: !recurring ? "var(--forest)" : "transparent", color: !recurring ? "var(--paper)" : "var(--ink-2)" }}>{t("One-off")}</button>
-              <button onClick={() => setRecurring(true)} className="pill" style={{ padding: "8px 18px", background: recurring ? "var(--forest)" : "transparent", color: recurring ? "var(--paper)" : "var(--ink-2)" }}>{t("Monthly · 5–10× retention")}</button>
+              <button onClick={() => setRecurring(true)} className="pill" style={{ padding: "8px 18px", background: recurring ? "var(--forest)" : "transparent", color: recurring ? "var(--paper)" : "var(--ink-2)" }}>{t("Monthly")}</button>
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>

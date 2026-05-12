@@ -8,7 +8,7 @@ const App = () => {
 
   const nav = (screen, ...args) => {
     if (screen === "plant") setRoute({ screen, plantId: args[0] });
-    else if (screen === "adopt") setRoute({ screen, plantId: args[0] });
+    else if (screen === "adopt") setRoute({ screen, plantId: args[0], intent: args[1] });
     else setRoute({ screen });
     setOpenMenu(null);
     window.scrollTo({ top: 0, behavior: "instant" });
@@ -186,8 +186,8 @@ const App = () => {
 
       <main>
         {route.screen === "discover" && <DiscoverScreen onOpenPlant={id => nav("plant", id)} onNav={nav}/>}
-        {route.screen === "plant" && <PlantScreen plantId={route.plantId} onBack={() => nav("discover")} onNav={nav} onAdopt={id => nav("adopt", id)}/>}
-        {route.screen === "adopt" && <AdoptScreen presetPlantId={route.plantId} onNav={nav}/>}
+        {route.screen === "plant" && <PlantScreen plantId={route.plantId} onBack={() => nav("discover")} onNav={nav} onAdopt={(id, intent) => nav("adopt", id, intent)}/>}
+        {route.screen === "adopt" && <AdoptScreen presetPlantId={route.plantId} presetIntent={route.intent} onNav={nav}/>}
         {route.screen === "ask" && <AskScreen onNav={nav} onOpenPlant={id => nav("plant", id)}/>}
         {route.screen === "garden" && <GardenScreen onOpenPlant={id => nav("plant", id)} onNav={nav}/>}
         {route.screen === "kiosk" && <KioskScreen onNav={nav}/>}

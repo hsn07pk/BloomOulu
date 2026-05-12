@@ -11,8 +11,15 @@ const DiscoverScreen = ({ onOpenPlant, onNav }) => {
     { id: "NA", label: t("Greenhouse Star") }
   ];
   const [filter, setFilter] = React.useState("All");
+  const [search, setSearch] = React.useState("");
   const plants = React.useMemo(() => PLANTS.map(p => localisePlant(p, lang)), [lang]);
-  const visible = plants.filter(p => filter === "All" || p.rarity === filter);
+  const visible = plants.filter(p => {
+    if (filter !== "All" && p.rarity !== filter) return false;
+    if (!search.trim()) return true;
+    const q = search.trim().toLowerCase();
+    return [p.name, p.fi, p.sv, p.en, p.family, p.accession]
+      .some(s => (s || "").toLowerCase().includes(q));
+  });
 
   return (
     <div className="fade-in">
@@ -107,8 +114,22 @@ const DiscoverScreen = ({ onOpenPlant, onNav }) => {
           </div>
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
             <div style={{ position: "relative" }}>
-              <input placeholder={t("Search 4 213 plants…")} style={{ padding: "12px 16px 12px 40px", borderRadius: 999, border: "1px solid var(--line)", background: "var(--paper)", width: 280, fontSize: 14, color: "var(--ink)" }}/>
+              <input
+                placeholder={t("Search 4 213 plants…")}
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                style={{ padding: "12px 16px 12px 40px", borderRadius: 999, border: "1px solid var(--line)", background: "var(--paper)", width: 280, fontSize: 14, color: "var(--ink)", outline: "none" }}
+              />
               <Icon name="search" size={16} style={{ position: "absolute", left: 14, top: 13, color: "var(--ink-3)" }}/>
+              {search && (
+                <button
+                  onClick={() => setSearch("")}
+                  aria-label={t("Close")}
+                  style={{ position: "absolute", right: 12, top: 11, width: 24, height: 24, borderRadius: "50%", background: "rgba(31,58,44,0.08)", color: "var(--ink-2)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+                >
+                  <Icon name="close" size={12}/>
+                </button>
+              )}
             </div>
             <button className="icon-btn"><Icon name="qr" size={16}/></button>
           </div>
@@ -130,6 +151,15 @@ const DiscoverScreen = ({ onOpenPlant, onNav }) => {
             </button>
           ))}
         </div>
+
+        {visible.length === 0 && (
+          <div className="card card-pad" style={{ textAlign: "center", padding: "48px 24px" }}>
+            <div style={{ fontSize: 36 }}>🔍</div>
+            <div className="serif" style={{ fontSize: 22, marginTop: 12 }}>{t("No matching plants")}</div>
+            <p className="muted" style={{ marginTop: 8 }}>{t("Try a different name or clear the filter.")}</p>
+            <button className="btn btn-secondary" style={{ marginTop: 18 }} onClick={() => { setSearch(""); setFilter("All"); }}>{t("Clear search")}</button>
+          </div>
+        )}
 
         <div data-grid-mobile="2" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20 }}>
           {visible.map(p => (

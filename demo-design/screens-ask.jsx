@@ -1,7 +1,7 @@
 // AskTheGarden - RAG-grounded chat with citations
 
 const AskScreen = ({ onNav, onOpenPlant }) => {
-  const { t, lang, setLang } = useT();
+  const { t, lang } = useT();
   const [messages, setMessages] = React.useState([
     {
       role: "assistant",
@@ -110,12 +110,7 @@ const AskScreen = ({ onNav, onOpenPlant }) => {
             </div>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <div className="lang-pill">
-              {["FI", "SV", "EN"].map(l => (
-                <button key={l} onClick={() => setLang(l)} className={lang === l ? "active" : ""}>{l}</button>
-              ))}
-            </div>
-            <button className="icon-btn" title="Voice mode"><Icon name="mic" size={16}/></button>
+            <button className="icon-btn" title={t("Voice mode")}><Icon name="mic" size={16}/></button>
           </div>
         </div>
 

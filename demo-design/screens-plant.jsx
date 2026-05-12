@@ -257,17 +257,17 @@ const PlantScreen = ({ plantId, onBack, onNav, onAdopt }) => {
                 <div className="small" style={{ color: "var(--ink-2)", marginTop: 6 }}>{plant.rarity === "CR" ? t("Critically Endangered · engraved plaque tier") : plant.rarity === "EN" || plant.rarity === "VU" ? t("Vulnerable tier · Adopters' Day invite") : t("Common tier · named plant page")}</div>
               </div>
 
-              <button className="btn btn-primary btn-block btn-lg" style={{ marginTop: 16 }} onClick={() => onAdopt(plant.id)}>
+              <button className="btn btn-primary btn-block btn-lg" style={{ marginTop: 16 }} onClick={() => onAdopt(plant.id, "self")}>
                 <Icon name="seedling" size={16}/> {t("Adopt this plant")}
               </button>
-              <button className="btn btn-secondary btn-block" style={{ marginTop: 8 }}>
+              <button className="btn btn-secondary btn-block" style={{ marginTop: 8 }} onClick={() => onAdopt(plant.id, "gift")}>
                 <Icon name="gift" size={14}/> {t("Adopt as a gift")}
               </button>
               <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                <button className="btn btn-ghost small" style={{ flex: 1, border: "1px solid var(--line)" }}>
+                <button className="btn btn-ghost small" style={{ flex: 1, border: "1px solid var(--line)" }} onClick={() => onAdopt(plant.id, "memorial")}>
                   <Icon name="heart" size={13}/> {t("Memorial")}
                 </button>
-                <button className="btn btn-ghost small" style={{ flex: 1, border: "1px solid var(--line)" }}>
+                <button className="btn btn-ghost small" style={{ flex: 1, border: "1px solid var(--line)" }} onClick={() => onAdopt(plant.id, "class")}>
                   <Icon name="school" size={13}/> {t("Class")} · €50
                 </button>
               </div>

@@ -52,7 +52,7 @@ const GardenScreen = ({ onOpenPlant, onNav }) => {
                 <span className="pill pill-on-dark">€430 {t("lifetime")}</span>
               </div>
               <div className="small" style={{ color: "rgba(250,247,238,0.7)", marginTop: 8 }}>
-                €570 {t("to")} <b style={{ color: "var(--sage-bright)" }}>{t("Gold")}</b> · {t("concierge service + curator access")}
+                €570 {t("to")} <b style={{ color: "var(--sage-bright)" }}>{t("Gold")}</b>
               </div>
               <div style={{ marginTop: 16 }}>
                 <div style={{ height: 6, background: "rgba(250,247,238,0.14)", borderRadius: 999, overflow: "hidden" }}>
