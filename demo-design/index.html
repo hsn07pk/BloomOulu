@@ -529,6 +529,21 @@
     /* Reduce big hero stats strip gap */
     section [style*="grid-template-columns: repeat(4, 1fr)"] { gap: 12px !important; }
 
+    /* Plant page: hero audio overlay - allow wrapping so play/progress/CC don't crowd */
+    [style*="aspectRatio: \"16/10\""] [style*="space-between"][style*="position: absolute"] {
+      flex-wrap: wrap !important;
+      gap: 8px !important;
+    }
+
+    /* Plant page season tab caption: smaller font on mobile */
+    .small.muted[style*="italic"] { font-size: 12px !important; }
+
+    /* Make sure all card-pad has reasonable mobile padding */
+    .card-pad { padding: 18px !important; }
+
+    /* Audio-bar progress: shrink minWidth on mobile */
+    [style*="minWidth: 180"] { min-width: 120px !important; }
+
     /* Ask screen: hide right context aside on mobile (informational only) */
     .ask-context { display: none !important; }
 

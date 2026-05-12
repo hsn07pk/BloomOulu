@@ -20,15 +20,24 @@ const PlantScreen = ({ plantId, onBack, onNav, onAdopt }) => {
   const [mode, setMode] = React.useState("adult");
   const audioRef = React.useRef(null);
 
-  // Reset audio when the plant changes
+  // Reset audio when the plant or language changes (audio source becomes a new file)
   React.useEffect(() => {
     const a = audioRef.current;
     if (!a) return;
     a.pause();
-    a.currentTime = 0;
+    // Reload so the new src is fetched
+    try { a.load(); } catch {}
     setAudioPlaying(false);
     setAudioCurrent(0);
-  }, [plant.id]);
+    setAudioDuration(0);
+  }, [plant.id, lang]);
+
+  // Pick localised transcript + audio path
+  const langKey = (lang || "EN").toLowerCase();
+  const transcript = (plant.transcript && typeof plant.transcript === "object")
+    ? (plant.transcript[langKey] || plant.transcript.en)
+    : plant.transcript;
+  const audioSrc = `audio/${langKey}/${plant.id}.m4a`;
 
   const toggleAudio = () => {
     const a = audioRef.current;
@@ -83,7 +92,8 @@ const PlantScreen = ({ plantId, onBack, onNav, onAdopt }) => {
               <div style={{ background: "rgba(255,255,255,0.92)", padding: "12px 16px", borderRadius: 14, display: "flex", alignItems: "center", gap: 12 }}>
                 <audio
                   ref={audioRef}
-                  src={`audio/${plant.id}.m4a`}
+                  key={audioSrc}
+                  src={audioSrc}
                   preload="metadata"
                   onLoadedMetadata={e => setAudioDuration(e.currentTarget.duration)}
                   onTimeUpdate={e => setAudioCurrent(e.currentTarget.currentTime)}
@@ -120,16 +130,16 @@ const PlantScreen = ({ plantId, onBack, onNav, onAdopt }) => {
           </div>
 
           {/* Captions / transcript — toggled by the CC button on the hero */}
-          {captionsOn && plant.transcript && (
+          {captionsOn && transcript && (
             <div
               role="region"
               aria-label={t("Audio transcript")}
               style={{ marginTop: 18, padding: "16px 20px", background: "var(--forest-deep)", color: "var(--cream)", borderRadius: 14, fontSize: 15, lineHeight: 1.6, position: "relative" }}
             >
               <div className="tiny" style={{ color: "var(--sage-bright)", marginBottom: 8, letterSpacing: "0.12em" }}>
-                {audioPlaying ? `▶ ${t("Now playing")}` : t("Transcript")}
+                {audioPlaying ? `▶ ${t("Now playing")}` : t("Transcript")} · {lang}
               </div>
-              <p style={{ margin: 0, color: "rgba(250,247,238,0.92)" }}>{plant.transcript}</p>
+              <p lang={langKey} style={{ margin: 0, color: "rgba(250,247,238,0.92)" }}>{transcript}</p>
             </div>
           )}
 

@@ -31,3 +31,16 @@ and full provenance. Attribution is preserved here for downstream reuse.
 | `lobaria-pulmonaria-habitat.jpg` | Autumn (old-growth context) | https://commons.wikimedia.org/wiki/File:Lobaria_pulmonaria_190708.jpg |
 | `victoria-amazonica-fitch.jpg` | Summer (Fitch 1851 illustration) | https://commons.wikimedia.org/wiki/File:Victoria_Regia._(Expanded_flower)_(1851).jpeg |
 | `victoria-amazonica-chatsworth.jpg` | Autumn (Chatsworth 1849) | https://commons.wikimedia.org/wiki/File:Victoria_Regia_LIN_1849-.jpg |
+
+## Additional seasonal alternates (round 2)
+
+| File | Use | Source |
+|---|---|---|
+| `pulsatilla-patens-steppe.jpg` | Summer (Buryatia steppe) | https://commons.wikimedia.org/wiki/File:Прострел._Сон-трава._Бурятия.jpg |
+| `pulsatilla-patens-reserve.jpg` | Autumn (Strilsk steppe reserve) | https://commons.wikimedia.org/wiki/Category:Pulsatilla_patens |
+| `campanula-uniflora-arctic.jpg` | Summer (Arctic harebell macro) | https://commons.wikimedia.org/wiki/File:Arctic_Harebell_-_Campanula_uniflora_(4828792331).jpg |
+| `campanula-uniflora-upernavik.jpg` | Autumn (Upernavik, Greenland) | https://commons.wikimedia.org/wiki/File:Campanula_uniflora_upernavik_2007-07-11_2.jpg |
+| `saxifraga-hirculus-svalbard.jpg` | Summer (Svalbard mire) | https://commons.wikimedia.org/wiki/File:Saxifraga_hirculus_IMG_3875_myrsildre_hotellneset.JPG |
+| `saxifraga-hirculus-brassus.jpg` | Autumn (Le Brassus, Switzerland) | https://commons.wikimedia.org/wiki/File:Saxifraga_hirculus,_Le_Brassus_-_img_39318.jpg |
+| `primula-nutans-bothnian.jpg` | Summer (Bothnian Bay 2006) | https://commons.wikimedia.org/wiki/File:Primula_Nutans_Bothnian_Bay_2006_06_26.JPG |
+| `primula-nutans-simo2021.jpg` | Autumn (Simo 2021) | https://commons.wikimedia.org/wiki/File:Primula_nutans_Simo_20210613.jpg |
