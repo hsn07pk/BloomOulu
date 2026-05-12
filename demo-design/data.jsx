@@ -124,6 +124,11 @@ const PLANTS = [
   {
     id: "trol-eur",
     image: "plants/trollius-europaeus.jpg",
+    seasons: {
+      spring: "plants/trollius-europaeus-habitat.jpg",
+      summer: "plants/trollius-europaeus.jpg",
+      autumn: "plants/trollius-europaeus-seed.jpg"
+    },
     accession: "OULU-1987-0044",
     name: "Trollius europaeus",
     fi: "Kullero",
@@ -154,6 +159,11 @@ const PLANTS = [
   {
     id: "cyp-cal",
     image: "plants/cypripedium-calceolus.jpg",
+    seasons: {
+      spring: "plants/cypripedium-calceolus.jpg",
+      summer: "plants/cypripedium-calceolus-inflorescence.jpg",
+      autumn: "plants/cypripedium-calceolus-sweden.jpg"
+    },
     accession: "OULU-1995-0009",
     name: "Cypripedium calceolus",
     fi: "Tikankontti",
@@ -184,6 +194,11 @@ const PLANTS = [
   {
     id: "lob-pul",
     image: "plants/lobaria-pulmonaria.jpg",
+    seasons: {
+      spring: "plants/lobaria-pulmonaria.jpg",
+      summer: "plants/lobaria-pulmonaria-detail.jpg",
+      autumn: "plants/lobaria-pulmonaria-habitat.jpg"
+    },
     accession: "OULU-2017-0204",
     name: "Lobaria pulmonaria",
     fi: "Raidankeuhkojäkälä",
@@ -214,6 +229,11 @@ const PLANTS = [
   {
     id: "vict-am",
     image: "plants/victoria-amazonica.jpg",
+    seasons: {
+      spring: "plants/victoria-amazonica.jpg",
+      summer: "plants/victoria-amazonica-fitch.jpg",
+      autumn: "plants/victoria-amazonica-chatsworth.jpg"
+    },
     accession: "OULU-1972-0001",
     name: "Victoria amazonica",
     fi: "Amazonin jättivesilumme",

@@ -179,23 +179,49 @@ const PlantScreen = ({ plantId, onBack, onNav, onAdopt }) => {
                     }}><Icon name={s.icon} size={13}/> {s.label}</button>
                   ))}
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  {[1,2].map(i => (
-                    <div key={i} style={{ aspectRatio: "4/3", borderRadius: 14, background: season === "winter" ? "linear-gradient(180deg, #e7ecf0 0%, #cbd4d8 100%)" : plant.accent, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-                      {season === "winter" ? (
-                        <Botanical color="#9DA8B4" accent="#cbd4d8" variant={plant.variant} style={{ width: "70%", height: "85%" }}/>
-                      ) : (
-                        <PlantImage plant={plant} style={{ width: "100%", height: "100%" }}/>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                {season === "winter" && (
-                  <div style={{ marginTop: 18, padding: 16, background: "#f0f3f5", borderRadius: 12, fontSize: 14, color: "var(--ink-2)" }}>
-                    <Icon name="snow" size={14} style={{ verticalAlign: "middle", marginRight: 6, color: "var(--sky)" }}/>
-                    {t("Under the snow now. What's happening below: rhizomes are dormant, mycorrhizal partners still active. Outdoor garden is closed for maintenance - visit Romeo & Julia year-round.")}
-                  </div>
-                )}
+                {(() => {
+                  const seasonalSrc = plant.seasons && plant.seasons[season];
+                  const hasSeasonalAlt = seasonalSrc && seasonalSrc !== plant.image;
+                  const captions = {
+                    spring: hasSeasonalAlt ? t("First leaves emerge") : t("Early growth — out of bloom"),
+                    summer: t("Peak bloom"),
+                    autumn: hasSeasonalAlt ? t("Setting seed") : t("Post-bloom"),
+                    winter: t("Under the snow")
+                  };
+                  if (season === "winter") {
+                    return (
+                      <>
+                        <div style={{ aspectRatio: "16/9", borderRadius: 14, background: "linear-gradient(180deg, #e7ecf0 0%, #cbd4d8 100%)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                          <Botanical color="#9DA8B4" accent="#cbd4d8" variant={plant.variant} style={{ width: "45%", height: "70%" }}/>
+                        </div>
+                        <div style={{ marginTop: 18, padding: 16, background: "#f0f3f5", borderRadius: 12, fontSize: 14, color: "var(--ink-2)" }}>
+                          <Icon name="snow" size={14} style={{ verticalAlign: "middle", marginRight: 6, color: "var(--sky)" }}/>
+                          {t("Under the snow now. What's happening below: rhizomes are dormant, mycorrhizal partners still active. Outdoor garden is closed for maintenance - visit Romeo & Julia year-round.")}
+                        </div>
+                      </>
+                    );
+                  }
+                  return (
+                    <>
+                      <div style={{ aspectRatio: "16/9", borderRadius: 14, background: plant.accent, overflow: "hidden", position: "relative" }}>
+                        <img
+                          src={seasonalSrc || plant.image}
+                          alt={`${plant.name} - ${season}`}
+                          loading="lazy"
+                          style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", filter: hasSeasonalAlt ? "none" : (season === "spring" ? "saturate(0.85) brightness(1.06)" : season === "autumn" ? "sepia(0.18) saturate(1.1) hue-rotate(-8deg)" : "none") }}
+                        />
+                        {!hasSeasonalAlt && (
+                          <div style={{ position: "absolute", top: 14, right: 14, padding: "6px 12px", background: "rgba(31,58,44,0.78)", color: "var(--cream)", borderRadius: 999, fontSize: 11, fontFamily: "var(--f-mono)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
+                            {t("Stock photo")}
+                          </div>
+                        )}
+                      </div>
+                      <div className="small muted" style={{ marginTop: 12, textAlign: "center", fontStyle: "italic" }}>
+                        {captions[season]}{plant.bloom ? ` · ${t("Blooms")} ${t(plant.bloom)}` : ""}
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
             )}
             {tab === "data" && (

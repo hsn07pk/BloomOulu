@@ -18,3 +18,16 @@ files and per-image licence/author metadata are linked below.
 
 Open each Commons URL to see the author, licence (CC BY-SA / CC BY / Public Domain),
 and full provenance. Attribution is preserved here for downstream reuse.
+
+## Seasonal-view alternates
+
+| File | Use | Source |
+|---|---|---|
+| `trollius-europaeus-habitat.jpg` | Spring (wooded meadow) | https://commons.wikimedia.org/wiki/File:Trollius_europaeus_habitat_-_wooded_meadow_in_Keila.jpg |
+| `trollius-europaeus-seed.jpg` | Autumn (seed head) | https://commons.wikimedia.org/wiki/File:Trollius_europaeus_seed_head_-_Keila.jpg |
+| `cypripedium-calceolus-inflorescence.jpg` | Summer (inflorescence) | https://commons.wikimedia.org/wiki/File:Cypripedium_calceolus_inflorescence.jpg |
+| `cypripedium-calceolus-sweden.jpg` | Autumn (Jämtland) | https://commons.wikimedia.org/wiki/File:Guckusko_Jamtland_jun2004_UlfSundberg.jpg |
+| `lobaria-pulmonaria-detail.jpg` | Summer (thallus detail) | https://commons.wikimedia.org/wiki/File:Lobaria_pulmonaria_010108a.jpg |
+| `lobaria-pulmonaria-habitat.jpg` | Autumn (old-growth context) | https://commons.wikimedia.org/wiki/File:Lobaria_pulmonaria_190708.jpg |
+| `victoria-amazonica-fitch.jpg` | Summer (Fitch 1851 illustration) | https://commons.wikimedia.org/wiki/File:Victoria_Regia._(Expanded_flower)_(1851).jpeg |
+| `victoria-amazonica-chatsworth.jpg` | Autumn (Chatsworth 1849) | https://commons.wikimedia.org/wiki/File:Victoria_Regia_LIN_1849-.jpg |
