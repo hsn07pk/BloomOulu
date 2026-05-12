@@ -170,8 +170,6 @@ const T = {
     "Step 3 of 4": "Vaihe 3/4",
     "Step 4 of 4": "Vaihe 4/4",
     "Choose your tier": "Valitse tasosi",
-    "Anchored on peer programmes — Kew, ELTE Füvészkert, Meise. Every tier funds direct ex-situ conservation work via the LIFE+ ESCAPE legacy.":
-      "Vertailu vertaisohjelmiin — Kew, ELTE Füvészkert, Meise. Jokainen taso rahoittaa suoraa ex situ -suojelutyötä LIFE+ ESCAPE -perinnön kautta.",
     "One-off": "Kertaluonteinen",
     "Monthly · 5–10× retention": "Kuukausittain · 5–10× pysyvämpi",
     "/month": "/kk",
@@ -611,8 +609,6 @@ const T = {
     "Step 3 of 4": "Steg 3 av 4",
     "Step 4 of 4": "Steg 4 av 4",
     "Choose your tier": "Välj din nivå",
-    "Anchored on peer programmes — Kew, ELTE Füvészkert, Meise. Every tier funds direct ex-situ conservation work via the LIFE+ ESCAPE legacy.":
-      "Förankrad i jämförbara program — Kew, ELTE Füvészkert, Meise. Varje nivå finansierar direkt ex-situ-bevarandearbete via LIFE+ ESCAPE-arvet.",
     "One-off": "Engångs",
     "Monthly · 5–10× retention": "Månadsvis · 5–10× lojalitet",
     "/month": "/mån",

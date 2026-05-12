@@ -58,7 +58,6 @@ const AdoptScreen = ({ presetPlantId, onNav }) => {
             <div style={{ marginBottom: 40 }}>
               <div className="tiny" style={{ color: "var(--rust)" }}>{t("Step 1 of 4")}</div>
               <h1 style={{ fontSize: 56, marginTop: 12 }}>{t("Choose your tier")}</h1>
-              <p className="muted" style={{ marginTop: 12, maxWidth: 600 }}>{t("Anchored on peer programmes — Kew, ELTE Füvészkert, Meise. Every tier funds direct ex-situ conservation work via the LIFE+ ESCAPE legacy.")}</p>
             </div>
 
             {/* Recurring toggle */}
