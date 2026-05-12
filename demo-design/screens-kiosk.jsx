@@ -77,7 +77,7 @@ const KioskScreen = ({ onNav }) => {
           <div style={{ background: "var(--cream)", color: "var(--ink)", borderRadius: 16, padding: 32, display: "flex", flexDirection: "column" }}>
             <div className="eyebrow">{t("Begin your visit")}</div>
             <h3 className="serif" style={{ fontSize: 32, marginTop: 12 }}>{t("Scan any plant.")}</h3>
-            <p className="small muted" style={{ marginTop: 8 }}>{t("3-language audio narration. NFC also available — tap your phone to any tag.")}</p>
+            <p className="small muted" style={{ marginTop: 8 }}>{t("3-language audio narration.")}</p>
 
             <div style={{ marginTop: 28, alignSelf: "center", padding: 24, background: "var(--paper)", borderRadius: 12, boxShadow: "var(--shadow-soft)" }}>
               {/* Stylised QR */}

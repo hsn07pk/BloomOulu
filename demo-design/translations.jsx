@@ -399,8 +399,7 @@ const T = {
     "Show on map": "Näytä kartalla",
     "Begin your visit": "Aloita vierailusi",
     "Scan any plant.": "Skannaa mikä tahansa kasvi.",
-    "3-language audio narration. NFC also available — tap your phone to any tag.":
-      "Äänikertomus 3 kielellä. Myös NFC saatavilla — napauta puhelimellasi mitä tahansa tunnistetta.",
+    "3-language audio narration.": "Äänikertomus 3 kielellä.",
     "Open your camera, point at any plant label": "Avaa kamerasi, osoita mihin tahansa kasvilaattaan",
     "Listen, read, or ask. Adopt if you fall in love.": "Kuuntele, lue tai kysy. Adoptoi jos rakastut.",
     "What would you like to know?": "Mitä haluaisit tietää?",
@@ -840,8 +839,7 @@ const T = {
     "Show on map": "Visa på karta",
     "Begin your visit": "Börja ditt besök",
     "Scan any plant.": "Skanna vilken växt som helst.",
-    "3-language audio narration. NFC also available — tap your phone to any tag.":
-      "Ljudberättelse på 3 språk. NFC också tillgängligt — knacka telefonen mot vilken tagg som helst.",
+    "3-language audio narration.": "Ljudberättelse på 3 språk.",
     "Open your camera, point at any plant label": "Öppna kameran, peka på vilken växtetikett som helst",
     "Listen, read, or ask. Adopt if you fall in love.": "Lyssna, läs eller fråga. Adoptera om du blir kär.",
     "What would you like to know?": "Vad vill du veta?",
