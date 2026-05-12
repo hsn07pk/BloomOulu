@@ -200,6 +200,9 @@ const AskScreen = ({ onNav, onOpenPlant }) => {
 
 const MessageBubble = ({ m, onOpenPlant }) => {
   const { t, lang } = useT();
+  const [reaction, setReaction] = React.useState(null); // null | "helpful" | "off-base"
+  const [saved, setSaved] = React.useState(false);
+  const [forwarded, setForwarded] = React.useState(false);
   if (m.type === "intro") {
     return (
       <div style={{ display: "flex", gap: 14, marginBottom: 32 }}>
@@ -267,12 +270,77 @@ const MessageBubble = ({ m, onOpenPlant }) => {
             </div>
           )}
         </div>
-        <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
-          <button className="pill small" style={{ padding: "4px 10px" }}>👍 Helpful</button>
-          <button className="pill small" style={{ padding: "4px 10px" }}>👎 Off-base</button>
-          <button className="pill small" style={{ padding: "4px 10px" }}>📧 Forward to curator</button>
-          <button className="pill small" style={{ padding: "4px 10px" }}>🔖 Save</button>
+        <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
+          <button
+            className="pill small"
+            onClick={() => setReaction(r => r === "helpful" ? null : "helpful")}
+            style={{
+              padding: "4px 10px", cursor: "pointer",
+              background: reaction === "helpful" ? "var(--sage-pale)" : undefined,
+              color: reaction === "helpful" ? "var(--forest)" : undefined,
+              border: reaction === "helpful" ? "1px solid var(--sage)" : "1px solid transparent"
+            }}
+            aria-pressed={reaction === "helpful"}
+          >
+            👍 {t("Helpful")}
+          </button>
+          <button
+            className="pill small"
+            onClick={() => setReaction(r => r === "off-base" ? null : "off-base")}
+            style={{
+              padding: "4px 10px", cursor: "pointer",
+              background: reaction === "off-base" ? "var(--rust-soft)" : undefined,
+              color: reaction === "off-base" ? "var(--rust)" : undefined,
+              border: reaction === "off-base" ? "1px solid var(--rust)" : "1px solid transparent"
+            }}
+            aria-pressed={reaction === "off-base"}
+          >
+            👎 {t("Off-base")}
+          </button>
+          <button
+            className="pill small"
+            onClick={() => setForwarded(true)}
+            disabled={forwarded}
+            style={{
+              padding: "4px 10px", cursor: forwarded ? "default" : "pointer",
+              background: forwarded ? "var(--teal-pale)" : undefined,
+              color: forwarded ? "var(--forest-mid)" : undefined,
+              border: forwarded ? "1px solid var(--teal)" : "1px solid transparent",
+              opacity: forwarded ? 0.85 : 1
+            }}
+          >
+            📧 {forwarded ? t("Forwarded to curator") : t("Forward to curator")}
+          </button>
+          <button
+            className="pill small"
+            onClick={() => setSaved(s => !s)}
+            style={{
+              padding: "4px 10px", cursor: "pointer",
+              background: saved ? "var(--amber-soft)" : undefined,
+              color: saved ? "#876422" : undefined,
+              border: saved ? "1px solid var(--amber)" : "1px solid transparent"
+            }}
+            aria-pressed={saved}
+          >
+            🔖 {saved ? t("Saved") : t("Save")}
+          </button>
         </div>
+        {/* Inline confirmation strip */}
+        {(reaction || forwarded || saved) && (
+          <div className="tiny" style={{ marginTop: 8, color: "var(--ink-mute)", textTransform: "none", fontFamily: "var(--f-body)", letterSpacing: 0 }}>
+            {reaction === "helpful" && <span>✓ {t("Thanks for the feedback.")}</span>}
+            {reaction === "off-base" && !forwarded && (
+              <span>
+                {t("Thanks - want a curator to review?")}
+                <button onClick={() => setForwarded(true)} style={{ marginLeft: 8, color: "var(--rust)", fontWeight: 500, background: "transparent", border: 0, cursor: "pointer", padding: 0, textDecoration: "underline" }}>
+                  {t("Forward to curator")}
+                </button>
+              </span>
+            )}
+            {forwarded && <span>✓ {t("Curator typically replies within 2 working days.")}</span>}
+            {saved && !forwarded && reaction !== "off-base" && <span>✓ {t("Saved to My Garden")}</span>}
+          </div>
+        )}
       </div>
     </div>
   );
