@@ -213,7 +213,7 @@ const PlantScreen = ({ plantId, onBack, onNav, onAdopt }) => {
 
           {/* Mode-specific intro */}
           {mode === "child" ? (
-            <KidModeIntro plant={plant} t={t} collectSticker={collectSticker} hasSticker={hasSticker(plant.id)} stickerCount={stickers.length}/>
+            <KidModeIntro plant={plant} t={t} collectSticker={collectSticker} hasSticker={hasSticker(plant.id)} stickers={stickers}/>
           ) : mode === "school" ? (
             <SchoolModeIntro plant={plant} t={t} readingLevel={readingLevel} setReadingLevel={setReadingLevel} onQuiz={() => setQuizOpen(true)} onNav={onNav}/>
           ) : (
@@ -426,10 +426,10 @@ const PlantScreen = ({ plantId, onBack, onNav, onAdopt }) => {
               <div style={{ marginTop: 24, padding: 16, background: "var(--paper)", borderRadius: 12 }}>
                 <div className="tiny">{t("Suggested tier for this plant")}</div>
                 <div style={{ marginTop: 8, display: "flex", alignItems: "baseline", gap: 8 }}>
-                  <div className="serif" style={{ fontSize: 40 }}>€{plant.rarity === "CR" ? 500 : plant.rarity === "EN" || plant.rarity === "VU" ? 180 : 75}</div>
-                  <div className="small muted">{t("or")} €{plant.rarity === "CR" ? 40 : plant.rarity === "EN" || plant.rarity === "VU" ? 15 : 7}{t("/month")}</div>
+                  <div className="serif" style={{ fontSize: 40 }}>€{plant.rarity === "CR" || plant.rarity === "EN" ? 750 : plant.rarity === "VU" ? 250 : 75}<span style={{ fontSize: 14, color: "var(--ink-3)" }}>/yr</span></div>
+                  <div className="small muted">{plant.rarity === "CR" || plant.rarity === "EN" ? t("Endangered tier") : plant.rarity === "VU" ? t("Vulnerable tier") : t("Rooted tier")}</div>
                 </div>
-                <div className="small" style={{ color: "var(--ink-2)", marginTop: 6 }}>{plant.rarity === "CR" ? t("Critically Endangered · engraved plaque tier") : plant.rarity === "EN" || plant.rarity === "VU" ? t("Vulnerable tier · Adopters' Day invite") : t("Common tier · named plant page")}</div>
+                <div className="small" style={{ color: "var(--ink-2)", marginTop: 6 }}>{plant.rarity === "CR" || plant.rarity === "EN" ? t("Plaque next to YOUR plant · annual seed packet") : plant.rarity === "VU" ? t("Signed botanical art · Adopters' Open Day + guest") : t("Printed certificate · seasonal photos")}</div>
               </div>
 
               <button className="btn btn-primary btn-block btn-lg" style={{ marginTop: 16 }} onClick={() => onAdopt(plant.id, "self")}>
@@ -562,7 +562,7 @@ const PlantScreen = ({ plantId, onBack, onNav, onAdopt }) => {
 // =====================================================================
 // Kid mode: plant-as-character intro + sticker collection
 // =====================================================================
-const KidModeIntro = ({ plant, t, collectSticker, hasSticker, stickerCount }) => {
+const KidModeIntro = ({ plant, t, collectSticker, hasSticker, stickers }) => {
   const greeted = React.useRef(false);
   React.useEffect(() => {
     if (greeted.current) return;
@@ -572,8 +572,22 @@ const KidModeIntro = ({ plant, t, collectSticker, hasSticker, stickerCount }) =>
       showToast(`⭐ ${t("Sticker collected!")} (${next.length}/10)`);
     }
   }, [plant.id]);
+  const stickerCount = stickers.length;
   const goal = 10;
   const pct = Math.min(100, (stickerCount / goal) * 100);
+
+  // Visit-loop badges: how many unique seasons + biomes the user has collected.
+  const collectedPlants = (typeof PLANTS !== "undefined" ? PLANTS : [])
+    .filter(p => stickers.includes(p.id));
+  const allSeasons = ["spring", "summer", "autumn", "winter"];
+  const collectedSeasons = new Set();
+  collectedPlants.forEach(p => {
+    if (p.bloomSeason === "all") allSeasons.forEach(s => collectedSeasons.add(s));
+    else if (p.bloomSeason) collectedSeasons.add(p.bloomSeason);
+  });
+  const allBiomes = Array.from(new Set((typeof PLANTS !== "undefined" ? PLANTS : []).map(p => p.biome).filter(Boolean)));
+  const collectedBiomes = new Set(collectedPlants.map(p => p.biome).filter(Boolean));
+
   const facts = [
     { emoji: "🌍", label: t("Where I'm from"), value: t(plant.origin) },
     { emoji: "🌸", label: t("When I bloom"), value: t(plant.bloom) },
@@ -600,6 +614,36 @@ const KidModeIntro = ({ plant, t, collectSticker, hasSticker, stickerCount }) =>
         </div>
         <div className="tiny" style={{ marginTop: 6, textTransform: "none", letterSpacing: 0, fontFamily: "var(--f-body)" }}>
           {stickerCount >= goal ? `🏆 ${t("Done! Show this at the gift shop for your badge.")}` : `${t("Scan")} ${goal - stickerCount} ${t("more plants to win a badge!")}`}
+        </div>
+      </div>
+
+      {/* Visit-loop badges: seasons + biomes collected */}
+      <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }} data-grid-mobile="2">
+        <div style={{ padding: 12, background: "rgba(250,247,238,0.7)", borderRadius: 12, border: "1px solid var(--line)" }}>
+          <div className="tiny">🍂 {t("Seasons")}</div>
+          <div style={{ display: "flex", gap: 4, marginTop: 6, flexWrap: "wrap" }}>
+            {[{ id: "spring", emoji: "🌱" }, { id: "summer", emoji: "☀️" }, { id: "autumn", emoji: "🍁" }, { id: "winter", emoji: "❄️" }].map(s => (
+              <span key={s.id} title={t(s.id)} style={{
+                fontSize: 18, opacity: collectedSeasons.has(s.id) ? 1 : 0.25,
+                filter: collectedSeasons.has(s.id) ? "none" : "grayscale(1)",
+                transition: "opacity 200ms"
+              }}>{s.emoji}</span>
+            ))}
+          </div>
+          <div className="tiny" style={{ marginTop: 6, textTransform: "none", letterSpacing: 0, fontFamily: "var(--f-body)" }}>
+            {collectedSeasons.size}/4 {t("seasons collected")}
+          </div>
+        </div>
+        <div style={{ padding: 12, background: "rgba(250,247,238,0.7)", borderRadius: 12, border: "1px solid var(--line)" }}>
+          <div className="tiny">🗺 {t("Biomes")}</div>
+          <div style={{ fontSize: 13, marginTop: 6, lineHeight: 1.3, color: "var(--ink-soft)" }}>
+            {collectedBiomes.size > 0
+              ? Array.from(collectedBiomes).slice(0, 3).map(b => b.split(" / ")[0]).join(" · ")
+              : <span style={{ color: "var(--ink-mute)" }}>{t("None yet")}</span>}
+          </div>
+          <div className="tiny" style={{ marginTop: 6, textTransform: "none", letterSpacing: 0, fontFamily: "var(--f-body)" }}>
+            {collectedBiomes.size}/{allBiomes.length} {t("biomes collected")}
+          </div>
         </div>
       </div>
 

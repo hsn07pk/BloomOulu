@@ -105,33 +105,37 @@ const AdoptScreen = ({ presetPlantId, presetIntent, onNav }) => {
               ))}
             </div>
 
-            {/* Corporate tier strip */}
+            {/* Corporate tier strip (single tier per pitch) */}
             <div className="card" style={{ marginTop: 32, padding: 0, overflow: "hidden", background: "var(--forest)", color: "var(--paper)" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 0 }}>
+              <div data-grid-mobile="keep" style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 0 }}>
                 <div style={{ padding: 32 }}>
                   <div className="tiny" style={{ color: "var(--lichen)" }}>{t("Yritys · Corporate")}</div>
                   <h3 className="serif" style={{ fontSize: 32, marginTop: 8, color: "var(--paper)" }}>{t("For companies")}</h3>
                   <p className="small" style={{ marginTop: 12, color: "rgba(248,244,230,0.7)", lineHeight: 1.5 }}>
-                    {t("CSR-ready quarterly impact reports, logo placement, employee tours. Tax-deductible under TVL §57 for Finnish corporates.")}
+                    {t("CSR-ready quarterly impact reports, logo placement on greenhouse signage, private event slot for up to 20 guests. Tax-deductible under TVL §57 for Finnish corporates.")}
                   </p>
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", borderLeft: "1px solid rgba(248,244,230,0.15)" }}>
-                  {CORPORATE_TIERS.map((c, i) => (
-                    <div key={c.name} style={{ padding: 24, borderRight: i < 2 ? "1px solid rgba(248,244,230,0.15)" : "none" }}>
-                      <div className="tiny" style={{ color: "var(--lichen)" }}>{c.name}</div>
-                      <div className="serif" style={{ fontSize: 32, marginTop: 8, color: "var(--paper)" }}>€{c.price.toLocaleString()}<span style={{ fontSize: 14, color: "rgba(248,244,230,0.6)" }}>/yr</span></div>
-                      <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 6 }}>
-                        {c.perks.map(p => (
-                          <div key={p} style={{ display: "flex", gap: 6, alignItems: "start", fontSize: 12, color: "rgba(248,244,230,0.8)" }}>
-                            <Icon name="check" size={11} style={{ color: "var(--lichen)", marginTop: 3, flexShrink: 0 }}/>
-                            <span>{p}</span>
-                          </div>
-                        ))}
-                      </div>
+                {CORPORATE_TIERS.map((c) => (
+                  <div key={c.name} style={{ padding: 24, borderLeft: "1px solid rgba(248,244,230,0.15)" }}>
+                    <div className="tiny" style={{ color: "var(--lichen)" }}>{t(c.name)} · {t(c.fi || "Yritystaso")}</div>
+                    <div className="serif" style={{ fontSize: 36, marginTop: 8, color: "var(--paper)" }}>€{c.price.toLocaleString()}<span style={{ fontSize: 14, color: "rgba(248,244,230,0.6)" }}>/yr</span></div>
+                    <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 8 }}>
+                      {c.perks.map(p => (
+                        <div key={p} style={{ display: "flex", gap: 8, alignItems: "start", fontSize: 13, color: "rgba(248,244,230,0.85)" }}>
+                          <Icon name="check" size={12} style={{ color: "var(--lichen)", marginTop: 3, flexShrink: 0 }}/>
+                          <span>{t(p)}</span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ))}
               </div>
+            </div>
+
+            {/* Locally-sourced perks note */}
+            <div style={{ marginTop: 18, padding: "12px 18px", background: "rgba(168,192,96,0.10)", borderRadius: 12, fontSize: 13, lineHeight: 1.55, color: "var(--ink-soft)", display: "flex", gap: 12, alignItems: "center" }}>
+              <Icon name="seedling" size={16} style={{ color: "var(--forest)", flexShrink: 0 }}/>
+              <span>{t("All physical perks - postcards, prints, books, seeds - come from Finnish artists, presses, and the Garden's own seed bank.")}</span>
             </div>
 
             <div style={{ display: "flex", justifyContent: "end", marginTop: 32 }}>
@@ -233,6 +237,39 @@ const AdoptScreen = ({ presetPlantId, presetIntent, onNav }) => {
                   <div style={{ marginTop: 16 }}>
                     <Field label={intent === "memorial" ? t("Dedication (e.g. In memory of…)") : t("Public dedication (shown on plant page, optional)")} placeholder={intent === "memorial" ? "In memory of Eeva - who loved the lady's-slipper." : "From Mira, summer 2026 🌱"} value={dedication} onChange={setDedication} maxLength={80}/>
                     <div className="tiny" style={{ marginTop: 6, textAlign: "right" }}>{dedication.length}/80</div>
+                  </div>
+                </div>
+
+                {/* Internationalisation@Home (I@H) — pitch-defining feature */}
+                <div className="card card-pad" style={{ background: "linear-gradient(135deg, rgba(168,192,96,0.10) 0%, rgba(95,176,160,0.10) 100%)", borderColor: "var(--sage)" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                    <span style={{ fontFamily: "var(--f-mono)", fontSize: 13, fontWeight: 700, color: "var(--forest)", padding: "3px 8px", background: "var(--cream)", borderRadius: 4, letterSpacing: "0.04em" }}>I@H</span>
+                    <div className="tiny" style={{ color: "var(--forest)" }}>{t("Internationalisation@Home")}</div>
+                  </div>
+                  <p className="small" style={{ color: "var(--ink-soft)", lineHeight: 1.55, marginTop: 6 }}>
+                    {t("Pair your adoption with a plant from your home region. An emotional anchor for far-from-home visitors. Included in every tier at no extra cost.")}
+                  </p>
+                  <div style={{ marginTop: 14 }}>
+                    <Field
+                      label={t("Your home region or country")}
+                      type="select"
+                      options={[
+                        t("Skip - any plant"),
+                        "Finland · Lapland",
+                        "Finland · Häme",
+                        "Finland · Bothnian coast",
+                        "Sweden",
+                        "Norway",
+                        "Estonia",
+                        "Russia",
+                        "UK · Scotland",
+                        "Germany",
+                        "Other Nordic",
+                        "Other European",
+                        "Other"
+                      ]}
+                      defaultValue={t("Skip - any plant")}
+                    />
                   </div>
                 </div>
 

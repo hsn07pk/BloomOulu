@@ -398,16 +398,16 @@ function buildAnswer(q, t) {
   if (ql.includes("bloom") || ql.includes("blooming") || ql.includes("kukk") || ql.includes("blomma")) {
     return {
       role: "assistant",
-      citations: [ASK_CITATIONS[2]],
+      citations: [ASK_CITATIONS[0], ASK_CITATIONS[2]],
       body: (
         <>
-          <p>{t("This week (May 12 – May 18, 2026), three plants are in active bloom:")}</p>
+          <p>{t("This week (May 12 - May 18, 2026), three plants are in active bloom:")}</p>
           <ul style={{ marginTop: 10, paddingLeft: 20, color: "var(--ink-2)" }}>
             <li><b>Pulsatilla patens</b> - {t("south slope, peak bloom expected through Sunday")}</li>
             <li><b>Primula nutans</b> - {t("Bothnian Bay bed, first flush")}</li>
             <li><b>Trollius europaeus</b> - {t("meadow bed 4, ~30% open")}</li>
           </ul>
-          <p style={{ marginTop: 12 }} className="small muted">{t("Based on Head Gardener Tuomas Kauppila's note from May 10. Greenhouse Victoria water lily not yet blooming - August evenings.")}</p>
+          <p style={{ marginTop: 12 }} className="small muted">{t("Drawn from the Garden's curator-maintained Phenology log (wk 19). Head Gardener Tuomas Kauppila adds: Greenhouse Victoria water lily not yet blooming - August evenings.")}</p>
         </>
       ),
       cards: ["puls-pat", "prim-nut"]
@@ -419,7 +419,7 @@ function buildAnswer(q, t) {
       citations: [ASK_CITATIONS[3], ASK_CITATIONS[1]],
       body: (
         <>
-          <p>{t("The garden holds 6 species assessed as Critically Endangered (CR) or Endangered (EN) in the 2019 Finnish Red List. Among these,")} <b>Pulsatilla patens</b> {t("is CR;")} <b>Saxifraga hirculus</b> {t("and")} <b>Primula nutans</b> {t("are EN.")}</p>
+          <p>{t("The garden holds 6 species assessed as Endangered (EN) or Vulnerable (VU) in the 2019 Finnish Red List. Among these,")} <b>Pulsatilla patens</b> {t("is VU;")} <b>Saxifraga hirculus</b> {t("and")} <b>Primula nutans</b> {t("are EN.")}</p>
           <p style={{ marginTop: 12 }}>{t("All three are part of the Garden's contribution to the LIFE+ ESCAPE programme (2012–2017), which lifted ex-situ coverage of Finnish threatened plants from 11% to 56%.")}</p>
         </>
       ),

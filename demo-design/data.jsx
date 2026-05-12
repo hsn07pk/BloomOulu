@@ -6,28 +6,30 @@ const PLANTS = [
     accession: "OULU-1998-0421",
     image: "plants/pulsatilla-patens.jpg",
     name: "Pulsatilla patens",
-    fi: "Hämeenkylmänkukka",
+    fi: "Kangasvuokko",
     sv: "Nipsippa",
     en: "Eastern Pasqueflower",
     family: "Ranunculaceae",
-    rarity: "CR",
-    rarityLabel: "Critically Endangered",
+    rarity: "VU",
+    rarityLabel: "Vulnerable",
     origin: "Häme, southern Finland",
     habitat: "Dry esker pine forests",
+    biome: "Boreal heath / esker",
+    bloomSeason: "spring",
     color: "#2D5440",
     accent: "#E8EEDE",
     variant: 0,
     adopters: 47,
     funded: 86,
     target: 100,
-    story: "Once common on Finland's sandy eskers, the pasqueflower has retreated to a handful of protected sites. Oulu propagated 230 seedlings under LIFE+ ESCAPE.",
-    bloom: "April – May",
+    story: "A purple-petaled survivor of Finland's sandy heaths. Vulnerable on the 2019 Red List; fire suppression has erased the open soil it needs to germinate. Oulu propagated 230 seedlings as part of the LIFE+ ESCAPE programme (LIFE11 BIO/FI/000917, 2012-2017), which collected 175 Finnish threatened taxa and banked 148 in long-term storage.",
+    bloom: "April - May",
     accessed: "Collected 1998, Hämeenlinna pop.",
     audio: "0:32",
     transcript: {
-      en: "Welcome to Pulsatilla patens, the Eastern pasqueflower. In Finnish, hämeenkylmänkukka. This Critically Endangered species was once common on the sandy eskers of southern Finland, but has retreated to just a handful of protected sites. The specimen in front of you was collected in 1998 from a population in Hämeenlinna, and is part of the Garden's contribution to the LIFE+ ESCAPE conservation programme. Watch the south-facing slope in April or May for the first silver-grey buds opening into deep violet flowers.",
-      fi: "Pulsatilla patens, hämeenkylmänkukka. Erittäin uhanalainen laji Suomessa. Aikoinaan yleinen hiekkaharjuilla, nyt vain muutamalla suojelualueella. Tämä yksilö kerättiin Hämeenlinnasta vuonna 1998, osana LIFE+ ESCAPE -suojeluohjelmaa. Kukkii huhti- ja toukokuussa.",
-      sv: "Pulsatilla patens, nipsippa. Akut hotad art i Finland. En gång vanlig på sandåsar, idag bara på några skyddade platser. Detta exemplar samlades in från Hämeenlinna 1998 som del av LIFE+ ESCAPE-bevarandeprogrammet. Blommar i april och maj."
+      en: "Welcome to Pulsatilla patens, the Eastern pasqueflower. In Finnish, kangasvuokko. This Vulnerable species - listed on Finland's 2019 Red List - was once common on the sandy eskers of southern Finland, but fire suppression has erased the open soil it needs to germinate. The specimen in front of you was collected in 1998 from a population in Hämeenlinna, and is part of the Garden's contribution to the LIFE+ ESCAPE conservation programme. Watch the south-facing slope in April or May for the first silver-grey buds opening into deep violet flowers.",
+      fi: "Pulsatilla patens, kangasvuokko. Vaarantunut laji vuoden 2019 punaisella listalla. Aikoinaan yleinen Suomen hiekkaharjuilla, nyt vain muutamalla suojelualueella. Tämä yksilö kerättiin Hämeenlinnasta vuonna 1998 osana LIFE+ ESCAPE -suojeluohjelmaa. Kukkii huhti- ja toukokuussa.",
+      sv: "Pulsatilla patens, nipsippa. Sårbar art på Finlands rödlista 2019. En gång vanlig på sandåsar, idag bara på några skyddade platser. Detta exemplar samlades in från Hämeenlinna 1998 som del av LIFE+ ESCAPE-bevarandeprogrammet. Blommar i april och maj."
     },
     seasons: {
       spring: "plants/pulsatilla-patens.jpg",
@@ -36,8 +38,8 @@ const PLANTS = [
     },
     quickFacts: [
       ["Origin", "Häme esker"],
-      ["Bloom", "Apr – May"],
-      ["Red List", "CR (2019)"],
+      ["Bloom", "Apr - May"],
+      ["Red List", "VU (2019)"],
       ["Ex-situ since", "1998"]
     ]
   },
@@ -54,6 +56,8 @@ const PLANTS = [
     rarityLabel: "Vulnerable",
     origin: "Kilpisjärvi fells, NW Lapland",
     habitat: "Calcareous fell slopes",
+    biome: "Arctic-alpine fell",
+    bloomSeason: "summer",
     color: "#3D6A52",
     accent: "#D6EBE3",
     variant: 2,
@@ -94,6 +98,8 @@ const PLANTS = [
     rarityLabel: "Endangered",
     origin: "Pohjois-Pohjanmaa mires",
     habitat: "Rich fens",
+    biome: "Mire / fen",
+    bloomSeason: "summer",
     color: "#C9A14A",
     accent: "#F1E6CB",
     variant: 7,
@@ -134,6 +140,8 @@ const PLANTS = [
     rarityLabel: "Endangered",
     origin: "Bothnian Bay coast",
     habitat: "Coastal meadows",
+    biome: "Bothnian coast",
+    bloomSeason: "summer",
     color: "#B25C3A",
     accent: "#F0DCD0",
     variant: 6,
@@ -179,6 +187,8 @@ const PLANTS = [
     rarityLabel: "Near Threatened",
     origin: "North Karelia meadows",
     habitat: "Damp meadows",
+    biome: "Hay meadow",
+    bloomSeason: "summer",
     color: "#C9A14A",
     accent: "#F1E6CB",
     variant: 7,
@@ -219,6 +229,8 @@ const PLANTS = [
     rarityLabel: "Vulnerable",
     origin: "Kuusamo limestone",
     habitat: "Calcareous boreal forest",
+    biome: "Limestone forest",
+    bloomSeason: "spring",
     color: "#B25C3A",
     accent: "#F0DCD0",
     variant: 4,
@@ -259,6 +271,8 @@ const PLANTS = [
     rarityLabel: "Near Threatened",
     origin: "Old-growth forests",
     habitat: "Bark of old aspens",
+    biome: "Old-growth forest",
+    bloomSeason: "all",
     color: "#3D6A52",
     accent: "#E8EEDE",
     variant: 5,
@@ -299,6 +313,8 @@ const PLANTS = [
     rarityLabel: "Greenhouse Star",
     origin: "Amazon basin (cultivated since 1972)",
     habitat: "Romeo & Julia pond",
+    biome: "Tropical greenhouse",
+    bloomSeason: "summer",
     color: "#5FB0A0",
     accent: "#D6EBE3",
     variant: 3,
@@ -323,37 +339,43 @@ const PLANTS = [
   }
 ];
 
+// Tier ladder aligned to the v3 pitch (Growth Hack 2026).
+// All 4 public tiers are annual by default; the monthly figure is provided as
+// an opt-in equivalent (price / 12, rounded). Each tier includes I@H pairing
+// (Internationalisation@Home - any tier pairs with a plant from the adopter's
+// home region) and all physical perks are sourced locally from Finnish
+// artists, presses, and the Garden's seed bank.
 const TIERS = [
   {
-    id: "seed",
-    name: "Seed",
+    id: "seedling",
+    name: "Seedling",
     fi: "Siemen",
     price: 25,
-    monthly: 5,
+    monthly: 2,
     tag: "Most popular gift",
-    blurb: "A starter gesture. Digital certificate, name on the adopter wall, and a thank-you from a real gardener.",
+    blurb: "A starter gesture. Nickname your plant, pick one from your home region, get a digital certificate and quarterly notes.",
     perks: [
-      "PDF certificate (instant)",
-      "Add to Wallet",
-      "Name on adopter wall",
-      "Gardener thank-you note"
+      "Nickname your plant",
+      "I@H · plant from your home region",
+      "Digital certificate & story page",
+      "Quarterly grower's notes"
     ],
     color: "#A8C060",
     bg: "#E8EEDE"
   },
   {
-    id: "common",
-    name: "Common",
-    fi: "Yleinen",
+    id: "rooted",
+    name: "Rooted",
+    fi: "Juurtunut",
     price: 75,
     monthly: 7,
     tag: "Best value",
-    blurb: "Named plant page for a year, two greenhouse passes, and a 10% shop voucher.",
+    blurb: "Printed certificate mailed to you, I@H postcard from your plant's region, seasonal photos of your specific plant.",
     perks: [
-      "All of Seed",
-      "Named plant page (12 months)",
-      "2× greenhouse passes",
-      "10% gift-shop voucher"
+      "Printed certificate · mailed",
+      "I@H postcard from plant's region",
+      "Seasonal photos of YOUR plant",
+      "Adopters' Open Day invite"
     ],
     color: "#88A050",
     bg: "#DDE6CB"
@@ -362,34 +384,34 @@ const TIERS = [
     id: "vulnerable",
     name: "Vulnerable",
     fi: "Vaarantunut",
-    price: 180,
-    monthly: 15,
-    tag: "Adopters' Day invite",
-    blurb: "Funds an actively threatened species. Includes our annual Adopters' Day and first-bloom alerts.",
+    price: 250,
+    monthly: 21,
+    tag: "Donor-wall listing",
+    blurb: "Funds an actively threatened species. Signed botanical art, themed garden walk, Adopters' Open Day + guest.",
     perks: [
-      "All of Common",
-      "Printed certificate (mailed)",
-      "Annual Adopters' Day invite",
-      "First-bloom alerts",
-      "Rotating name on QR page"
+      "Signed botanical art print",
+      "Themed garden walk · 1 admission",
+      "Adopters' Open Day + 1 guest",
+      "Donor-wall listing",
+      "Name on shared adopters' plaque"
     ],
     color: "#5FB0A0",
     bg: "#D6EBE3"
   },
   {
-    id: "critical",
-    name: "Critically Endangered",
+    id: "endangered",
+    name: "Endangered",
     fi: "Erittäin uhanalainen",
-    price: 500,
-    monthly: 40,
-    tag: "Engraved plaque",
-    blurb: "Two-year stewardship of one of Finland's most threatened plants, with a real plaque next to the specimen.",
+    price: 750,
+    monthly: 63,
+    tag: "Plaque by YOUR plant",
+    blurb: "Limited-edition signed art, donor dinner with a seed-bank visit, an engraved plaque next to your specific plant, and an annual seed packet.",
     perks: [
-      "All of Vulnerable",
-      "Engraved plaque (2 years)",
-      "Behind-the-scenes tour (2 guests)",
-      "Annual Report listing",
-      "Signed letter from the Director"
+      "Limited-edition signed art print",
+      "Curated botany book",
+      "Donor dinner + seed-bank visit",
+      "Plaque next to YOUR plant",
+      "Annual seed packet"
     ],
     color: "#1F3C2D",
     bg: "#CFD9D0"
@@ -397,14 +419,22 @@ const TIERS = [
 ];
 
 const CORPORATE_TIERS = [
-  { name: "Bronze", price: 2500, color: "#B25C3A", perks: ["Logo on sponsor wall", "Plant page mention", "CSR/ESG quarterly report"] },
-  { name: "Silver", price: 7500, color: "#5FB0A0", perks: ["All of Bronze", "Quarterly impact report", "Employee group tour (×1)", "Marketing badge rights"] },
-  { name: "Gold", price: 20000, color: "#1F3C2D", perks: ["All of Silver", "Lobby plaque", "Named species partnership", "Annual report co-branding", "Custom event in Romeo & Julia"] }
+  {
+    name: "Corporate",
+    fi: "Yritystaso",
+    price: 2500,
+    color: "#B25C3A",
+    perks: [
+      "Logo on greenhouse signage",
+      "CSR-ready impact report",
+      "Private event slot · 20 guests"
+    ]
+  }
 ];
 
 const ASK_CITATIONS = [
-  { id: "c1", source: "Annales Botanici Fennici", year: 2019, title: "Distribution patterns of Pulsatilla patens in Häme eskers", page: "56(1–3): 41–58" },
-  { id: "c2", source: "LIFE+ ESCAPE Final Report", year: 2017, title: "Ex-situ conservation of Finnish native plant species", page: "Section 4.2" },
+  { id: "c1", source: "Phenology log", year: 2026, title: "Curator-maintained bloom register", page: "wk 19 · Spring 2026" },
+  { id: "c2", source: "LIFE+ ESCAPE Final Report", year: 2017, title: "Ex-situ conservation of Finnish native plant species", page: "LIFE11 BIO/FI/000917 · 2012-2017" },
   { id: "c3", source: "Oulu Accession DB", year: 2024, title: "Accession OULU-1998-0421", page: "Pulsatilla patens, Hämeenlinna source pop." },
   { id: "c4", source: "Red List of Finnish Species", year: 2019, title: "Vascular plants - threat category assessment", page: "p. 217" },
   { id: "c5", source: "Memoranda Soc. F. F. Fennica", year: 2021, title: "Saxifraga hirculus indicator value in boreal fens", page: "97: 33–47" }

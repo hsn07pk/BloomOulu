@@ -136,7 +136,7 @@ const GardenScreen = ({ onOpenPlant, onNav }) => {
                 </div>
               </div>
               <div style={{ padding: 20 }}>
-                <div className="eyebrow">{[ t("Vulnerable tier · €180") , t("Common tier · €75") , t("Critically Endangered · €500") ][i]}</div>
+                <div className="eyebrow">{[ t("Vulnerable tier · €250/yr") , t("Rooted tier · €75/yr") , t("Endangered tier · €750/yr") ][i]}</div>
                 <div className="serif" style={{ fontSize: 26, fontStyle: "italic", marginTop: 8, lineHeight: 1.1 }}>{p.name}</div>
                 <div className="small muted" style={{ marginTop: 4 }}>{p.fi} · adopted {[ t("12 May 2026") , t("8 Jun 2024") , t("3 Mar 2025") ][i]}</div>
 
