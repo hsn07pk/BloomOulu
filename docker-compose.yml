@@ -1,0 +1,43 @@
+# BloomOulu — one-command local serving.
+#
+#   docker compose up -d        # build + run in the background
+#   docker compose logs -f      # tail logs
+#   docker compose down         # stop + remove the container
+#
+# Then open http://localhost:8080/
+
+services:
+  BloomOulu:
+    build: .
+    # Docker image names must be lowercase, so the tag uses the repo name in
+    # lowercase. The container name itself preserves the repo's mixed case.
+    image: bloomoulu:local
+    container_name: BloomOulu
+    hostname: BloomOulu
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/demo-design/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  # Optional: a "dev" service that hot-reloads from the working tree
+  # instead of baking the site into the image. Run with
+  #   docker compose --profile dev up BloomOulu-dev
+  BloomOulu-dev:
+    profiles: ["dev"]
+    image: nginx:1.27-alpine
+    container_name: BloomOulu-dev
+    hostname: BloomOulu-dev
+    ports:
+      - "8081:80"
+    volumes:
+      - ./index.html:/usr/share/nginx/html/index.html:ro
+      - ./vercel.json:/usr/share/nginx/html/vercel.json:ro
+      - ./demo-design:/usr/share/nginx/html/demo-design:ro
+      - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./docker/mime.types:/etc/nginx/mime.types:ro
+    restart: unless-stopped

@@ -90,23 +90,51 @@ BloomOulu/
     ├── screens-kiosk.jsx      # Lobby kiosk view
     ├── plants/                # 16 plant photos + CREDITS.md
     ├── audio/{en,fi,sv}/      # 24 m4a narrations + CREDITS.md
-    ├── uploads/, assets/      # Logo + pitch deck
-    └── chats/                 # Design handoff transcripts
+    └── uploads/, assets/      # Logo + pitch deck
+
+# Local-serving config (in repo root)
+├── Dockerfile                 # nginx:1.27-alpine
+├── docker-compose.yml         # `docker compose up -d`
+├── docker/
+│   ├── nginx.conf             # MIME, cache, security headers
+│   └── mime.types
+└── environment.yml            # `conda env create -f environment.yml`
 ```
 
 ## Local development
 
-The project is plain static files — no build step. Run any HTTP server in the repo root:
+Three equivalent ways to run BloomOulu on your machine — pick whichever you have.
+
+### 🐳 Docker (recommended)
 
 ```bash
-# Python
-python3 -m http.server 8000
-
-# or Node
-npx serve
-
-# then open http://localhost:8000/demo-design/
+docker compose up -d
+# open http://localhost:8080/
 ```
+
+This builds a slim nginx 1.27-alpine image, copies the site in, applies a hand-tuned `nginx.conf` (correct MIME types for `.jsx` and `.m4a`, gzip, long-cache for plant images + audio, no-cache for HTML + JSX), and exposes port 80 → 8080 on the host. The container has a healthcheck and auto-restarts. Hot-reload variant available via `docker compose --profile dev up BloomOulu-dev` (port 8081, files mounted read-only).
+
+### 🐍 Conda
+
+```bash
+conda env create -f environment.yml
+conda activate bloomoulu
+python -m http.server 8000
+# open http://localhost:8000/demo-design/
+```
+
+The conda env also installs `ffmpeg`, `pillow`, and `imagemagick` so you can regenerate audio narrations and resize plant photos locally.
+
+### 📁 Plain Python
+
+```bash
+python3 -m http.server 8000
+# open http://localhost:8000/demo-design/
+```
+
+Works on any machine with Python 3. No dependencies.
+
+---
 
 The Plant page deep-links via URL hash (e.g. `…/demo-design/#plant=puls-pat`). The same hash is what the kiosk QR code encodes.
 

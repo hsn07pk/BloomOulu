@@ -1,0 +1,24 @@
+# Conda environment for BloomOulu local development.
+#
+# Create:    conda env create -f environment.yml
+# Activate:  conda activate bloomoulu
+# Serve:     python -m http.server 8000
+# Then open: http://localhost:8000/demo-design/
+#
+# This is a backup path for when Docker isn't available. The project is
+# pure static HTML/JSX, so the only "dependency" is a working HTTP server.
+
+name: bloomoulu
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  # Pillow + ImageMagick let you regenerate / resize plant photos locally.
+  - pillow
+  - imagemagick
+  # ffmpeg lets you regenerate / re-encode the narration audio.
+  - ffmpeg
+  - pip
+  - pip:
+      # Optional: a friendlier static server with live-reload during dev.
+      - "livereload>=2.6"
