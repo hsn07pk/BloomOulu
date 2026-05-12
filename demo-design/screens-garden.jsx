@@ -38,7 +38,7 @@ const GardenScreen = ({ onOpenPlant, onNav }) => {
             <div className="eyebrow">{t("My Garden · Mira Karjalainen")}</div>
             <h1 style={{ fontSize: 72, marginTop: 16 }}>Tervetuloa takaisin,<br/><span className="italic-serif accent-grad">Mira</span>.</h1>
             <p className="muted" style={{ marginTop: 16, fontSize: 16, maxWidth: 560 }}>
-              {t("Three plants, two memorial gifts, one class adoption. Cumulative giving since June 2024: €430.")}
+              {t("Three plants, two memorial gifts, one class adoption. Cumulative giving since June 2024: €1,250.")}
             </p>
           </div>
           <div style={{ display: "flex", gap: 10 }}>
@@ -54,20 +54,20 @@ const GardenScreen = ({ onOpenPlant, onNav }) => {
             <div style={{ padding: 28, position: "relative", zIndex: 1 }}>
               <div className="eyebrow eyebrow--sage">{t("Adopter status")}</div>
               <div style={{ display: "flex", alignItems: "baseline", gap: 16, marginTop: 14 }}>
-                <div className="serif" style={{ fontSize: 56, color: "var(--cream)", lineHeight: 1 }}>{t("Silver")}</div>
-                <span className="pill pill-on-dark">€430 {t("lifetime")}</span>
+                <div className="serif" style={{ fontSize: 56, color: "var(--cream)", lineHeight: 1 }}>{t("Gold")}</div>
+                <span className="pill pill-on-dark">€1,250 {t("lifetime")}</span>
               </div>
               <div className="small" style={{ color: "rgba(250,247,238,0.7)", marginTop: 8 }}>
-                €570 {t("to")} <b style={{ color: "var(--sage-bright)" }}>{t("Gold")}</b>
+                €1,250 {t("to")} <b style={{ color: "var(--sage-bright)" }}>{t("Platinum")}</b>
               </div>
               <div style={{ marginTop: 16 }}>
                 <div style={{ height: 6, background: "rgba(250,247,238,0.14)", borderRadius: 999, overflow: "hidden" }}>
-                  <div style={{ width: "43%", height: "100%", background: "linear-gradient(90deg, var(--sage) 0%, var(--sage-bright) 100%)" }}/>
+                  <div style={{ width: "50%", height: "100%", background: "linear-gradient(90deg, var(--sage) 0%, var(--sage-bright) 100%)" }}/>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }} className="tiny">
-                  <span style={{ color: "rgba(250,247,238,0.5)" }}>Bronze · €0</span>
-                  <span style={{ color: "var(--sage-bright)" }}>Silver · €200</span>
-                  <span style={{ color: "rgba(250,247,238,0.5)" }}>Gold · €1000</span>
+                  <span style={{ color: "rgba(250,247,238,0.5)" }}>Silver · €200</span>
+                  <span style={{ color: "var(--sage-bright)" }}>Gold · €1,000</span>
+                  <span style={{ color: "rgba(250,247,238,0.5)" }}>Platinum · €2,500</span>
                 </div>
               </div>
             </div>
@@ -80,13 +80,13 @@ const GardenScreen = ({ onOpenPlant, onNav }) => {
           {/* Impact card */}
           <div className="card card-pad">
             <div className="eyebrow">{t("Your conservation impact")}</div>
-            <div className="serif" style={{ fontSize: 44, marginTop: 12 }}>€266</div>
+            <div className="serif" style={{ fontSize: 44, marginTop: 12 }}>€775</div>
             <div className="small muted">{t("to direct ex-situ work · 62%")}</div>
             <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 6 }}>
               {[
-                [ t("Seed bank deposits") , 77, "var(--sage)"],
-                [ t("Garden operations") , 52, "var(--teal)"],
-                [ t("Platform costs") , 34, "var(--ink-mute)"]
+                [ t("Seed bank deposits") , 225, "var(--sage)"],
+                [ t("Garden operations") , 150, "var(--teal)"],
+                [ t("Platform costs") , 100, "var(--ink-mute)"]
               ].map(([l, v, c]) => (
                 <div key={l} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12 }}>
                   <span className="muted">{l}</span>
@@ -256,7 +256,7 @@ const GardenScreen = ({ onOpenPlant, onNav }) => {
             {/* Tax */}
             <div className="card card-pad" style={{ background: "var(--paper)" }}>
               <div className="eyebrow">{t("2025 tax certificate")}</div>
-              <div className="serif" style={{ fontSize: 24, marginTop: 8 }}>€430.00</div>
+              <div className="serif" style={{ fontSize: 24, marginTop: 8 }}>€1,250.00</div>
               <p className="small muted" style={{ marginTop: 6 }}>{t("Auto-generated for the prior tax year · TVL §57 reference included.")}</p>
               <button className="btn btn-secondary small" style={{ marginTop: 12 }}>{t("Download PDF")}</button>
             </div>

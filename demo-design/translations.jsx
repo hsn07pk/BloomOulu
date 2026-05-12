@@ -442,7 +442,10 @@ const T = {
       "Pulsatilla patens -adoptiosi on vahvistettu. Kuitti lähetetty osoitteeseen mira@example.fi. Ensimmäisen kukinnan hälytys ajastettu.",
     "My Garden · Mira Karjalainen": "Puutarhani · Mira Karjalainen",
     "Three plants, two memorial gifts, one class adoption. Cumulative giving since June 2024: €430.":
-      "Kolme kasvia, kaksi muistolahjaa, yksi luokka-adoptio. Kumulatiivinen lahjoitus kesäkuusta 2024: 430 €.",
+      "Kolme kasvia, kaksi muistolahjaa, yksi luokka-adoptio. Kumulatiivinen lahjoitus kesäkuusta 2024: 1 250 €.",
+    "Three plants, two memorial gifts, one class adoption. Cumulative giving since June 2024: €1,250.":
+      "Kolme kasvia, kaksi muistolahjaa, yksi luokka-adoptio. Kumulatiivinen lahjoitus kesäkuusta 2024: 1 250 €.",
+    "Platinum": "Platina",
     "Notifications": "Ilmoitukset",
     "unread": "lukematonta",
     "See all in My Garden": "Näytä kaikki Puutarhassani",
@@ -1098,7 +1101,10 @@ const T = {
       "Din adoption av Pulsatilla patens är bekräftad. Kvitto skickat till mira@example.fi. Första-blomning-varning schemalagd.",
     "My Garden · Mira Karjalainen": "Min trädgård · Mira Karjalainen",
     "Three plants, two memorial gifts, one class adoption. Cumulative giving since June 2024: €430.":
-      "Tre växter, två minnesgåvor, en klassadoption. Kumulativ givning sedan juni 2024: 430 €.",
+      "Tre växter, två minnesgåvor, en klassadoption. Kumulativ givning sedan juni 2024: 1 250 €.",
+    "Three plants, two memorial gifts, one class adoption. Cumulative giving since June 2024: €1,250.":
+      "Tre växter, två minnesgåvor, en klassadoption. Kumulativ givning sedan juni 2024: 1 250 €.",
+    "Platinum": "Platinum",
     "Notifications": "Aviseringar",
     "unread": "olästa",
     "See all in My Garden": "Visa alla i Min trädgård",
