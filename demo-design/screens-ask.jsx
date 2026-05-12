@@ -141,15 +141,15 @@ const AskScreen = ({ onNav, onOpenPlant }) => {
         <div style={{ padding: "20px 32px 28px", borderTop: "1px solid var(--line-soft)", background: "var(--bg)", flexShrink: 0 }}>
           <div style={{ maxWidth: 760, margin: "0 auto" }}>
             <form onSubmit={e => { e.preventDefault(); sendQuestion(input); }} style={{ display: "flex", gap: 10, padding: 10, background: "var(--paper)", borderRadius: 18, border: "1px solid var(--line)", boxShadow: "var(--shadow-sm)" }}>
-              <button type="button" className="icon-btn" title="Upload a plant photo (forwarded to Pl@ntNet)" style={{ flexShrink: 0 }}><Icon name="plus" size={16}/></button>
+              <button type="button" className="icon-btn" title={t("Upload a plant photo")} aria-label={t("Upload a plant photo")} style={{ flexShrink: 0 }}><Icon name="plus" size={16}/></button>
               <input
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 placeholder={mode === "staff" ? t("Ask for grant text, signage, school scripts…") : t("Ask about a plant, the garden, conservation work…")}
                 style={{ flex: 1, border: "none", background: "transparent", outline: "none", fontSize: 15, color: "var(--ink)" }}
               />
-              <button type="button" className="icon-btn" title="Voice input"><Icon name="mic" size={16}/></button>
-              <button type="submit" className="btn btn-primary" style={{ padding: "0 16px" }} disabled={!input.trim()}>
+              <button type="button" className="icon-btn" title={t("Voice input")} aria-label={t("Voice input")}><Icon name="mic" size={16}/></button>
+              <button type="submit" className="btn btn-primary" style={{ padding: "0 16px" }} disabled={!input.trim()} aria-label={t("Send")}>
                 <Icon name="send" size={14}/>
               </button>
             </form>

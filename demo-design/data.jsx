@@ -23,7 +23,8 @@ const PLANTS = [
     story: "Once common on Finland's sandy eskers, the pasqueflower has retreated to a handful of protected sites. Oulu propagated 230 seedlings under LIFE+ ESCAPE.",
     bloom: "April – May",
     accessed: "Collected 1998, Hämeenlinna pop.",
-    audio: "0:30",
+    audio: "0:32",
+    transcript: "Welcome to Pulsatilla patens, the Eastern pasqueflower. In Finnish, hämeenkylmänkukka. This Critically Endangered species was once common on the sandy eskers of southern Finland, but has retreated to just a handful of protected sites. The specimen in front of you was collected in 1998 from a population in Hämeenlinna, and is part of the Garden's contribution to the LIFE+ ESCAPE conservation programme. Watch the south-facing slope in April or May for the first silver-grey buds opening into deep violet flowers.",
     quickFacts: [
       ["Origin", "Häme esker"],
       ["Bloom", "Apr – May"],
@@ -42,7 +43,7 @@ const PLANTS = [
     family: "Campanulaceae",
     rarity: "VU",
     rarityLabel: "Vulnerable",
-    origin: "Kilpisjärvi fells",
+    origin: "Kilpisjärvi fells, NW Lapland",
     habitat: "Calcareous fell slopes",
     color: "#3D6A52",
     accent: "#D6EBE3",
@@ -53,7 +54,8 @@ const PLANTS = [
     story: "A tiny azure bell that flowers for three weeks above the tree line. Sensitive to reindeer overgrazing and warming summers.",
     bloom: "July",
     accessed: "Collected 2014, Saana fell",
-    audio: "0:27",
+    audio: "0:29",
+    transcript: "Campanula uniflora, the Arctic harebell, pohjankello in Finnish. A tiny azure bell that flowers for just three weeks above the tree line. This Vulnerable species comes from the Kilpisjärvi fells of northwestern Lapland, where it grows on calcareous slopes at altitudes that few flowering plants can survive. The Oulu specimen was collected in 2014 from Saana fell. Like many arctic-alpine plants, it is sensitive to reindeer overgrazing and warming summers.",
     quickFacts: [
       ["Origin", "Kilpisjärvi"],
       ["Bloom", "July"],
@@ -83,7 +85,8 @@ const PLANTS = [
     story: "A buttery yellow saxifrage of intact rich fens, indicator species for healthy mires. Oulu maintains 5 source populations ex situ.",
     bloom: "August",
     accessed: "Collected 2009, Pudasjärvi mire",
-    audio: "0:23",
+    audio: "0:25",
+    transcript: "Saxifraga hirculus, the yellow marsh saxifrage. In Finnish, lettorikko. An Endangered species of cold, calcium-rich mires. Its bright yellow flowers, marked with orange dots, appear in August above carpets of sphagnum moss. The Oulu specimen comes from a fen near Kuusamo, where the species is one of the indicator plants used to identify intact boreal mire systems.",
     quickFacts: [
       ["Origin", "Pudasjärvi"],
       ["Bloom", "August"],
@@ -113,7 +116,8 @@ const PLANTS = [
     story: "A pink coastal primrose tightly bound to the rising shores of the Bothnian Bay - a uniquely Finnish post-glacial story.",
     bloom: "June – July",
     accessed: "Collected 2002, Hailuoto",
-    audio: "0:20",
+    audio: "0:21",
+    transcript: "Primula nutans, the Finnmark primrose. Ruijanesikko in Finnish. A pink coastal primrose found only on the rising shores of the Bothnian Bay. As the land rebounds after the last ice age, new shoreline emerges each century, and this Endangered species follows the moving coast. The Oulu specimen was collected from Simo in 2002.",
     quickFacts: [
       ["Origin", "Hailuoto"],
       ["Bloom", "Jun – Jul"],
@@ -148,7 +152,8 @@ const PLANTS = [
     story: "A signature meadow species declining with the loss of traditional pasture management. Sponsorship funds restoration partnerships.",
     bloom: "June",
     accessed: "Collected 1987, Lieksa",
-    audio: "0:25",
+    audio: "0:27",
+    transcript: "Trollius europaeus, the European globeflower. Kullero in Finnish. Its golden, almost spherical flowers light up the meadow bed each June and July. Once common in moist hay meadows, the globeflower has declined as traditional meadows have been ploughed or abandoned. It is now classified as Near Threatened in Finland. The Oulu population was established in 1987 and supports both ex-situ conservation and pollinator research.",
     quickFacts: [
       ["Origin", "Lieksa"],
       ["Bloom", "June"],
@@ -183,7 +188,8 @@ const PLANTS = [
     story: "Europe's most iconic temperate orchid. Slow-growing - a single rhizome can live a century. Strictly protected; propagation is exacting.",
     bloom: "Late May – June",
     accessed: "Collected 1995, Kuusamo",
-    audio: "0:25",
+    audio: "0:28",
+    transcript: "Cypripedium calceolus, the lady's-slipper orchid. In Finnish, tikankontti. Europe's most iconic temperate orchid. Each yellow shoe-shaped flower is a trap that briefly captures small bees, dusting them with pollen as they escape. This Vulnerable species is slow-growing — a single rhizome can live a century. The Oulu specimen was rescued from a roadworks site in Kuusamo in 1995. Please do not touch the flowers.",
     quickFacts: [
       ["Origin", "Kuusamo"],
       ["Bloom", "May – Jun"],
@@ -218,7 +224,8 @@ const PLANTS = [
     story: "A leafy lichen and an indicator species - its presence signals ancient, undisturbed forest. Sensitive to logging and air pollution.",
     bloom: "n/a (lichen)",
     accessed: "Collected 2017, Syöte NP",
-    audio: "0:23",
+    audio: "0:25",
+    transcript: "Lobaria pulmonaria, the tree lungwort. Raidankeuhkojäkälä in Finnish. Not a plant at all, but a leafy lichen — a symbiosis of fungus, alga, and cyanobacteria. Its presence on a tree signals ancient, undisturbed forest, because Lobaria cannot tolerate logging or air pollution. This Near Threatened species was collected in 2017 from an old-growth spruce stand.",
     quickFacts: [
       ["Origin", "Syöte"],
       ["Bloom", "-"],
@@ -253,7 +260,8 @@ const PLANTS = [
     story: "The most photographed plant in the Romeo greenhouse. Leaves reach 2.5 m; can support 30 kg. Night blooms turn from white to pink.",
     bloom: "August evenings",
     accessed: "Cultivated since 1972",
-    audio: "0:24",
+    audio: "0:26",
+    transcript: "Victoria amazonica, the giant Amazonian water lily. In Finnish, amazonin jättivesilumme. Cultivated here in the Romeo and Julia greenhouses since 1972. The leaves can reach two metres across and support the weight of a small child. The white flowers open at dusk on August evenings, turning pink overnight after pollination by scarab beetles. Bloom evenings are announced 48 hours in advance.",
     quickFacts: [
       ["Origin", "Amazon"],
       ["Bloom", "Aug nights"],

@@ -124,11 +124,11 @@ const DiscoverScreen = ({ onOpenPlant, onNav }) => {
                 onChange={e => setSearch(e.target.value)}
                 style={{ padding: "12px 16px 12px 40px", borderRadius: 999, border: "1px solid var(--line)", background: "var(--paper)", width: 280, fontSize: 14, color: "var(--ink)", outline: "none" }}
               />
-              <Icon name="search" size={16} style={{ position: "absolute", left: 14, top: 13, color: "var(--ink-3)" }}/>
+              <Icon name="search" size={16} style={{ position: "absolute", left: 14, top: 13, color: "var(--ink-3)" }} aria-hidden="true"/>
               {search && (
                 <button
                   onClick={() => setSearch("")}
-                  aria-label={t("Close")}
+                  aria-label={t("Clear search")}
                   style={{ position: "absolute", right: 12, top: 11, width: 24, height: 24, borderRadius: "50%", background: "rgba(31,58,44,0.08)", color: "var(--ink-2)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
                 >
                   <Icon name="close" size={12}/>

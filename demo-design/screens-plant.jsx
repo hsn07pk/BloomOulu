@@ -7,6 +7,14 @@ const PlantScreen = ({ plantId, onBack, onNav, onAdopt }) => {
   const [audioPlaying, setAudioPlaying] = React.useState(false);
   const [audioCurrent, setAudioCurrent] = React.useState(0);
   const [audioDuration, setAudioDuration] = React.useState(0);
+  const [captionsOn, setCaptionsOn] = React.useState(
+    typeof window !== "undefined" && window.localStorage && localStorage.getItem("bloom_captions") === "1"
+  );
+  React.useEffect(() => {
+    if (typeof window !== "undefined" && window.localStorage) {
+      localStorage.setItem("bloom_captions", captionsOn ? "1" : "0");
+    }
+  }, [captionsOn]);
   const [tab, setTab] = React.useState("story");
   const [season, setSeason] = React.useState("summer");
   const [mode, setMode] = React.useState("adult");
@@ -52,11 +60,11 @@ const PlantScreen = ({ plantId, onBack, onNav, onAdopt }) => {
       {/* Sticky back bar */}
       <div style={{ background: "var(--paper)", borderBottom: "1px solid var(--line-soft)", position: "sticky", top: 65, zIndex: 30 }}>
         <div className="container" style={{ padding: "14px 32px", display: "flex", alignItems: "center", gap: 16 }}>
-          <button className="btn btn-ghost small" onClick={onBack}><Icon name="back" size={14}/> {t("Back")}</button>
+          <button className="btn btn-ghost small" onClick={onBack} aria-label={t("Back")}><Icon name="back" size={14}/> {t("Back")}</button>
           <span className="tiny">{t("Scanned via QR · ")}{plant.accession}</span>
           <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-            <button className="icon-btn"><Icon name="bookmark" size={16}/></button>
-            <button className="icon-btn"><Icon name="share" size={16}/></button>
+            <button className="icon-btn" aria-label={t("Bookmark")}><Icon name="bookmark" size={16}/></button>
+            <button className="icon-btn" aria-label={t("Share")}><Icon name="share" size={16}/></button>
           </div>
         </div>
       </div>
@@ -97,10 +105,33 @@ const PlantScreen = ({ plantId, onBack, onNav, onAdopt }) => {
                 </div>
               </div>
               <div style={{ display: "flex", gap: 6 }}>
-                <button className="icon-btn" style={{ background: "rgba(255,255,255,0.85)" }} title="Voice / TTS"><Icon name="mic" size={16}/></button>
+                <button
+                  className="icon-btn"
+                  style={{ background: captionsOn ? "var(--forest)" : "rgba(255,255,255,0.92)", color: captionsOn ? "var(--cream)" : "var(--ink-2)", borderColor: captionsOn ? "var(--forest)" : "var(--line)" }}
+                  onClick={() => setCaptionsOn(c => !c)}
+                  aria-pressed={captionsOn}
+                  aria-label={captionsOn ? t("Hide captions") : t("Show captions")}
+                  title={captionsOn ? t("Hide captions") : t("Show captions")}
+                >
+                  <span aria-hidden="true" style={{ fontFamily: "var(--f-mono)", fontSize: 11, fontWeight: 700 }}>CC</span>
+                </button>
               </div>
             </div>
           </div>
+
+          {/* Captions / transcript — toggled by the CC button on the hero */}
+          {captionsOn && plant.transcript && (
+            <div
+              role="region"
+              aria-label={t("Audio transcript")}
+              style={{ marginTop: 18, padding: "16px 20px", background: "var(--forest-deep)", color: "var(--cream)", borderRadius: 14, fontSize: 15, lineHeight: 1.6, position: "relative" }}
+            >
+              <div className="tiny" style={{ color: "var(--sage-bright)", marginBottom: 8, letterSpacing: "0.12em" }}>
+                {audioPlaying ? `▶ ${t("Now playing")}` : t("Transcript")}
+              </div>
+              <p style={{ margin: 0, color: "rgba(250,247,238,0.92)" }}>{plant.transcript}</p>
+            </div>
+          )}
 
           {/* Title block */}
           <div style={{ marginTop: 32, display: "flex", justifyContent: "space-between", alignItems: "start", gap: 32 }}>

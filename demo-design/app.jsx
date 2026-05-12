@@ -3,8 +3,21 @@
 const App = () => {
   const [route, setRoute] = React.useState({ screen: "discover" });
   const [lang, setLang] = React.useState("EN");
-  const [openMenu, setOpenMenu] = React.useState(null); // "notif" | "account" | null
+  const [openMenu, setOpenMenu] = React.useState(null); // "notif" | "account" | "a11y" | null
+  const [a11y, setA11y] = React.useState(() => {
+    if (typeof window === "undefined" || !window.localStorage) return { largerText: false, highContrast: false, reducedMotion: false };
+    try { return JSON.parse(localStorage.getItem("bloom_a11y") || "{}"); } catch { return {}; }
+  });
   const t = React.useCallback((s) => translate(s, lang), [lang]);
+
+  // Apply accessibility settings to <body> classes
+  React.useEffect(() => {
+    if (typeof document === "undefined") return;
+    document.body.classList.toggle("bloom-larger-text", !!a11y.largerText);
+    document.body.classList.toggle("bloom-high-contrast", !!a11y.highContrast);
+    document.body.classList.toggle("bloom-reduced-motion", !!a11y.reducedMotion);
+    if (window.localStorage) localStorage.setItem("bloom_a11y", JSON.stringify(a11y));
+  }, [a11y]);
 
   const nav = (screen, ...args) => {
     if (screen === "plant") setRoute({ screen, plantId: args[0] });
@@ -51,20 +64,30 @@ const App = () => {
   return (
     <LangContext.Provider value={{ lang, t, setLang }}>
     <div style={{ minHeight: "100vh" }}>
-      <header className="topbar">
+      {/* Skip to main content link (WCAG 2.4.1 Bypass Blocks) */}
+      <a href="#main-content" className="skip-link">{t("Skip to main content")}</a>
+
+      <header className="topbar" role="banner">
         <div className="topbar-inner">
           <div className="brand" onClick={() => nav("discover")}>
             <BloomMark size={36}/>
             <span>BloomOulu</span>
           </div>
 
-          <nav className="nav">
-            {navItems.map(n => (
-              <button key={n.id} className={route.screen === n.id || (route.screen === "plant" && n.id === "discover") ? "active" : ""}
-                onClick={() => nav(n.id)}>
-                <Icon name={n.icon} size={14}/> {n.label}
-              </button>
-            ))}
+          <nav className="nav" aria-label={t("Primary")}>
+            {navItems.map(n => {
+              const active = route.screen === n.id || (route.screen === "plant" && n.id === "discover");
+              return (
+                <button
+                  key={n.id}
+                  className={active ? "active" : ""}
+                  onClick={() => nav(n.id)}
+                  aria-current={active ? "page" : undefined}
+                >
+                  <Icon name={n.icon} size={14}/> {n.label}
+                </button>
+              );
+            })}
           </nav>
 
           <div className="topbar-right">
@@ -184,7 +207,7 @@ const App = () => {
         </div>
       </header>
 
-      <main>
+      <main id="main-content" tabIndex={-1}>
         {route.screen === "discover" && <DiscoverScreen onOpenPlant={id => nav("plant", id)} onNav={nav}/>}
         {route.screen === "plant" && <PlantScreen plantId={route.plantId} onBack={() => nav("discover")} onNav={nav} onAdopt={(id, intent) => nav("adopt", id, intent)}/>}
         {route.screen === "adopt" && <AdoptScreen presetPlantId={route.plantId} presetIntent={route.intent} onNav={nav}/>}
@@ -193,8 +216,56 @@ const App = () => {
         {route.screen === "kiosk" && <KioskScreen onNav={nav}/>}
       </main>
 
+      {/* Accessibility settings floating button + panel */}
+      <button
+        className="a11y-fab"
+        onClick={() => setOpenMenu(m => m === "a11y" ? null : "a11y")}
+        aria-expanded={openMenu === "a11y"}
+        aria-controls="a11y-panel"
+        aria-label={t("Accessibility settings")}
+        title={t("Accessibility settings")}
+      >
+        {/* Universal accessibility person icon */}
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <circle cx="12" cy="4.5" r="2"/>
+          <path d="M12 6.5v6"/>
+          <path d="M4 8h16"/>
+          <path d="M8.5 22 12 15l3.5 7"/>
+        </svg>
+      </button>
+      {openMenu === "a11y" && (
+        <div id="a11y-panel" className="a11y-panel" role="dialog" aria-modal="false" aria-label={t("Accessibility settings")} data-menu-root>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <h2>{t("Accessibility")}</h2>
+            <button
+              onClick={() => setOpenMenu(null)}
+              className="icon-btn"
+              aria-label={t("Close")}
+              style={{ width: 30, height: 30 }}
+            >
+              <Icon name="close" size={14}/>
+            </button>
+          </div>
+          <div className="a11y-row">
+            <label htmlFor="a11y-larger">{t("Larger text")}</label>
+            <input id="a11y-larger" type="checkbox" checked={!!a11y.largerText} onChange={e => setA11y(s => ({ ...s, largerText: e.target.checked }))}/>
+          </div>
+          <div className="a11y-row">
+            <label htmlFor="a11y-contrast">{t("High contrast")}</label>
+            <input id="a11y-contrast" type="checkbox" checked={!!a11y.highContrast} onChange={e => setA11y(s => ({ ...s, highContrast: e.target.checked }))}/>
+          </div>
+          <div className="a11y-row">
+            <label htmlFor="a11y-motion">{t("Reduce motion")}</label>
+            <input id="a11y-motion" type="checkbox" checked={!!a11y.reducedMotion} onChange={e => setA11y(s => ({ ...s, reducedMotion: e.target.checked }))}/>
+          </div>
+          <p className="tiny" style={{ marginTop: 14, textTransform: "none", letterSpacing: 0, lineHeight: 1.5, color: "var(--ink-mute)" }}>
+            {t("BloomOulu targets WCAG 2.2 AA and the European Accessibility Act 2025. Preferences are saved on this device only.")}
+          </p>
+        </div>
+      )}
+
       {/* Mobile bottom tab bar - shown via CSS at <=768px */}
-      <nav className="mobile-tabs" aria-label="Primary">
+      <nav className="mobile-tabs" aria-label={t("Primary")}>
         {navItems.map(n => (
           <button
             key={n.id}
@@ -210,7 +281,7 @@ const App = () => {
 
       {/* Footer - hide on full-bleed screens */}
       {!isFullBleed && (
-        <footer style={{ background: "var(--forest-deep)", color: "var(--cream)", marginTop: 64, padding: "56px 0 40px", position: "relative", overflow: "hidden" }}>
+        <footer role="contentinfo" style={{ background: "var(--forest-deep)", color: "var(--cream)", marginTop: 64, padding: "56px 0 40px", position: "relative", overflow: "hidden" }}>
           <div style={{ position: "absolute", inset: 0, backgroundImage: "repeating-linear-gradient(115deg, transparent, transparent 80px, rgba(168,192,96,.04) 80px, rgba(168,192,96,.04) 81px)", pointerEvents: "none" }}/>
           <div className="container" style={{ position: "relative", display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr 1fr 1fr", gap: 48, paddingTop: 0, paddingBottom: 0 }}>
             <div>

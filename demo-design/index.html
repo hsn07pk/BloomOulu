@@ -294,6 +294,126 @@
   }
 
   /* ===================================================================
+     ACCESSIBILITY — WCAG 2.2 AA / European Accessibility Act 2025
+     =================================================================== */
+
+  /* Screen-reader-only utility (visible to AT, hidden from sighted users) */
+  .sr-only {
+    position: absolute !important;
+    width: 1px !important; height: 1px !important;
+    padding: 0 !important; margin: -1px !important;
+    overflow: hidden !important; clip: rect(0,0,0,0) !important;
+    white-space: nowrap !important; border: 0 !important;
+  }
+
+  /* Skip-to-content link: hidden until keyboard-focused */
+  .skip-link {
+    position: absolute; top: -100px; left: 0;
+    background: var(--forest-deep); color: var(--cream);
+    padding: 12px 20px;
+    font-family: var(--f-body); font-weight: 600; font-size: 14px;
+    z-index: 1000; border-radius: 0 0 8px 0;
+    transition: top 0.15s;
+  }
+  .skip-link:focus { top: 0; outline: 3px solid var(--sage-bright); }
+
+  /* Visible focus indicator for keyboard nav (WCAG 2.4.7) */
+  *:focus { outline: none; }
+  *:focus-visible {
+    outline: 3px solid var(--sage-bright);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  .btn:focus-visible, .icon-btn:focus-visible, button:focus-visible {
+    outline: 3px solid var(--sage-bright);
+    outline-offset: 3px;
+  }
+
+  /* Respect user's reduced-motion preference (WCAG 2.3.3) */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+    .fade-in { animation: none !important; }
+  }
+  body.bloom-reduced-motion *,
+  body.bloom-reduced-motion *::before,
+  body.bloom-reduced-motion *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  body.bloom-reduced-motion .fade-in { animation: none !important; }
+
+  /* Larger text mode (~120% root) */
+  body.bloom-larger-text { font-size: 17px; }
+  body.bloom-larger-text h1 { font-size: 110% !important; }
+  body.bloom-larger-text h2 { font-size: 110% !important; }
+  body.bloom-larger-text h3 { font-size: 110% !important; }
+  body.bloom-larger-text .small,
+  body.bloom-larger-text .tiny { font-size: 14px !important; }
+
+  /* High-contrast mode: darker ink, stronger borders, no transparency */
+  body.bloom-high-contrast {
+    --ink: #000000;
+    --ink-soft: #111111;
+    --ink-mute: #2A2A2A;
+    --line: rgba(0,0,0,0.45);
+    --line-strong: rgba(0,0,0,0.8);
+    --paper: #FFFFFF;
+    --cream: #FFFFFF;
+    --cream-deep: #F5F5F5;
+  }
+  body.bloom-high-contrast .muted { color: #2A2A2A !important; }
+  body.bloom-high-contrast a { text-decoration: underline; }
+  body.bloom-high-contrast .btn-primary { background: #0A1A12 !important; }
+  body.bloom-high-contrast .icon-btn,
+  body.bloom-high-contrast .pill,
+  body.bloom-high-contrast .card { border: 1.5px solid #000 !important; }
+
+  /* Accessibility settings floating button */
+  .a11y-fab {
+    position: fixed; bottom: 24px; left: 24px; z-index: 90;
+    width: 48px; height: 48px; border-radius: 50%;
+    background: var(--forest-deep); color: var(--cream);
+    display: flex; align-items: center; justify-content: center;
+    border: 0; cursor: pointer;
+    box-shadow: var(--shadow-deep);
+  }
+  .a11y-fab:hover { background: #142B20; }
+  @media (max-width: 768px) {
+    .a11y-fab { bottom: 78px; left: 16px; width: 44px; height: 44px; }
+  }
+  .a11y-panel {
+    position: fixed; bottom: 84px; left: 24px; z-index: 91;
+    width: 300px;
+    background: var(--paper); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 14px;
+    box-shadow: var(--shadow-deep);
+    padding: 18px 20px;
+  }
+  @media (max-width: 768px) {
+    .a11y-panel { bottom: 130px; left: 16px; width: calc(100vw - 32px); max-width: 320px; }
+  }
+  .a11y-panel h2 {
+    font-family: var(--f-display); font-size: 18px;
+    font-weight: 500; margin: 0 0 12px;
+  }
+  .a11y-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 0; border-top: 1px solid var(--line);
+  }
+  .a11y-row:first-of-type { border-top: 0; }
+  .a11y-row label { font-size: 14px; cursor: pointer; flex: 1; }
+  .a11y-row input[type="checkbox"] {
+    width: 18px; height: 18px; cursor: pointer;
+    accent-color: var(--forest);
+  }
+
+  /* ===================================================================
      MOBILE TAB BAR — visible only at <=768px (defined inside @media)
      =================================================================== */
   .mobile-tabs { display: none; }
