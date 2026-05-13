@@ -1,0 +1,60 @@
+{
+  "uid": "bloomoulu-queues",
+  "title": "BloomOulu · Queues",
+  "tags": ["bloomoulu", "bullmq"],
+  "timezone": "Europe/Helsinki",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-3h", "to": "now" },
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Total jobs in flight",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "targets": [{ "expr": "sum(bullmq_queue_active)" }]
+    },
+    {
+      "type": "stat",
+      "title": "Waiting (any queue)",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "targets": [{ "expr": "sum(bullmq_queue_waiting)" }],
+      "fieldConfig": { "defaults": { "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 25 }, { "color": "red", "value": 100 } ] } } }
+    },
+    {
+      "type": "stat",
+      "title": "Failed (last hour)",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "targets": [{ "expr": "sum(increase(bullmq_jobs_failed_total[1h]))" }]
+    },
+    {
+      "type": "stat",
+      "title": "Job throughput (jobs/min)",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "targets": [{ "expr": "sum(rate(bullmq_jobs_completed_total[5m])) * 60" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "Queue depth (waiting) per queue",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "targets": [{ "expr": "bullmq_queue_waiting", "legendFormat": "{{queue}}" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "Completed / failed / delayed per minute",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "targets": [
+        { "expr": "sum by(queue) (rate(bullmq_jobs_completed_total[5m])) * 60", "legendFormat": "completed {{queue}}" },
+        { "expr": "sum by(queue) (rate(bullmq_jobs_failed_total[5m])) * 60", "legendFormat": "failed {{queue}}" }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "Dead-letter queue contents",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 12 },
+      "targets": [
+        { "expr": "bullmq_queue_dead", "legendFormat": "{{queue}}" }
+      ]
+    }
+  ]
+}

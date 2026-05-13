@@ -1,0 +1,75 @@
+{
+  "uid": "bloomoulu-db",
+  "title": "BloomOulu · Database",
+  "tags": ["bloomoulu", "db", "postgres"],
+  "timezone": "Europe/Helsinki",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-3h", "to": "now" },
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Connections",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "targets": [{ "expr": "sum(pg_stat_activity_count)" }]
+    },
+    {
+      "type": "stat",
+      "title": "Cache hit ratio",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "targets": [
+        { "expr": "sum(rate(pg_stat_database_blks_hit[5m])) / (sum(rate(pg_stat_database_blks_hit[5m])) + sum(rate(pg_stat_database_blks_read[5m])))" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percentunit", "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "yellow", "value": 0.95 }, { "color": "green", "value": 0.99 } ] } } }
+    },
+    {
+      "type": "stat",
+      "title": "DB size (MB)",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "targets": [{ "expr": "pg_database_size_bytes{datname=\"bloomoulu\"} / 1024 / 1024" }]
+    },
+    {
+      "type": "stat",
+      "title": "Replication lag (s)",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "targets": [{ "expr": "pg_replication_lag" }],
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Tuples returned vs fetched",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "targets": [
+        { "expr": "rate(pg_stat_database_tup_returned[5m])", "legendFormat": "returned" },
+        { "expr": "rate(pg_stat_database_tup_fetched[5m])", "legendFormat": "fetched" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Slow queries (>1s) per minute",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "targets": [
+        { "expr": "increase(pg_stat_statements_calls{mean_time_ms_gt=\"1000\"}[1m])" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "pgvector retrieval latency · p95",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum by(le) (rate(bloomoulu_pgvector_retrieve_ms_bucket[5m])))", "legendFormat": "p95" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ms", "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 100 }, { "color": "red", "value": 250 } ] } } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Connection pool saturation",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "targets": [
+        { "expr": "sum(pg_stat_activity_count{state=\"active\"}) / pg_settings_max_connections", "legendFormat": "active / max" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percentunit" } }
+    }
+  ]
+}

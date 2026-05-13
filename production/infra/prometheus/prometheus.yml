@@ -32,4 +32,6 @@ rule_files:
 alerting:
   alertmanagers:
     - static_configs:
-        - targets: []  # We push alerts to ntfy directly from rules using webhook receiver
+        - targets: ['alertmanager:9093']
+      # Alertmanager routes P0/P1/P2 to different ntfy.sh topics. See
+      # infra/alertmanager/alertmanager.yml.

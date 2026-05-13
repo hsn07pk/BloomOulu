@@ -1,0 +1,68 @@
+{
+  "uid": "bloomoulu-backend",
+  "title": "BloomOulu · Backend",
+  "tags": ["bloomoulu", "backend"],
+  "timezone": "Europe/Helsinki",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-3h", "to": "now" },
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Request rate (req/s)",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "targets": [{ "expr": "sum(rate(http_server_duration_ms_count[1m]))" }]
+    },
+    {
+      "type": "stat",
+      "title": "Error rate (5xx %)",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "targets": [
+        { "expr": "sum(rate(http_server_duration_ms_count{http_status_code=~\"5..\"}[5m])) / sum(rate(http_server_duration_ms_count[5m]))" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percentunit", "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 0.005 }, { "color": "red", "value": 0.02 } ] } } }
+    },
+    {
+      "type": "stat",
+      "title": "p95 latency (ms)",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum by(le) (rate(http_server_duration_ms_bucket[5m])))" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ms", "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 500 }, { "color": "red", "value": 1500 } ] } } }
+    },
+    {
+      "type": "stat",
+      "title": "Up jobs",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "targets": [{ "expr": "sum(up{job=~\"bloomoulu-.*\"})" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "Latency by route (p50/p95/p99)",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 4 },
+      "targets": [
+        { "expr": "histogram_quantile(0.5, sum by(le, http_route) (rate(http_server_duration_ms_bucket[5m])))", "legendFormat": "p50 {{http_route}}" },
+        { "expr": "histogram_quantile(0.95, sum by(le, http_route) (rate(http_server_duration_ms_bucket[5m])))", "legendFormat": "p95 {{http_route}}" },
+        { "expr": "histogram_quantile(0.99, sum by(le, http_route) (rate(http_server_duration_ms_bucket[5m])))", "legendFormat": "p99 {{http_route}}" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Requests by status × method",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "targets": [
+        { "expr": "sum by (http_method, http_status_code) (rate(http_server_duration_ms_count[5m]))", "legendFormat": "{{http_method}} {{http_status_code}}" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Errors per route (5xx) · 5m rate",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "targets": [
+        { "expr": "sum by (http_route) (rate(http_server_duration_ms_count{http_status_code=~\"5..\"}[5m]))", "legendFormat": "{{http_route}}" }
+      ]
+    }
+  ]
+}

@@ -198,7 +198,22 @@ services:
     <<: *restart-policy
     volumes:
       - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infra/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
       - prometheus_data:/prometheus
+    networks: [internal]
+    depends_on:
+      - alertmanager
+
+  alertmanager:
+    image: prom/alertmanager:latest
+    <<: *restart-policy
+    env_file: .env
+    volumes:
+      - ./infra/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
     networks: [internal]
 
   grafana:
@@ -309,6 +324,7 @@ volumes:
   ollama_data:
   reranker_data:
   prometheus_data:
+  alertmanager_data:
   grafana_data:
   loki_data:
   tempo_data:

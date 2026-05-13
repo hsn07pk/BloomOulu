@@ -1,0 +1,70 @@
+{
+  "uid": "bloomoulu-business",
+  "title": "BloomOulu · Business",
+  "tags": ["bloomoulu", "business"],
+  "timezone": "Europe/Helsinki",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-7d", "to": "now" },
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Adoptions · last 24h",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "targets": [{ "expr": "increase(bloomoulu_adoptions_total[24h])" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "type": "stat",
+      "title": "Revenue (EUR) · last 24h",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "targets": [{ "expr": "increase(bloomoulu_payment_amount_cents_total{status=\"succeeded\"}[24h]) / 100" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "unit": "€" }
+    },
+    {
+      "type": "stat",
+      "title": "Active adopters",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "targets": [{ "expr": "bloomoulu_adoptions_active" }]
+    },
+    {
+      "type": "stat",
+      "title": "Avg donation · last 7d",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "targets": [{ "expr": "increase(bloomoulu_payment_amount_cents_total{status=\"succeeded\"}[7d]) / increase(bloomoulu_payments_total{status=\"succeeded\"}[7d]) / 100" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "Adoptions per day, by tier",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "targets": [
+        { "expr": "increase(bloomoulu_adoptions_total[1d])", "legendFormat": "{{tier}}" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Revenue per day, by provider",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "targets": [
+        { "expr": "increase(bloomoulu_payment_amount_cents_total{status=\"succeeded\"}[1d]) / 100", "legendFormat": "{{provider}}" }
+      ]
+    },
+    {
+      "type": "bargauge",
+      "title": "Tier mix · last 30d",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "targets": [
+        { "expr": "sum by (tier) (increase(bloomoulu_adoptions_total[30d]))", "legendFormat": "{{tier}}" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Donor cohort retention (rolling 30d)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "targets": [
+        { "expr": "bloomoulu_donor_retention_30d_ratio", "legendFormat": "30d retention" }
+      ]
+    }
+  ]
+}

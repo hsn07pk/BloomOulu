@@ -1,0 +1,79 @@
+{
+  "uid": "bloomoulu-infra",
+  "title": "BloomOulu · Infrastructure",
+  "tags": ["bloomoulu", "infra", "node"],
+  "timezone": "Europe/Helsinki",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "panels": [
+    {
+      "type": "stat",
+      "title": "CPU load (1m)",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "targets": [{ "expr": "node_load1" }]
+    },
+    {
+      "type": "stat",
+      "title": "Memory used (%)",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "targets": [
+        { "expr": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percent", "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 75 }, { "color": "red", "value": 92 } ] } } }
+    },
+    {
+      "type": "stat",
+      "title": "Disk free (%)",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "targets": [
+        { "expr": "(node_filesystem_avail_bytes{mountpoint=\"/\"} / node_filesystem_size_bytes{mountpoint=\"/\"}) * 100" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percent", "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "yellow", "value": 15 }, { "color": "green", "value": 30 } ] } } }
+    },
+    {
+      "type": "stat",
+      "title": "Cert days remaining",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "targets": [
+        { "expr": "(probe_ssl_earliest_cert_expiry - time()) / 86400" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "d", "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "yellow", "value": 14 }, { "color": "green", "value": 30 } ] } } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Per-container CPU usage (%)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "targets": [
+        { "expr": "sum by (name) (rate(container_cpu_usage_seconds_total{name=~\"bloomoulu-.*\"}[5m])) * 100", "legendFormat": "{{name}}" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Per-container memory (MB)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "targets": [
+        { "expr": "container_memory_usage_bytes{name=~\"bloomoulu-.*\"} / 1024 / 1024", "legendFormat": "{{name}}" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Network in/out (B/s)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "targets": [
+        { "expr": "rate(node_network_receive_bytes_total{device!~\"lo|veth.*|docker.*\"}[5m])", "legendFormat": "rx {{device}}" },
+        { "expr": "rate(node_network_transmit_bytes_total{device!~\"lo|veth.*|docker.*\"}[5m])", "legendFormat": "tx {{device}}" }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Time since last restic backup (hours)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "targets": [
+        { "expr": "(time() - bloomoulu_restic_last_success_timestamp) / 3600" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "h", "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 26 }, { "color": "red", "value": 30 } ] } } }
+    }
+  ]
+}
