@@ -25,6 +25,7 @@ import {
   QUEUE_KIOSK_WATCHDOG,
   QUEUE_PAYMENT_RETRY,
   QUEUE_RENEWAL,
+  QUEUE_TAX_CERT_ANNUAL,
 } from './modules/jobs/queues.js';
 import { registerCronJobs } from './modules/jobs/cron.js';
 import { processReceipt } from './modules/jobs/processors/receipt.processor.js';
@@ -36,6 +37,7 @@ import { processGdprErase } from './modules/jobs/processors/gdpr-erase.processor
 import { processKioskWatchdog } from './modules/jobs/processors/kiosk-watchdog.processor.js';
 import { processPaymentRetry } from './modules/jobs/processors/payment-retry.processor.js';
 import { processRenewal } from './modules/jobs/processors/renewal.processor.js';
+import { processTaxCertAnnual } from './modules/jobs/processors/tax-cert-annual.processor.js';
 
 const logger = new Logger('Worker');
 const connection: ConnectionOptions = {
@@ -58,6 +60,7 @@ const QUEUES: ReadonlyArray<QueueDef> = [
   { name: QUEUE_KIOSK_WATCHDOG, concurrency: 1,  handler: processKioskWatchdog },
   { name: QUEUE_PAYMENT_RETRY,  concurrency: 4,  handler: processPaymentRetry },
   { name: QUEUE_RENEWAL,        concurrency: 2,  handler: processRenewal },
+  { name: QUEUE_TAX_CERT_ANNUAL, concurrency: 1, handler: processTaxCertAnnual },
 ];
 
 const workers: Worker[] = [];

@@ -16,6 +16,7 @@ export const QUEUE_GDPR_ERASE = 'gdpr-erase';
 export const QUEUE_KIOSK_WATCHDOG = 'kiosk-watchdog';
 export const QUEUE_PAYMENT_RETRY = 'payment-retry';
 export const QUEUE_RENEWAL = 'renewal';
+export const QUEUE_TAX_CERT_ANNUAL = 'tax-cert-annual';
 
 export const defaultJobOpts: JobsOptions = {
   attempts: 5,

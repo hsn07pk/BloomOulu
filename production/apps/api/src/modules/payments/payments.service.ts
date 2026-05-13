@@ -212,10 +212,41 @@ export class PaymentsService {
             },
           });
           if (payment.adoptionId) {
-            await tx.adoption.update({
+            const adoption = await tx.adoption.update({
               where: { id: payment.adoptionId },
               data: { status: 'active', startedAt: event.paidAt },
+              include: {
+                tier: true,
+                donor: { select: { name: true, email: true } },
+              },
             });
+            // Plaque eligibility: Endangered (€750) and Corporate (€1,250)
+            // tiers get a physical plaque next to their plant. Auto-create
+            // a Plaque row in `requested` state — curators approve + engrave
+            // + install from /admin/resources/Plaque.
+            const eligible: Array<typeof adoption.tierId> = ['endangered', 'corporate'];
+            if (eligible.includes(adoption.tierId)) {
+              const existing = await tx.plaque.findUnique({ where: { adoptionId: adoption.id } });
+              if (!existing) {
+                const engraved =
+                  adoption.nickname ??
+                  adoption.publicName ??
+                  adoption.donor.name ??
+                  adoption.donor.email.split('@')[0]!;
+                await tx.plaque.create({
+                  data: {
+                    adoptionId: adoption.id,
+                    engravedText: engraved,
+                    status: 'requested',
+                  },
+                });
+                await this.audit.log(tx, {
+                  action: 'plaque.requested',
+                  resource: `Plaque/adoption-${adoption.id}`,
+                  after: { engravedText: engraved, tier: adoption.tierId },
+                });
+              }
+            }
           }
           await this.audit.log(tx, {
             action: 'payment.succeeded',

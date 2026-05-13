@@ -23,9 +23,14 @@ import AdminJS, { ComponentLoader } from 'adminjs';
 import AdminJSFastify from '@adminjs/fastify';
 import { Database, Resource, getModelByName } from '@adminjs/prisma';
 import { PrismaClient } from '@prisma/client';
+import { Queue } from 'bullmq';
 import bcrypt from 'bcryptjs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+const emailQueue = new Queue('email', {
+  connection: { url: process.env.REDIS_URL ?? 'redis://localhost:6379' },
+});
 
 AdminJS.registerAdapter({ Database, Resource });
 
@@ -132,7 +137,53 @@ const adminConfig = new AdminJS({
     },
     { resource: { model: getModelByName('User'), client: prisma }, options: { navigation: { name: 'Donors' } } },
     { resource: { model: getModelByName('GiftCode'), client: prisma }, options: { navigation: { name: 'Donors' } } },
-    { resource: { model: getModelByName('Plaque'), client: prisma }, options: { navigation: { name: 'Donors' } } },
+    {
+      resource: { model: getModelByName('Plaque'), client: prisma },
+      options: {
+        navigation: { name: 'Donors', icon: 'Bookmark' },
+        listProperties: ['createdAt', 'adoptionId', 'engravedText', 'status', 'installedAt'],
+        sort: { sortBy: 'createdAt', direction: 'desc' as const },
+        actions: {
+          markInstalled: {
+            actionType: 'record',
+            label: 'Mark installed',
+            icon: 'CheckCircle',
+            isAccessible: ({ currentAdmin }: { currentAdmin?: { role?: string } }) =>
+              ['admin', 'curator'].includes(currentAdmin?.role as string),
+            handler: async (_req: any, _res: any, ctx: any) => {
+              const id = ctx.record!.params['id'];
+              const photoUrl = ctx.request?.payload?.photoUrl ?? null;
+              const plaque = await prisma.plaque.update({
+                where: { id },
+                data: {
+                  status: 'installed',
+                  installedAt: new Date(),
+                  ...(photoUrl ? { photoUrl } : {}),
+                },
+                include: {
+                  adoption: { include: { plant: true, donor: { select: { email: true, name: true, locale: true } } } },
+                },
+              });
+              await emailQueue.add(
+                'send',
+                {
+                  template: 'plaque-ready',
+                  to: plaque.adoption.donor.email,
+                  locale: plaque.adoption.donor.locale,
+                  variables: {
+                    donorName: plaque.adoption.donor.name ?? '',
+                    plantName: plaque.adoption.plant.nameEn,
+                    photoUrl: photoUrl ?? '',
+                  },
+                },
+                { attempts: 5, backoff: { type: 'exponential', delay: 5_000 } },
+              );
+              return { record: ctx.record!.toJSON(ctx.currentAdmin) };
+            },
+          },
+        },
+      },
+    },
     // ── Finance ────────────────────────────────────────────────────────
     {
       resource: { model: getModelByName('Payment'), client: prisma },
