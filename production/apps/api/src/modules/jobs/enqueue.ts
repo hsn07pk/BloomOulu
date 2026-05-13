@@ -33,7 +33,9 @@ export const enqueueEmail = (data: EmailJob) =>
   q(QUEUE_EMAIL).add('send', data, defaultJobOpts);
 
 export const enqueueReceipt = (data: ReceiptJob) =>
-  q(QUEUE_RECEIPT).add('render', data, { ...defaultJobOpts, jobId: `receipt:${data.paymentId}` });
+  // BullMQ uses ':' as a Redis key separator and rejects it inside custom
+  // jobIds; '-' gives us the same idempotency at the queue level.
+  q(QUEUE_RECEIPT).add('render', data, { ...defaultJobOpts, jobId: `receipt-${data.paymentId}` });
 
 export const enqueueRagIngest = (data: RagIngestJob) =>
   q(QUEUE_RAG_INGEST).add('ingest', data, defaultJobOpts);

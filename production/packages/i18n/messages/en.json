@@ -1,12 +1,48 @@
 {
+  "Common": {
+    "appName": "BloomOulu",
+    "siteName": "University of Oulu Botanical Garden",
+    "loading": "Loading…",
+    "error": "Something went wrong.",
+    "retry": "Retry",
+    "back": "Back",
+    "close": "Close",
+    "save": "Save",
+    "cancel": "Cancel",
+    "submit": "Submit",
+    "print": "Print",
+    "yes": "Yes",
+    "no": "No"
+  },
+  "Nav": {
+    "home": "Home",
+    "plants": "Plants",
+    "adopt": "Adopt",
+    "ask": "Ask the Garden",
+    "garden": "My Garden",
+    "signIn": "Sign in"
+  },
   "Home": {
     "heroTitle": "Turning every plant into a story, a supporter, and a step toward saving Finnish flora.",
     "heroLead": "Adopt a plant. Save a species. Welcome to the University of Oulu Botanical Garden.",
-    "featured": "Featured plants"
+    "heroCta": "Adopt a plant",
+    "featured": "Featured plants",
+    "conservation": "Conservation impact",
+    "howItWorks": "How BloomOulu works"
   },
   "Plant": {
     "story": "Story",
-    "adoptCta": "Adopt this plant"
+    "adoptCta": "Adopt this plant",
+    "habitat": "Habitat",
+    "bloomWindow": "Blooms",
+    "redList": "Red List status",
+    "showOnMap": "Show on map",
+    "shareQr": "Share this plant",
+    "citations": "Sources",
+    "audio": "Listen to the story",
+    "modeAdult": "Adult mode",
+    "modeKid": "Kid mode",
+    "modeSchool": "School mode"
   },
   "Adopt": {
     "title": "Adopt a plant",
@@ -15,15 +51,69 @@
     "tier_rooted": "Rooted · €75",
     "tier_vulnerable": "Vulnerable · €250",
     "tier_endangered": "Endangered · €750",
+    "tier_corporate": "Corporate · €1,250",
     "billing": "Billing interval",
     "annual": "Annual",
     "monthly": "Monthly",
+    "oneTime": "One-time",
     "paymentMethod": "Payment method",
     "card": "Card / bank",
+    "mobilepay": "MobilePay",
     "bankTransfer": "Bank transfer (RF reference)",
     "donor": "Your details",
     "email": "Email",
     "name": "Name (optional)",
     "submit": "Continue to payment"
+  },
+  "Pay": {
+    "bankInstructions": {
+      "title": "Complete your donation by bank transfer",
+      "openBankApp": "Open your banking app and create a SEPA payment with these details. The RF reference lets the Garden reconcile your donation automatically — no further action needed from you.",
+      "iban": "IBAN",
+      "bic": "BIC",
+      "amount": "Amount",
+      "reference": "Reference (RF)",
+      "beneficiary": "Beneficiary",
+      "qrCaption": "Open your bank app's camera and scan to pre-fill the transfer.",
+      "next": "What happens next",
+      "nextSteps": "Once the Garden's accountant receives your payment (usually within 2 business days), you'll get a PDF receipt by email and your plant will show up in 'My Garden'."
+    }
+  },
+  "Ask": {
+    "title": "Ask the Garden",
+    "subtitle": "Grounded · cited · never hallucinated.",
+    "placeholder": "Ask anything about our plants…",
+    "send": "Send",
+    "helpful": "Helpful",
+    "offBase": "Off base",
+    "escalate": "Forward to a curator",
+    "thinking": "Thinking…",
+    "noAnswer": "I don't have a confident answer for that. Would you like me to forward it to a curator?",
+    "starters": "Trending questions"
+  },
+  "Garden": {
+    "title": "My Garden",
+    "adoptions": "Your adoptions",
+    "receipts": "Receipts",
+    "taxCertificates": "Tax certificates",
+    "managePayment": "Manage payment",
+    "pause": "Pause for 3 months",
+    "cancel": "Cancel adoption",
+    "gdpr": "Privacy & GDPR",
+    "exportData": "Request a copy of my data",
+    "eraseData": "Erase my data"
+  },
+  "Receipts": {
+    "thanks": "Thank you for supporting Finnish flora conservation.",
+    "vatExempt": "Donations to a Finnish non-profit (yleishyödyllinen yhteisö) are outside the scope of VAT.",
+    "downloadPdf": "Download PDF",
+    "creditNote": "Credit note"
+  },
+  "Footer": {
+    "privacy": "Privacy",
+    "terms": "Terms",
+    "accessibility": "Accessibility statement",
+    "contact": "Contact",
+    "fundsFlow": "Where your money goes"
   }
 }

@@ -18,6 +18,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { AuditService } from '../audit/audit.service.js';
 import { SettingsService } from '../settings/settings.service.js';
 import { PaymentGatewayFactory } from './payment-gateway.factory.js';
+import { enqueueReceipt } from '../jobs/enqueue.js';
 
 export interface CreatePaymentInput {
   donorId: string;
@@ -163,7 +164,12 @@ export class PaymentsService {
       this.logger.warn(`Unknown event from ${event.provider}: ${event.providerEventId}`);
       return { deduplicated: false };
     }
-    return this.prisma.$transaction(async (tx) => {
+    // Collect post-commit side effects (job enqueues, etc.) inside the
+    // transaction closure and fire them only after $transaction returns
+    // successfully — never enqueue from inside the txn because a rollback
+    // would still leave the job in Redis.
+    const sideEffects: Array<() => Promise<unknown>> = [];
+    const result = await this.prisma.$transaction(async (tx) => {
       // Idempotency gate.
       try {
         await tx.processedEvent.create({
@@ -216,7 +222,8 @@ export class PaymentsService {
             resource: `Payment/${payment.id}`,
             after: { providerPaymentRef: event.providerPaymentRef },
           });
-          // The receipt job is enqueued by ReceiptsService after this txn.
+          // Enqueue receipt PDF + email after the txn commits.
+          sideEffects.push(() => enqueueReceipt({ paymentId: payment.id }));
           break;
         }
         case 'payment.failed': {
@@ -285,6 +292,18 @@ export class PaymentsService {
       }
       return { deduplicated: false };
     });
+    if (!result.deduplicated) {
+      for (const fx of sideEffects) {
+        try {
+          await fx();
+        } catch (err) {
+          this.logger.error(`Post-commit side-effect failed: ${(err as Error).message}`);
+          // We deliberately do not rethrow — the business state is already
+          // committed; the worker DLQ + reconciliation cron will reconcile.
+        }
+      }
+    }
+    return result;
   }
 }
 

@@ -2,6 +2,7 @@ import type { Job } from 'bullmq';
 import { prisma } from '@bloomoulu/db';
 import { sendEmail } from '../../../infra/email.js';
 import { renderMjml } from '@bloomoulu/emails/render';
+import { presign } from '../../../infra/storage.js';
 
 export interface EmailJob {
   template: string;             // EmailTemplate.slug
@@ -21,13 +22,32 @@ export async function processEmail(job: Job<EmailJob>): Promise<void> {
   const preheader = pickLocale(tpl, 'preheader', locale) ?? '';
   const mjml = pickLocale(tpl, 'mjml', locale);
 
-  const html = renderMjml(mjml, { ...variables, preheader });
+  // Resolve any s3://bucket/key references — both in `variables.receiptUrl`
+  // (used inside the email body) and in `attachments[*].url` (passed to
+  // nodemailer as `path:`). nodemailer can fetch via http(s); we presign for
+  // 24h so the donor can also click the link from the email.
+  const resolvedVars: Record<string, string> = { ...variables };
+  for (const k of Object.keys(resolvedVars)) {
+    const v = resolvedVars[k];
+    if (typeof v === 'string' && v.startsWith('s3://')) {
+      resolvedVars[k] = await presign(v, 60 * 60 * 24);
+    }
+  }
+
+  const html = renderMjml(mjml, { ...resolvedVars, preheader });
+
+  const resolvedAttachments = await Promise.all(
+    (attachments ?? []).map(async (a) => ({
+      filename: a.filename,
+      path: a.url.startsWith('s3://') ? await presign(a.url, 60 * 60 * 24) : a.url,
+    })),
+  );
 
   await sendEmail({
     to,
-    subject: interpolate(subject, variables),
+    subject: interpolate(subject, resolvedVars),
     html,
-    attachments: attachments ?? [],
+    attachments: resolvedAttachments.map((a) => ({ filename: a.filename, url: a.path })),
   });
 }
 

@@ -1,12 +1,48 @@
 {
+  "Common": {
+    "appName": "BloomOulu",
+    "siteName": "Oulun yliopiston kasvitieteellinen puutarha",
+    "loading": "Ladataan…",
+    "error": "Jotain meni pieleen.",
+    "retry": "Yritä uudelleen",
+    "back": "Takaisin",
+    "close": "Sulje",
+    "save": "Tallenna",
+    "cancel": "Peruuta",
+    "submit": "Lähetä",
+    "print": "Tulosta",
+    "yes": "Kyllä",
+    "no": "Ei"
+  },
+  "Nav": {
+    "home": "Etusivu",
+    "plants": "Kasvit",
+    "adopt": "Adoptoi",
+    "ask": "Kysy puutarhalta",
+    "garden": "Oma puutarhani",
+    "signIn": "Kirjaudu"
+  },
   "Home": {
     "heroTitle": "Jokaisesta kasvista tarina, tukija ja askel suomalaisen lajiston suojelemiseksi.",
     "heroLead": "Adoptoi kasvi. Pelasta laji. Tervetuloa Oulun yliopiston kasvitieteelliseen puutarhaan.",
-    "featured": "Kuukauden kasvit"
+    "heroCta": "Adoptoi kasvi",
+    "featured": "Kuukauden kasvit",
+    "conservation": "Suojelun vaikutus",
+    "howItWorks": "Näin BloomOulu toimii"
   },
   "Plant": {
     "story": "Tarina",
-    "adoptCta": "Adoptoi tämä kasvi"
+    "adoptCta": "Adoptoi tämä kasvi",
+    "habitat": "Elinympäristö",
+    "bloomWindow": "Kukinta-aika",
+    "redList": "Uhanalaisuusluokka",
+    "showOnMap": "Näytä kartalla",
+    "shareQr": "Jaa tämä kasvi",
+    "citations": "Lähteet",
+    "audio": "Kuuntele tarina",
+    "modeAdult": "Aikuisille",
+    "modeKid": "Lapsille",
+    "modeSchool": "Kouluille"
   },
   "Adopt": {
     "title": "Adoptoi kasvi",
@@ -15,15 +51,69 @@
     "tier_rooted": "Juurtunut · 75 €",
     "tier_vulnerable": "Vaarantunut · 250 €",
     "tier_endangered": "Erittäin uhanalainen · 750 €",
+    "tier_corporate": "Yritys · 1 250 €",
     "billing": "Laskutusväli",
     "annual": "Vuosittain",
     "monthly": "Kuukausittain",
+    "oneTime": "Kertalahjoitus",
     "paymentMethod": "Maksutapa",
     "card": "Kortti / pankki",
+    "mobilepay": "MobilePay",
     "bankTransfer": "Tilisiirto (RF-viite)",
     "donor": "Tiedot",
     "email": "Sähköposti",
     "name": "Nimi (vapaaehtoinen)",
     "submit": "Jatka maksuun"
+  },
+  "Pay": {
+    "bankInstructions": {
+      "title": "Suorita lahjoitus tilisiirtona",
+      "openBankApp": "Avaa pankkisovelluksesi ja tee SEPA-tilisiirto näillä tiedoilla. RF-viite mahdollistaa lahjoituksesi automaattisen kirjaamisen — sinun ei tarvitse tehdä muuta.",
+      "iban": "IBAN",
+      "bic": "BIC",
+      "amount": "Summa",
+      "reference": "Viite (RF)",
+      "beneficiary": "Saaja",
+      "qrCaption": "Avaa pankkisovelluksen kamera ja skannaa, niin maksun tiedot täyttyvät.",
+      "next": "Mitä seuraavaksi",
+      "nextSteps": "Kun puutarhan kirjanpitäjä vastaanottaa maksusi (yleensä 2 arkipäivän kuluessa), saat PDF-kuitin sähköpostiisi ja kasvisi näkyy 'Omassa puutarhassani'."
+    }
+  },
+  "Ask": {
+    "title": "Kysy puutarhalta",
+    "subtitle": "Lähteistetty · varmistettu · ei keksittyä.",
+    "placeholder": "Kysy mitä tahansa kasveistamme…",
+    "send": "Lähetä",
+    "helpful": "Hyödyllinen",
+    "offBase": "Ei osunut",
+    "escalate": "Välitä puutarhuriile",
+    "thinking": "Mietin…",
+    "noAnswer": "Minulla ei ole varmaa vastausta. Välitänkö kysymyksesi puutarhurille?",
+    "starters": "Suosituimmat kysymykset"
+  },
+  "Garden": {
+    "title": "Oma puutarhani",
+    "adoptions": "Adoptiosi",
+    "receipts": "Kuitit",
+    "taxCertificates": "Verotodistukset",
+    "managePayment": "Hallinnoi maksutapaa",
+    "pause": "Tauota 3 kuukautta",
+    "cancel": "Peruuta adoptio",
+    "gdpr": "Yksityisyys & GDPR",
+    "exportData": "Pyydä kopio tiedoistani",
+    "eraseData": "Poista tietoni"
+  },
+  "Receipts": {
+    "thanks": "Kiitos suomalaisen luonnon suojelusta.",
+    "vatExempt": "Yleishyödyllisen yhteisön saamat lahjoitukset jäävät arvonlisäveron soveltamisalan ulkopuolelle.",
+    "downloadPdf": "Lataa PDF",
+    "creditNote": "Hyvityskuitti"
+  },
+  "Footer": {
+    "privacy": "Tietosuoja",
+    "terms": "Käyttöehdot",
+    "accessibility": "Saavutettavuusseloste",
+    "contact": "Yhteystiedot",
+    "fundsFlow": "Mihin rahasi käytetään"
   }
 }

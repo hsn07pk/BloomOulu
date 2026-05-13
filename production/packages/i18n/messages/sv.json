@@ -1,12 +1,48 @@
 {
+  "Common": {
+    "appName": "BloomOulu",
+    "siteName": "Uleåborgs universitets botaniska trädgård",
+    "loading": "Laddar…",
+    "error": "Något gick fel.",
+    "retry": "Försök igen",
+    "back": "Tillbaka",
+    "close": "Stäng",
+    "save": "Spara",
+    "cancel": "Avbryt",
+    "submit": "Skicka",
+    "print": "Skriv ut",
+    "yes": "Ja",
+    "no": "Nej"
+  },
+  "Nav": {
+    "home": "Hem",
+    "plants": "Växter",
+    "adopt": "Adoptera",
+    "ask": "Fråga trädgården",
+    "garden": "Min trädgård",
+    "signIn": "Logga in"
+  },
   "Home": {
     "heroTitle": "Varje växt en berättelse, en stödjare, ett steg för att rädda den finska floran.",
     "heroLead": "Adoptera en växt. Rädda en art. Välkommen till Uleåborgs universitets botaniska trädgård.",
-    "featured": "Månadens växter"
+    "heroCta": "Adoptera en växt",
+    "featured": "Månadens växter",
+    "conservation": "Bevarandeeffekt",
+    "howItWorks": "Så fungerar BloomOulu"
   },
   "Plant": {
     "story": "Berättelse",
-    "adoptCta": "Adoptera den här växten"
+    "adoptCta": "Adoptera den här växten",
+    "habitat": "Livsmiljö",
+    "bloomWindow": "Blomning",
+    "redList": "Rödlistestatus",
+    "showOnMap": "Visa på kartan",
+    "shareQr": "Dela den här växten",
+    "citations": "Källor",
+    "audio": "Lyssna på berättelsen",
+    "modeAdult": "Vuxenläge",
+    "modeKid": "Barnläge",
+    "modeSchool": "Skolläge"
   },
   "Adopt": {
     "title": "Adoptera en växt",
@@ -15,15 +51,69 @@
     "tier_rooted": "Rotad · 75 €",
     "tier_vulnerable": "Sårbar · 250 €",
     "tier_endangered": "Starkt hotad · 750 €",
+    "tier_corporate": "Företag · 1 250 €",
     "billing": "Faktureringsintervall",
     "annual": "Årligen",
     "monthly": "Månadsvis",
+    "oneTime": "Engångsdonation",
     "paymentMethod": "Betalningssätt",
     "card": "Kort / bank",
+    "mobilepay": "MobilePay",
     "bankTransfer": "Bankgiro (RF-referens)",
     "donor": "Dina uppgifter",
     "email": "E-post",
     "name": "Namn (valfritt)",
     "submit": "Fortsätt till betalning"
+  },
+  "Pay": {
+    "bankInstructions": {
+      "title": "Slutför din donation med bankgiro",
+      "openBankApp": "Öppna din bankapp och skapa en SEPA-betalning med dessa uppgifter. RF-referensen gör att trädgården kan registrera din donation automatiskt — du behöver inte göra något mer.",
+      "iban": "IBAN",
+      "bic": "BIC",
+      "amount": "Belopp",
+      "reference": "Referens (RF)",
+      "beneficiary": "Mottagare",
+      "qrCaption": "Öppna bankappens kamera och skanna för att fylla i betalningen.",
+      "next": "Vad händer härnäst",
+      "nextSteps": "När trädgårdens redovisare har tagit emot din betalning (vanligtvis inom 2 bankdagar) får du ett PDF-kvitto via e-post och din växt visas i 'Min trädgård'."
+    }
+  },
+  "Ask": {
+    "title": "Fråga trädgården",
+    "subtitle": "Grundat · refererat · aldrig hittepå.",
+    "placeholder": "Fråga vad som helst om våra växter…",
+    "send": "Skicka",
+    "helpful": "Hjälpsamt",
+    "offBase": "Träffade fel",
+    "escalate": "Skicka till en trädgårdsmästare",
+    "thinking": "Funderar…",
+    "noAnswer": "Jag har inget säkert svar på det. Vill du att jag skickar frågan vidare?",
+    "starters": "Populära frågor"
+  },
+  "Garden": {
+    "title": "Min trädgård",
+    "adoptions": "Dina adoptioner",
+    "receipts": "Kvitton",
+    "taxCertificates": "Skatteintyg",
+    "managePayment": "Hantera betalsätt",
+    "pause": "Pausa i 3 månader",
+    "cancel": "Avbryt adoption",
+    "gdpr": "Integritet & GDPR",
+    "exportData": "Begär en kopia av mina uppgifter",
+    "eraseData": "Radera mina uppgifter"
+  },
+  "Receipts": {
+    "thanks": "Tack för att du stödjer den finska floran.",
+    "vatExempt": "Donationer till en allmännyttig sammanslutning faller utanför momsens tillämpningsområde.",
+    "downloadPdf": "Ladda ner PDF",
+    "creditNote": "Kreditfaktura"
+  },
+  "Footer": {
+    "privacy": "Integritet",
+    "terms": "Villkor",
+    "accessibility": "Tillgänglighetsutlåtande",
+    "contact": "Kontakt",
+    "fundsFlow": "Vart pengarna går"
   }
 }
