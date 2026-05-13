@@ -1,0 +1,60 @@
+groups:
+  - name: bloomoulu.payments
+    rules:
+      - alert: PaymentWebhookFailing
+        expr: |
+          rate(bloomoulu_webhook_processed_total{status="failed"}[5m]) > 0.1
+        for: 5m
+        labels: { severity: page, tier: P0 }
+        annotations:
+          summary: "Payment webhook failure rate elevated"
+          description: "More than 6 failed webhooks in the last 5 min. Check `/admin/webhooks` and runbook payment-webhook-failing."
+
+      - alert: ReconciliationMismatch
+        expr: bloomoulu_reconciliation_exceptions_total > 0
+        for: 1m
+        labels: { severity: page, tier: P0 }
+        annotations:
+          summary: "Reconciliation found a mismatch"
+          description: "Payment(s) recorded but not found at provider, or vice versa. See /admin/reconciliation."
+
+  - name: bloomoulu.system
+    rules:
+      - alert: ApiDown
+        expr: up{job="bloomoulu-api"} == 0
+        for: 2m
+        labels: { severity: page, tier: P0 }
+        annotations:
+          summary: "API is unreachable from Prometheus"
+
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_server_duration_ms_bucket[5m])) by (le, http_route)
+          ) > 2000
+        for: 10m
+        labels: { severity: warn, tier: P1 }
+        annotations:
+          summary: "p95 latency > 2s on {{ $labels.http_route }}"
+
+      - alert: QueueDepthHigh
+        expr: bullmq_queue_waiting > 100
+        for: 5m
+        labels: { severity: warn, tier: P1 }
+        annotations:
+          summary: "BullMQ queue depth > 100"
+
+      - alert: DiskAlmostFull
+        expr: |
+          (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 15
+        for: 10m
+        labels: { severity: warn, tier: P1 }
+        annotations:
+          summary: "Root disk < 15% free"
+
+      - alert: TLSExpiringSoon
+        expr: (probe_ssl_earliest_cert_expiry - time()) < 7 * 86400
+        for: 1h
+        labels: { severity: page, tier: P0 }
+        annotations:
+          summary: "TLS certificate expires in less than 7 days"

@@ -1,0 +1,115 @@
+/**
+ * BloomOulu background worker.
+ *
+ *   docker compose run --rm api-worker
+ *
+ * Hosts every BullMQ queue's Worker process. Same image as the API; we just
+ * boot a different entry point. Queues are documented in queues.ts.
+ *
+ * Failure handling:
+ *   - Every worker has `attempts: 5` + exponential backoff.
+ *   - On final failure, the job moves to the dead-letter queue.
+ *   - DLQ is visible in the admin panel; admins can replay.
+ */
+import './telemetry.js';
+import { Worker, type Job, type ConnectionOptions, QueueEvents } from 'bullmq';
+import { prisma } from '@bloomoulu/db';
+import { Logger } from '@nestjs/common';
+import {
+  QUEUE_RECEIPT,
+  QUEUE_EMAIL,
+  QUEUE_RECONCILIATION,
+  QUEUE_RAG_INGEST,
+  QUEUE_GDPR_EXPORT,
+  QUEUE_GDPR_ERASE,
+  QUEUE_KIOSK_WATCHDOG,
+  QUEUE_PAYMENT_RETRY,
+  QUEUE_RENEWAL,
+} from './modules/jobs/queues.js';
+import { registerCronJobs } from './modules/jobs/cron.js';
+import { processReceipt } from './modules/jobs/processors/receipt.processor.js';
+import { processEmail } from './modules/jobs/processors/email.processor.js';
+import { processReconciliation } from './modules/jobs/processors/reconciliation.processor.js';
+import { processRagIngest } from './modules/jobs/processors/rag-ingest.processor.js';
+import { processGdprExport } from './modules/jobs/processors/gdpr-export.processor.js';
+import { processGdprErase } from './modules/jobs/processors/gdpr-erase.processor.js';
+import { processKioskWatchdog } from './modules/jobs/processors/kiosk-watchdog.processor.js';
+import { processPaymentRetry } from './modules/jobs/processors/payment-retry.processor.js';
+import { processRenewal } from './modules/jobs/processors/renewal.processor.js';
+
+const logger = new Logger('Worker');
+const connection: ConnectionOptions = {
+  url: process.env.REDIS_URL ?? 'redis://localhost:6379',
+};
+
+interface QueueDef {
+  name: string;
+  concurrency: number;
+  handler: (job: Job) => Promise<unknown>;
+}
+
+const QUEUES: ReadonlyArray<QueueDef> = [
+  { name: QUEUE_RECEIPT,        concurrency: 4,  handler: processReceipt },
+  { name: QUEUE_EMAIL,          concurrency: 8,  handler: processEmail },
+  { name: QUEUE_RECONCILIATION, concurrency: 1,  handler: processReconciliation },
+  { name: QUEUE_RAG_INGEST,     concurrency: 2,  handler: processRagIngest },
+  { name: QUEUE_GDPR_EXPORT,    concurrency: 2,  handler: processGdprExport },
+  { name: QUEUE_GDPR_ERASE,     concurrency: 1,  handler: processGdprErase },
+  { name: QUEUE_KIOSK_WATCHDOG, concurrency: 1,  handler: processKioskWatchdog },
+  { name: QUEUE_PAYMENT_RETRY,  concurrency: 4,  handler: processPaymentRetry },
+  { name: QUEUE_RENEWAL,        concurrency: 2,  handler: processRenewal },
+];
+
+const workers: Worker[] = [];
+const events: QueueEvents[] = [];
+
+for (const def of QUEUES) {
+  const w = new Worker(def.name, async (job) => {
+    const t0 = Date.now();
+    logger.log(`[${def.name}] start ${job.name} #${job.id}`);
+    try {
+      const out = await def.handler(job);
+      logger.log(`[${def.name}] done ${job.name} #${job.id} in ${Date.now() - t0}ms`);
+      return out;
+    } catch (err) {
+      logger.error(`[${def.name}] fail ${job.name} #${job.id}: ${(err as Error).message}`);
+      throw err;
+    }
+  }, { connection, concurrency: def.concurrency });
+
+  workers.push(w);
+
+  const ev = new QueueEvents(def.name, { connection });
+  ev.on('failed', async ({ jobId, failedReason }) => {
+    logger.warn(`[${def.name}] job ${jobId} failed: ${failedReason}`);
+    try {
+      await prisma.jobRun.create({
+        data: {
+          queueName: def.name,
+          jobName: jobId ?? 'unknown',
+          payload: {} as any,
+          status: 'failed',
+          errorMessage: failedReason ?? null,
+        },
+      });
+    } catch { /* observability is best-effort */ }
+  });
+  events.push(ev);
+}
+
+// Graceful shutdown so SIGTERM from Docker doesn't kill mid-job work.
+const shutdown = async () => {
+  logger.log('Shutting down workers…');
+  await Promise.allSettled(workers.map((w) => w.close()));
+  await Promise.allSettled(events.map((e) => e.close()));
+  await prisma.$disconnect();
+  process.exit(0);
+};
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
+
+registerCronJobs()
+  .then(() => logger.log('Cron schedule registered'))
+  .catch((e) => logger.error('Cron register failed', e));
+
+logger.log(`Worker up. Queues: ${QUEUES.map((q) => q.name).join(', ')}`);

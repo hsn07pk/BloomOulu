@@ -1,0 +1,29 @@
+{
+  "Home": {
+    "heroTitle": "Turning every plant into a story, a supporter, and a step toward saving Finnish flora.",
+    "heroLead": "Adopt a plant. Save a species. Welcome to the University of Oulu Botanical Garden.",
+    "featured": "Featured plants"
+  },
+  "Plant": {
+    "story": "Story",
+    "adoptCta": "Adopt this plant"
+  },
+  "Adopt": {
+    "title": "Adopt a plant",
+    "tier": "Tier",
+    "tier_seedling": "Seedling · €25",
+    "tier_rooted": "Rooted · €75",
+    "tier_vulnerable": "Vulnerable · €250",
+    "tier_endangered": "Endangered · €750",
+    "billing": "Billing interval",
+    "annual": "Annual",
+    "monthly": "Monthly",
+    "paymentMethod": "Payment method",
+    "card": "Card / bank",
+    "bankTransfer": "Bank transfer (RF reference)",
+    "donor": "Your details",
+    "email": "Email",
+    "name": "Name (optional)",
+    "submit": "Continue to payment"
+  }
+}

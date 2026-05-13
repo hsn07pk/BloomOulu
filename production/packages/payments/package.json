@@ -1,0 +1,30 @@
+{
+  "name": "@bloomoulu/payments",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./paytrail": "./src/paytrail/gateway.ts",
+    "./mobilepay": "./src/mobilepay/gateway.ts",
+    "./banktransfer": "./src/banktransfer/gateway.ts",
+    "./types": "./src/types.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^3.23.8",
+    "undici": "^7.1.1",
+    "@bloomoulu/db": "workspace:*"
+  },
+  "devDependencies": {
+    "vitest": "^2.1.5",
+    "typescript": "^5.6.3",
+    "@bloomoulu/config": "workspace:*"
+  }
+}

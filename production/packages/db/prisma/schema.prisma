@@ -1,0 +1,835 @@
+// BloomOulu — production schema.
+//
+// Conventions:
+//   * Primary keys: UUID v7 (sortable, no enumeration).
+//   * created_at / updated_at on every mutable row.
+//   * Money stored in *minor units* (cents) as Int. Never floats.
+//   * Soft-delete only where audit is mandatory (payments, receipts).
+//   * Enums are explicit; we never invent a string at the application layer.
+//
+// Run `prisma generate` after edits.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions", "fullTextSearch", "fullTextIndex"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  directUrl  = env("DIRECT_URL")
+  extensions = [pgcrypto, pg_trgm, unaccent, vector]
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Auth + users
+// ────────────────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  donor
+  curator
+  finance
+  admin
+}
+
+enum Locale {
+  en
+  fi
+  sv
+}
+
+model User {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email         String   @unique
+  emailVerified DateTime?
+  name          String?
+  image         String?
+  role          UserRole @default(donor)
+  locale        Locale   @default(fi)
+
+  // Donor-specific
+  homeRegion    String?  // ISO 3166-2 (e.g. "FI-10" North Ostrobothnia) — for I@H pairing
+  postalAddress Json?    // {line1, line2, postalCode, city, country} — needed for printed perks
+  preferences   Json     @default("{}") // a11y prefs, marketing opt-in
+
+  // Staff-specific
+  ouluUid       String?  @unique // OIDC subject id when signed via University SSO
+
+  accounts      Account[]
+  sessions      Session[]
+  adoptions     Adoption[]
+  giftsReceived Adoption[]    @relation("giftRecipient")
+  payments      Payment[]
+  receipts      Receipt[]
+  taxCertificates TaxCertificate[]
+  askMessages   AskMessage[]
+  dataExports   DataExportRequest[]
+  erasures      DataErasureRequest[]
+  auditLogs     AuditLog[]    @relation("auditActor")
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  deletedAt     DateTime?
+
+  @@index([locale])
+  @@index([role])
+  @@index([deletedAt])
+}
+
+// Auth.js v5 standard tables (kept minimal; we use email magic links + OIDC)
+model Account {
+  id                String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId            String  @db.Uuid
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionToken String   @unique
+  userId       String   @db.Uuid
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Plant catalogue
+// ────────────────────────────────────────────────────────────────────────────
+
+enum RedListStatus {
+  LC // Least Concern
+  NT // Near Threatened
+  VU // Vulnerable
+  EN // Endangered
+  CR // Critically Endangered
+  EX // Extinct
+  DD // Data Deficient
+  NA // Not Applicable (cultivated, exotic showcase, etc.)
+}
+
+enum BloomSeason {
+  spring
+  summer
+  autumn
+  winter
+  all
+}
+
+model Taxon {
+  id           String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  latinName    String  @unique
+  family       String
+  synonyms     String[] @default([])
+  author       String?
+  rank         String   @default("species")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  plants       Plant[]
+}
+
+model Plant {
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  slug            String        @unique // short stable URL slug, e.g. "kangasvuokko" / "puls-pat"
+  taxonId         String        @db.Uuid
+  taxon           Taxon         @relation(fields: [taxonId], references: [id])
+
+  // Common names
+  nameEn          String
+  nameFi          String
+  nameSv          String
+
+  // Status + story
+  redListStatus   RedListStatus
+  redListYear     Int           @default(2019)
+  origin          String
+  habitat         String
+  biome           String
+  bloomSeason     BloomSeason
+  bloomWindow     String?       // "April - May"
+  story           Json          // { en: "...", fi: "...", sv: "..." }
+  quickFacts      Json          // [{labelKey: "origin", value: "Häme esker"}, ...]
+
+  // Visual
+  primaryImageId  String?       @unique @db.Uuid
+  primaryImage    PlantImage?   @relation("primaryImage", fields: [primaryImageId], references: [id])
+  images          PlantImage[]  @relation("plantImages")
+
+  // Location in the garden (PostGIS geography point in WGS84)
+  // Use Prisma's raw type since prisma-client doesn't have a first-class
+  // PostGIS type — we get back a hex-encoded WKB.
+  microLat        Decimal?      @db.Decimal(10, 7)
+  microLng        Decimal?      @db.Decimal(10, 7)
+  gardenZone      String?       // "south esker bed", "romeo greenhouse pond", ...
+
+  // Funding state (denormalised counters; source of truth is Adoption rows)
+  adopterCount    Int           @default(0)
+  fundedCents     Int           @default(0)
+  targetCents     Int           @default(0)
+  status          String        @default("active") // active | retired | hidden
+
+  // Relations
+  accessions      Accession[]
+  adoptions       Adoption[]
+  narrations      AudioNarration[]
+  citations       PlantCitation[]
+  ragChunks       RagChunk[]
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([redListStatus])
+  @@index([bloomSeason])
+  @@index([status])
+  @@index([slug])
+}
+
+model PlantImage {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  plantId         String?  @db.Uuid
+  plant           Plant?   @relation("plantImages", fields: [plantId], references: [id], onDelete: Cascade)
+  primaryFor      Plant?   @relation("primaryImage")
+
+  url             String
+  altEn           String
+  altFi           String
+  altSv           String
+  attribution     String    // "© Photographer Name / Wikimedia, CC BY 4.0"
+  licenseSpdx     String    @default("CC-BY-4.0")
+  season          BloomSeason? // which seasonal variant
+  width           Int?
+  height          Int?
+
+  createdAt       DateTime  @default(now())
+}
+
+model Accession {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  accessionNumber String   @unique // "OULU-1998-0421"
+  plantId         String   @db.Uuid
+  plant           Plant    @relation(fields: [plantId], references: [id])
+
+  collectedAt     DateTime?
+  collectedBy     String?
+  sourcePopulation String?
+  propagationLineage String[] @default([])
+  notes           String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Citations (peer-reviewed and internal)
+// ────────────────────────────────────────────────────────────────────────────
+
+enum CitationSourceType {
+  paper
+  report
+  book
+  database
+  curator_note
+  phenology_log
+}
+
+model Citation {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sourceType      CitationSourceType
+  displayTitle    String
+  authors         String?
+  year            Int?
+  identifier      String?  // DOI, ISBN, internal report ID
+  url             String?
+  page            String?
+  notes           String?
+
+  plants          PlantCitation[]
+  askAnswers      AskAnswerCitation[]
+  ragChunks       RagChunk[]
+  ragDocuments    RagDocument[]
+
+  createdAt       DateTime @default(now())
+}
+
+model PlantCitation {
+  plantId    String   @db.Uuid
+  citationId String   @db.Uuid
+  context    String? // why this citation matters for this plant
+  plant      Plant    @relation(fields: [plantId], references: [id], onDelete: Cascade)
+  citation   Citation @relation(fields: [citationId], references: [id], onDelete: Cascade)
+
+  @@id([plantId, citationId])
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Audio narration
+// ────────────────────────────────────────────────────────────────────────────
+
+model AudioNarration {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  plantId     String   @db.Uuid
+  plant       Plant    @relation(fields: [plantId], references: [id], onDelete: Cascade)
+  locale      Locale
+  audioUrl    String   // S3 signed URL is generated on demand; this is the canonical key
+  durationMs  Int
+  transcript  String   @db.Text // full transcript for captions + a11y
+  captionsVtt String?  @db.Text // WebVTT for timed captions
+  voiceCredit String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([plantId, locale])
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Adoption + tiers
+// ────────────────────────────────────────────────────────────────────────────
+
+enum TierId {
+  seedling
+  rooted
+  vulnerable
+  endangered
+  corporate
+}
+
+enum BillingInterval {
+  one_time
+  annual
+  monthly
+}
+
+enum AdoptionIntent {
+  for_self
+  gift
+  memorial
+  class
+  corporate
+}
+
+enum AdoptionStatus {
+  pending       // checkout started, awaiting first payment confirmation
+  active
+  paused        // dunning failed payment
+  cancelled
+  expired
+}
+
+model Tier {
+  id              TierId  @id
+  name            String  // canonical English
+  nameFi          String
+  nameSv          String
+  annualPriceCents Int
+  monthlyPriceCents Int?
+  blurbEn         String
+  blurbFi         String
+  blurbSv         String
+  perks           Json    // [{labelKey: "i_at_h_postcard", localeFallbacks: {...}}]
+  // Visual
+  color           String
+  bg              String
+  sortOrder       Int     @default(0)
+
+  adoptions       Adoption[]
+}
+
+model Adoption {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  donorId         String   @db.Uuid
+  donor           User     @relation(fields: [donorId], references: [id])
+
+  plantId         String   @db.Uuid
+  plant           Plant    @relation(fields: [plantId], references: [id])
+
+  tierId          TierId
+  tier            Tier     @relation(fields: [tierId], references: [id])
+
+  status          AdoptionStatus  @default(pending)
+  intent          AdoptionIntent  @default(for_self)
+
+  // I@H — Internationalisation@Home (the donor's home region; we surface a plant
+  // from that region as the suggested adoption).
+  homeRegion      String?
+
+  // Personalisation
+  nickname        String?
+  dedication      String?   // up to 240 chars
+  showOnDonorWall Boolean   @default(true)
+  publicName      String?   // override of donor.name on donor wall
+
+  // Gift / memorial fields
+  giftRecipientId String?   @db.Uuid
+  giftRecipient   User?     @relation("giftRecipient", fields: [giftRecipientId], references: [id])
+  giftCodeId      String?   @unique @db.Uuid
+  giftCode        GiftCode? @relation(fields: [giftCodeId], references: [id])
+  memorialOf      String?
+
+  // Billing
+  recurring       Boolean   @default(true)
+  billingInterval BillingInterval @default(annual)
+  amountCents     Int                       // captured at creation time (tier price snapshot)
+  currency        String    @default("EUR")
+  startedAt       DateTime?
+  endsAt          DateTime?
+  cancelledAt     DateTime?
+  cancellationReason String?
+
+  // Plaque (Endangered tier and up)
+  plaque          Plaque?
+
+  payments        Payment[]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([donorId])
+  @@index([plantId])
+  @@index([status])
+  @@index([tierId])
+}
+
+model GiftCode {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code            String   @unique // short human-friendly e.g. "ROOTED-7Q3K-AB42"
+  redeemedAt      DateTime?
+  expiresAt       DateTime
+  adoption        Adoption?
+
+  createdAt       DateTime @default(now())
+}
+
+model Plaque {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  adoptionId      String   @unique @db.Uuid
+  adoption        Adoption @relation(fields: [adoptionId], references: [id], onDelete: Cascade)
+  engravedText    String
+  status          String   @default("requested") // requested | engraving | installed
+  installedAt     DateTime?
+  installedByUserId String? @db.Uuid
+  photoUrl        String?
+  notes           String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Payments
+// ────────────────────────────────────────────────────────────────────────────
+
+enum PaymentProvider {
+  paytrail
+  mobilepay
+  bank_transfer
+}
+
+enum PaymentStatus {
+  pending
+  succeeded
+  failed
+  refunded
+  cancelled
+  requires_action
+}
+
+model Payment {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  // Idempotent client-side identifier set at order creation, sent to the
+  // provider as their idempotency key. Survives retries and reconciliation.
+  orderId         String   @unique
+
+  adoptionId      String?  @db.Uuid
+  adoption        Adoption? @relation(fields: [adoptionId], references: [id])
+
+  donorId         String   @db.Uuid
+  donor           User     @relation(fields: [donorId], references: [id])
+
+  provider        PaymentProvider
+  providerCustomerId String? // stripe customer id / mobilepay agreement id
+  providerPaymentRef String?  // stripe payment_intent / mobilepay charge id
+  providerSessionId String?   // stripe checkout session id / mobilepay redirect id
+
+  amountCents     Int
+  currency        String   @default("EUR")
+  netCents        Int      // after fees + VAT split
+  vatRateBp       Int      @default(0) // in basis points; 0 if non-profit exempt
+  vatCents        Int      @default(0)
+  feeCents        Int      @default(0)
+  refundedCents   Int      @default(0)
+
+  status          PaymentStatus @default(pending)
+  failureCode     String?
+  failureMessage  String?
+
+  receivedAt      DateTime?
+  refundedAt      DateTime?
+
+  receipt         Receipt?
+  events          ProcessedEvent[]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([donorId])
+  @@index([adoptionId])
+  @@index([provider, providerPaymentRef])
+  @@index([status])
+}
+
+// Idempotency table — one row per inbound provider event we have processed.
+model ProcessedEvent {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  provider        PaymentProvider
+  providerEventId String
+  paymentId       String?  @db.Uuid
+  payment         Payment? @relation(fields: [paymentId], references: [id])
+  payloadDigest   String
+  processedAt     DateTime @default(now())
+
+  @@unique([provider, providerEventId])
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Receipts + tax
+// ────────────────────────────────────────────────────────────────────────────
+
+enum ReceiptKind {
+  donation       // standard adoption receipt
+  refund         // credit note
+  tax_certificate // annual roll-up for TVL §57 / new individual scheme
+}
+
+model Receipt {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  number          String   @unique // gapless year-prefixed counter, e.g. "BLO-2026-000123"
+  kind            ReceiptKind @default(donation)
+  donorId         String   @db.Uuid
+  donor           User     @relation(fields: [donorId], references: [id])
+  paymentId       String?  @unique @db.Uuid
+  payment         Payment? @relation(fields: [paymentId], references: [id])
+  amountCents     Int
+  currency        String   @default("EUR")
+  vatLineJson     Json     // [{lineKey, gross, net, vatRateBp, vatCents}, ...]
+  pdfUrl          String?  // signed S3 URL
+  issuedAt        DateTime @default(now())
+  pdfSha256       String?  // tamper-evidence
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model TaxCertificate {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  donorId         String   @db.Uuid
+  donor           User     @relation(fields: [donorId], references: [id])
+  taxYear         Int
+  totalCents      Int
+  scheme          String   // "TVL §57 corporate" | "TVL §98a individual" (when launched)
+  pdfUrl          String?
+  issuedAt        DateTime @default(now())
+
+  @@unique([donorId, taxYear])
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// AskTheGarden — RAG corpus + Q/A log
+// ────────────────────────────────────────────────────────────────────────────
+
+model RagDocument {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title           String
+  sourceCitationId String? @db.Uuid
+  sourceCitation  Citation? @relation(fields: [sourceCitationId], references: [id])
+  sourceUrl       String?
+  locale          Locale   @default(en)
+  body            String   @db.Text
+  bodyHash        String   // sha256 of body — change detection for re-ingest
+  isPublished     Boolean  @default(false)
+
+  chunks          RagChunk[]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([title, locale])
+}
+
+// Vector embeddings stored as pgvector(1024). Prisma can't (yet) generate the
+// vector type directly; we use Unsupported and lift queries to raw SQL in the
+// repository layer.
+model RagChunk {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  documentId      String   @db.Uuid
+  document        RagDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  chunkIndex      Int
+  text            String   @db.Text
+  tokenStart      Int
+  tokenEnd        Int
+  locale          Locale
+  embedding       Unsupported("vector(1024)")?
+  // Optional cross-links so a retrieval result can ground straight to a plant
+  plantId         String?  @db.Uuid
+  plant           Plant?   @relation(fields: [plantId], references: [id])
+  citationId      String?  @db.Uuid
+  citation        Citation? @relation(fields: [citationId], references: [id])
+
+  createdAt       DateTime @default(now())
+
+  @@unique([documentId, chunkIndex])
+  @@index([locale])
+}
+
+enum AskReaction {
+  helpful
+  off_base
+  escalated
+}
+
+model AskMessage {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String?  @db.Uuid
+  user            User?    @relation(fields: [userId], references: [id])
+  locale          Locale
+  text            String   @db.Text
+  intent          String   @default("on_topic") // on_topic | off_topic | harmful
+  createdAt       DateTime @default(now())
+  answer          AskAnswer?
+}
+
+model AskAnswer {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  messageId       String   @unique @db.Uuid
+  message         AskMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  text            String   @db.Text
+  modelUsed       String
+  promptTokens    Int
+  completionTokens Int
+  latencyMs       Int
+  reaction        AskReaction?
+  escalatedAt     DateTime?
+  citations       AskAnswerCitation[]
+  retrievedChunkIds String[] @default([])
+
+  createdAt       DateTime @default(now())
+}
+
+model AskAnswerCitation {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  answerId        String   @db.Uuid
+  answer          AskAnswer @relation(fields: [answerId], references: [id], onDelete: Cascade)
+  citationId      String   @db.Uuid
+  citation        Citation  @relation(fields: [citationId], references: [id])
+  marker          String   // e.g. "[c1]"
+  rank            Int
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Kiosk fleet
+// ────────────────────────────────────────────────────────────────────────────
+
+model KioskDevice {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  label           String
+  location        String   // romeo_lobby | julia_lobby | ticket_hall | events
+  pairingCode     String?  @unique // human-friendly, single-use; cleared after pairing
+  pairingExpiresAt DateTime?
+  pairingTokenHash String? // bcrypt hash of the long-lived device JWT signing seed
+  status          String   @default("unpaired") // unpaired | paired | offline
+  lastSeen        DateTime?
+  buildSha        String?
+  notes           String?
+  events          KioskEvent[]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model KioskEvent {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  deviceId        String   @db.Uuid
+  device          KioskDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  kind            String   // heartbeat | crash | reboot | qr_scan | error
+  payload         Json     @default("{}")
+  occurredAt      DateTime @default(now())
+
+  @@index([deviceId, occurredAt])
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Audit + GDPR
+// ────────────────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  actorUserId     String?  @db.Uuid
+  actor           User?    @relation("auditActor", fields: [actorUserId], references: [id])
+  action          String   // e.g. "adoption.create", "payment.refund"
+  resource        String   // e.g. "Adoption/8f3e..."
+  before          Json?
+  after           Json?
+  ip              String?
+  userAgent       String?
+  occurredAt      DateTime @default(now())
+
+  @@index([actorUserId, occurredAt])
+  @@index([resource])
+}
+
+enum GdprRequestStatus {
+  pending
+  verified
+  executing
+  completed
+  rejected
+}
+
+model DataExportRequest {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String   @db.Uuid
+  user            User     @relation(fields: [userId], references: [id])
+  status          GdprRequestStatus @default(pending)
+  exportUrl       String?  // signed link expiring in 24h
+  createdAt       DateTime @default(now())
+  completedAt     DateTime?
+}
+
+model DataErasureRequest {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String   @db.Uuid
+  user            User     @relation(fields: [userId], references: [id])
+  status          GdprRequestStatus @default(pending)
+  // Whether to pseudonymise (legal hold on financial records) vs full delete.
+  approach        String   @default("pseudonymise")
+  reason          String?
+  decidedByUserId String?  @db.Uuid
+  createdAt       DateTime @default(now())
+  completedAt     DateTime?
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Admin-editable runtime config (settings, translations, content, flags, emails)
+// ────────────────────────────────────────────────────────────────────────────
+
+/// Key/value typed settings — every business decision admins can flip.
+/// Examples of `key`:
+///   "payments.bank_transfer" | "payments.paytrail" | "payments.mobilepay"
+///   "bankTransfer.iban" | "bankTransfer.bic" | "bankTransfer.beneficiaryName"
+///   "vat.donationRateBp" | "vat.perkRateBp"
+///   "features.rag" | "features.kiosk" | "features.corporateTier"
+///   "receipts.prefix" | "receipts.yearReset"
+///   "gdpr.auditRetentionDays" | "gdpr.pseudonymiseAfterDays"
+///   "defaultAmountCents" | "adoptionFlow"
+model SystemSetting {
+  key             String   @id
+  value           Json
+  description     String?  // human-readable hint shown in admin UI
+  category        String?  // grouping for admin nav: "payments" | "vat" | ...
+  type            String?  // "boolean" | "number" | "string" | "json" | "iban"
+  updatedByUserId String?  @db.Uuid
+  updatedAt       DateTime @updatedAt @default(now())
+}
+
+/// Every public-facing UI string in FI / SV / EN.
+/// The web app reads via the i18n package at build time; runtime overrides
+/// come from this table. Admins edit in a Moodle-style table editor.
+model Translation {
+  i18nKey   String   @id    // e.g. "Adopt.tier_seedling" or "Receipts.thanks"
+  en        String
+  fi        String
+  sv        String
+  context   String?         // shown to translators as a hint
+  status    String   @default("active") // active | needs_review | deprecated
+  updatedAt DateTime @updatedAt @default(now())
+
+  @@index([status])
+}
+
+/// CMS-style content blocks composing the homepage, "where your money goes" modal, etc.
+model ContentBlock {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  slug        String   @unique         // "home.hero" | "policy.fundsFlow" | ...
+  kind        String                    // "hero" | "callout" | "modal" | "policy" | "raw_md"
+  bodyEn      String   @db.Text
+  bodyFi      String   @db.Text
+  bodySv      String   @db.Text
+  imageUrl    String?
+  ctaText     Json?    // { en: "Adopt", fi: "Adoptoi", sv: "Adoptera" }
+  ctaHref     String?
+  isPublished Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  updatedAt   DateTime @updatedAt @default(now())
+}
+
+/// Email templates — MJML body + per-locale subject/preheader.
+model EmailTemplate {
+  slug        String   @id          // "magic-link" | "receipt" | "gift-code" | ...
+  subjectEn   String
+  subjectFi   String
+  subjectSv   String
+  preheaderEn String?
+  preheaderFi String?
+  preheaderSv String?
+  mjmlEn      String   @db.Text
+  mjmlFi      String   @db.Text
+  mjmlSv      String   @db.Text
+  isActive    Boolean  @default(true)
+  updatedAt   DateTime @updatedAt @default(now())
+}
+
+/// Boolean feature flags — quick toggles without diving into SystemSetting.
+model FeatureFlag {
+  key         String   @id            // "rag" | "kiosk" | "corporateTier" | ...
+  enabled     Boolean  @default(false)
+  description String?
+  updatedAt   DateTime @updatedAt @default(now())
+}
+
+/// VAT rules — what rate applies to which line type. Admin-editable.
+model VatRule {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  lineKind    String   @unique  // "donation" | "perk" | "merch" | "event"
+  rateBp      Int                // 0 | 1400 | 2400 (Finnish rates Jan 2026)
+  description String?
+  updatedAt   DateTime @updatedAt @default(now())
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Internal jobs queue mirror (BullMQ writes here for observability)
+// ────────────────────────────────────────────────────────────────────────────
+
+model JobRun {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  queueName       String
+  jobName         String
+  payload         Json
+  status          String   // queued | running | completed | failed
+  attempts        Int      @default(0)
+  errorMessage    String?
+  startedAt       DateTime?
+  finishedAt      DateTime?
+  createdAt       DateTime @default(now())
+
+  @@index([queueName, status])
+}

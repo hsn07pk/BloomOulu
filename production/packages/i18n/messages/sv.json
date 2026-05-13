@@ -1,0 +1,29 @@
+{
+  "Home": {
+    "heroTitle": "Varje växt en berättelse, en stödjare, ett steg för att rädda den finska floran.",
+    "heroLead": "Adoptera en växt. Rädda en art. Välkommen till Uleåborgs universitets botaniska trädgård.",
+    "featured": "Månadens växter"
+  },
+  "Plant": {
+    "story": "Berättelse",
+    "adoptCta": "Adoptera den här växten"
+  },
+  "Adopt": {
+    "title": "Adoptera en växt",
+    "tier": "Nivå",
+    "tier_seedling": "Frö · 25 €",
+    "tier_rooted": "Rotad · 75 €",
+    "tier_vulnerable": "Sårbar · 250 €",
+    "tier_endangered": "Starkt hotad · 750 €",
+    "billing": "Faktureringsintervall",
+    "annual": "Årligen",
+    "monthly": "Månadsvis",
+    "paymentMethod": "Betalningssätt",
+    "card": "Kort / bank",
+    "bankTransfer": "Bankgiro (RF-referens)",
+    "donor": "Dina uppgifter",
+    "email": "E-post",
+    "name": "Namn (valfritt)",
+    "submit": "Fortsätt till betalning"
+  }
+}

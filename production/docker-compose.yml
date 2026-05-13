@@ -1,0 +1,325 @@
+# ──────────────────────────────────────────────────────────────────────────
+# BloomOulu — full self-hosted production stack.
+#
+#   docker compose up -d
+#
+# Starts the entire platform on a single host. Tested on Hetzner CX22
+# (4 vCPU / 8 GB / 80 GB SSD, ~€5/month). Ollama + LGTM each take ~1.5 GB.
+# For dev on a laptop, use `docker compose -f docker-compose.dev.yml up`.
+# ──────────────────────────────────────────────────────────────────────────
+
+name: bloomoulu
+
+x-restart-policy: &restart-policy
+  restart: unless-stopped
+
+x-default-healthcheck: &default-healthcheck
+  interval: 30s
+  timeout: 5s
+  retries: 3
+  start_period: 30s
+
+services:
+  # ── Reverse proxy + TLS ────────────────────────────────────────────────
+  caddy:
+    image: caddy:2.8-alpine
+    <<: *restart-policy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp" # HTTP/3
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+      - api
+      - admin
+      - kiosk
+    networks: [edge, internal]
+
+  # ── Application services ───────────────────────────────────────────────
+  web:
+    build:
+      context: .
+      dockerfile: infra/docker/web.Dockerfile
+    <<: *restart-policy
+    env_file: .env
+    environment:
+      NEXT_PUBLIC_API_URL: https://api.bloomoulu.fi
+      NEXT_PUBLIC_WEB_URL: https://bloomoulu.fi
+    healthcheck:
+      <<: *default-healthcheck
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/api/healthz"]
+    networks: [internal]
+
+  api:
+    build:
+      context: .
+      dockerfile: infra/docker/api.Dockerfile
+    <<: *restart-policy
+    env_file: .env
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+      minio:    { condition: service_started }
+      ollama:   { condition: service_started }
+    healthcheck:
+      <<: *default-healthcheck
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:4000/healthz"]
+    networks: [internal]
+
+  api-worker:
+    build:
+      context: .
+      dockerfile: infra/docker/api.Dockerfile
+    command: ["node", "dist/worker.js"]
+    <<: *restart-policy
+    env_file: .env
+    environment:
+      JOBS_MODE: "true"
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+    networks: [internal]
+
+  admin:
+    build:
+      context: .
+      dockerfile: infra/docker/admin.Dockerfile
+    <<: *restart-policy
+    env_file: .env
+    depends_on:
+      postgres: { condition: service_healthy }
+    healthcheck:
+      <<: *default-healthcheck
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:4100/admin/health"]
+    networks: [internal]
+
+  kiosk:
+    build:
+      context: .
+      dockerfile: infra/docker/kiosk.Dockerfile
+    <<: *restart-policy
+    env_file: .env
+    networks: [internal]
+
+  # ── Data plane ─────────────────────────────────────────────────────────
+  postgres:
+    image: pgvector/pgvector:pg16   # Postgres 16 with pgvector preinstalled
+    <<: *restart-policy
+    env_file: .env
+    environment:
+      POSTGRES_USER:     ${POSTGRES_USER:-bloomoulu}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bloomoulu}
+      POSTGRES_DB:       ${POSTGRES_DB:-bloomoulu}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
+    healthcheck:
+      <<: *default-healthcheck
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+    networks: [internal]
+
+  redis:
+    image: redis:7-alpine
+    <<: *restart-policy
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "allkeys-lru"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      <<: *default-healthcheck
+      test: ["CMD", "redis-cli", "ping"]
+    networks: [internal]
+
+  minio:
+    image: minio/minio:latest
+    <<: *restart-policy
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER:     ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      <<: *default-healthcheck
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+    networks: [internal]
+
+  # ── LLM / embeddings ───────────────────────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    <<: *restart-policy
+    volumes:
+      - ollama_data:/root/.ollama
+    # Optional GPU: uncomment if NVIDIA Container Toolkit is installed
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - capabilities: ["gpu"]
+    networks: [internal]
+
+  ollama-bootstrap:
+    image: ollama/ollama:latest
+    profiles: ["bootstrap"]
+    entrypoint: ["/bin/sh", "-c"]
+    command: |
+      "set -e;
+       echo 'Pulling models — this is a one-time download (~5 GB total).';
+       ollama --host http://ollama:11434 pull llama3.1:8b-instruct-q5_K_M;
+       ollama --host http://ollama:11434 pull nomic-embed-text:v1.5;
+       echo 'Done.'"
+    depends_on:
+      - ollama
+    networks: [internal]
+
+  reranker:
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.5
+    <<: *restart-policy
+    command: ["--model-id", "BAAI/bge-reranker-v2-m3", "--port", "8080"]
+    volumes:
+      - reranker_data:/data
+    environment:
+      HF_HUB_DISABLE_TELEMETRY: "1"
+    networks: [internal]
+
+  # ── Email ──────────────────────────────────────────────────────────────
+  postal:
+    image: ghcr.io/postalserver/postal:latest
+    <<: *restart-policy
+    env_file: .env
+    networks: [internal, edge]
+
+  # ── Observability stack (LGTM + GlitchTip + ntfy) ─────────────────────
+  prometheus:
+    image: prom/prometheus:latest
+    <<: *restart-policy
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks: [internal]
+
+  grafana:
+    image: grafana/grafana:latest
+    <<: *restart-policy
+    env_file: .env
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-bloomoulu}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_INSTALL_PLUGINS: ""
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - prometheus
+      - loki
+      - tempo
+    networks: [internal, edge]
+
+  loki:
+    image: grafana/loki:latest
+    <<: *restart-policy
+    volumes:
+      - ./infra/loki/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki_data:/loki
+    networks: [internal]
+
+  promtail:
+    image: grafana/promtail:latest
+    <<: *restart-policy
+    volumes:
+      - /var/log:/var/log:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - ./infra/promtail/promtail-config.yml:/etc/promtail/config.yml:ro
+    command: -config.file=/etc/promtail/config.yml
+    networks: [internal]
+
+  tempo:
+    image: grafana/tempo:latest
+    <<: *restart-policy
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - ./infra/tempo/tempo-config.yml:/etc/tempo.yaml:ro
+      - tempo_data:/var/tempo
+    networks: [internal]
+
+  glitchtip:
+    image: glitchtip/glitchtip:latest
+    <<: *restart-policy
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-bloomoulu}:${POSTGRES_PASSWORD:-bloomoulu}@postgres:5432/glitchtip
+      SECRET_KEY: ${GLITCHTIP_SECRET_KEY:-replace-me-with-openssl-rand}
+      PORT: "8000"
+      EMAIL_URL: smtp://postal:25
+      DEFAULT_FROM_EMAIL: noreply@bloomoulu.fi
+    depends_on:
+      postgres: { condition: service_healthy }
+    networks: [internal, edge]
+
+  glitchtip-worker:
+    image: glitchtip/glitchtip:latest
+    <<: *restart-policy
+    command: ["./bin/run-celery-with-beat.sh"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-bloomoulu}:${POSTGRES_PASSWORD:-bloomoulu}@postgres:5432/glitchtip
+      SECRET_KEY: ${GLITCHTIP_SECRET_KEY:-replace-me-with-openssl-rand}
+    depends_on:
+      postgres: { condition: service_healthy }
+    networks: [internal]
+
+  ntfy:
+    image: binwiederhier/ntfy:latest
+    <<: *restart-policy
+    command: ["serve"]
+    environment:
+      NTFY_BASE_URL: https://ntfy.bloomoulu.fi
+      NTFY_BEHIND_PROXY: "true"
+      NTFY_AUTH_FILE: /var/lib/ntfy/user.db
+      NTFY_AUTH_DEFAULT_ACCESS: deny-all
+    volumes:
+      - ntfy_data:/var/lib/ntfy
+    networks: [internal, edge]
+
+  # ── Backups (restic) ───────────────────────────────────────────────────
+  restic:
+    image: restic/restic:latest
+    profiles: ["backup"]
+    env_file: .env
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["/etc/restic/run-backup.sh"]
+    volumes:
+      - ./infra/restic/run-backup.sh:/etc/restic/run-backup.sh:ro
+      - postgres_data:/srcdata/postgres:ro
+      - minio_data:/srcdata/minio:ro
+      - restic_cache:/cache
+    depends_on:
+      - postgres
+      - minio
+    networks: [internal]
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+  ollama_data:
+  reranker_data:
+  prometheus_data:
+  grafana_data:
+  loki_data:
+  tempo_data:
+  ntfy_data:
+  caddy_data:
+  caddy_config:
+  restic_cache:
+
+networks:
+  edge:
+    driver: bridge
+  internal:
+    driver: bridge
+    internal: false

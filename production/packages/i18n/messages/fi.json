@@ -1,0 +1,29 @@
+{
+  "Home": {
+    "heroTitle": "Jokaisesta kasvista tarina, tukija ja askel suomalaisen lajiston suojelemiseksi.",
+    "heroLead": "Adoptoi kasvi. Pelasta laji. Tervetuloa Oulun yliopiston kasvitieteelliseen puutarhaan.",
+    "featured": "Kuukauden kasvit"
+  },
+  "Plant": {
+    "story": "Tarina",
+    "adoptCta": "Adoptoi tämä kasvi"
+  },
+  "Adopt": {
+    "title": "Adoptoi kasvi",
+    "tier": "Tukitasot",
+    "tier_seedling": "Siemen · 25 €",
+    "tier_rooted": "Juurtunut · 75 €",
+    "tier_vulnerable": "Vaarantunut · 250 €",
+    "tier_endangered": "Erittäin uhanalainen · 750 €",
+    "billing": "Laskutusväli",
+    "annual": "Vuosittain",
+    "monthly": "Kuukausittain",
+    "paymentMethod": "Maksutapa",
+    "card": "Kortti / pankki",
+    "bankTransfer": "Tilisiirto (RF-viite)",
+    "donor": "Tiedot",
+    "email": "Sähköposti",
+    "name": "Nimi (vapaaehtoinen)",
+    "submit": "Jatka maksuun"
+  }
+}
