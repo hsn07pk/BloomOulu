@@ -18,6 +18,7 @@ import { GdprModule } from './modules/gdpr/gdpr.module.js';
 import { AuditModule } from './modules/audit/audit.module.js';
 import { SettingsModule } from './modules/settings/settings.module.js';
 import { ReconciliationModule } from './modules/reconciliation/reconciliation.module.js';
+import { ContentModule } from './modules/content/content.module.js';
 
 @Module({
   imports: [
@@ -50,6 +51,7 @@ import { ReconciliationModule } from './modules/reconciliation/reconciliation.mo
     KioskModule,
     GdprModule,
     ReconciliationModule,
+    ContentModule,
   ],
   controllers: [HealthController],
 })

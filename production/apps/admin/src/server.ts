@@ -28,9 +28,9 @@ import bcrypt from 'bcryptjs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const emailQueue = new Queue('email', {
-  connection: { url: process.env.REDIS_URL ?? 'redis://localhost:6379' },
-});
+const queueConn = { connection: { url: process.env.REDIS_URL ?? 'redis://localhost:6379' } };
+const emailQueue = new Queue('email', queueConn);
+const eraseQueue = new Queue('gdpr-erase', queueConn);
 
 AdminJS.registerAdapter({ Database, Resource });
 
@@ -216,7 +216,71 @@ const adminConfig = new AdminJS({
       },
     },
     { resource: { model: getModelByName('DataExportRequest'), client: prisma }, options: { navigation: { name: 'Audit & GDPR' } } },
-    { resource: { model: getModelByName('DataErasureRequest'), client: prisma }, options: { navigation: { name: 'Audit & GDPR' } } },
+    {
+      resource: { model: getModelByName('DataErasureRequest'), client: prisma },
+      options: {
+        navigation: { name: 'Audit & GDPR' },
+        listProperties: ['createdAt', 'userId', 'status', 'reason', 'completedAt'],
+        sort: { sortBy: 'createdAt', direction: 'desc' as const },
+        actions: {
+          approveAndExecute: {
+            actionType: 'record',
+            label: 'Approve & execute',
+            icon: 'Trash2',
+            isAccessible: ({ currentAdmin, record }: { currentAdmin?: { role?: string }; record?: any }) =>
+              ['admin'].includes(currentAdmin?.role as string) && record?.params?.status === 'pending',
+            handler: async (_req: any, _res: any, ctx: any) => {
+              const id = ctx.record!.params['id'];
+              const adminId = ctx.currentAdmin?.id;
+              await prisma.$transaction(async (tx) => {
+                await tx.dataErasureRequest.update({
+                  where: { id },
+                  data: { status: 'verified', decidedByUserId: adminId ?? null },
+                });
+                await tx.auditLog.create({
+                  data: {
+                    actorUserId: adminId ?? null,
+                    action: 'gdpr.erase.approved',
+                    resource: `DataErasureRequest/${id}`,
+                  },
+                });
+              });
+              await eraseQueue.add(
+                'erase',
+                { requestId: id },
+                { attempts: 5, backoff: { type: 'exponential', delay: 5_000 } },
+              );
+              return { record: ctx.record!.toJSON(ctx.currentAdmin) };
+            },
+          },
+          reject: {
+            actionType: 'record',
+            label: 'Reject (legal hold)',
+            icon: 'X',
+            isAccessible: ({ currentAdmin, record }: { currentAdmin?: { role?: string }; record?: any }) =>
+              ['admin'].includes(currentAdmin?.role as string) && record?.params?.status === 'pending',
+            handler: async (_req: any, _res: any, ctx: any) => {
+              const id = ctx.record!.params['id'];
+              const adminId = ctx.currentAdmin?.id;
+              await prisma.$transaction(async (tx) => {
+                await tx.dataErasureRequest.update({
+                  where: { id },
+                  data: { status: 'rejected', decidedByUserId: adminId ?? null, completedAt: new Date() },
+                });
+                await tx.auditLog.create({
+                  data: {
+                    actorUserId: adminId ?? null,
+                    action: 'gdpr.erase.rejected',
+                    resource: `DataErasureRequest/${id}`,
+                  },
+                });
+              });
+              return { record: ctx.record!.toJSON(ctx.currentAdmin) };
+            },
+          },
+        },
+      },
+    },
   ],
   pages: {
     settings: {
