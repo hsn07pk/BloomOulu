@@ -7,7 +7,10 @@
 :root {
   --ink: #18271E;
   --ink-soft: #2C3E33;
-  --ink-mute: #5C6E60;
+  /* --ink-mute darkened from the prototype's #5C6E60 to #4F6155 so 13px
+   * `.muted` text meets WCAG-AA 4.5:1 on the sage-pale / amber-soft /
+   * rust-soft tier-card backgrounds. */
+  --ink-mute: #4F6155;
   --forest-deep: #1F3C2D;
   --forest: #2D5440;
   --forest-mid: #3D6A52;
@@ -19,7 +22,11 @@
   --teal-pale: #D6EBE3;
   --amber: #C9A14A;
   --amber-soft: #F1E6CB;
+  /* --rust is calibrated for dark / cream-on-rust pills (pill-on-dark,
+   * hero strip). --rust-on-light is a darker tone used by small / .tiny
+   * text on cream so 10px copy meets WCAG AA 4.5:1. */
   --rust: #B25C3A;
+  --rust-on-light: #8E4124;
   --rust-soft: #F0DCD0;
   --cream: #FAF7EE;
   --cream-deep: #F2EDE0;
@@ -95,6 +102,12 @@ a { color: var(--forest); text-underline-offset: 3px; }
   display: inline-flex; align-items: center; gap: 12px;
 }
 .eyebrow::before { content: ''; display: inline-block; width: 24px; height: 1px; background: var(--forest); }
+.eyebrow--rust { color: var(--rust-on-light); }
+.eyebrow--rust::before { background: var(--rust-on-light); }
+
+/* When using .tiny in colour=var(--rust) on cream, switch to the WCAG-AA
+   variant. Inline style="color:var(--rust)" usage still falls back to base
+   --rust; pages that need the on-light variant should use `style="color:var(--rust-on-light)"` instead. */
 
 .tiny { font-size: 10px; letter-spacing: .2em; text-transform: uppercase; font-family: var(--f-mono); color: var(--ink-mute); font-weight: 500; }
 .label { font-size: 10.5px; letter-spacing: .18em; text-transform: uppercase; font-family: var(--f-mono); color: var(--ink-mute); font-weight: 500; }
@@ -105,8 +118,8 @@ a { color: var(--forest); text-underline-offset: 3px; }
 .pill-on-dark { background: rgba(250, 247, 238, 0.12); color: var(--cream); border: 1px solid rgba(250,247,238,0.18); }
 
 .badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 3px; font-size: 10px; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; font-family: var(--f-mono); white-space: nowrap; }
-.badge-cr, .badge-en { background: var(--rust-soft); color: var(--rust); }
-.badge-vu { background: var(--amber-soft); color: #876422; }
+.badge-cr, .badge-en { background: var(--rust-soft); color: var(--rust-on-light); } /* AA on rust-soft at 10px */
+.badge-vu { background: var(--amber-soft); color: #6B4F1B; } /* darkened for 4.5:1 at 10px on amber-soft */
 .badge-nt { background: var(--sage-pale); color: var(--forest); }
 .badge-lc { background: var(--teal-pale); color: var(--forest-mid); }
 .badge-na { background: var(--cream-deep); color: var(--ink-mute); }
@@ -116,8 +129,11 @@ a { color: var(--forest); text-underline-offset: 3px; }
 .btn-primary:hover { background: #142B20; transform: translateY(-1px); box-shadow: var(--shadow-mid); }
 .btn-secondary { background: var(--paper); color: var(--ink); border-color: var(--line-strong); }
 .btn-secondary:hover { border-color: var(--forest); }
-.btn-rust { background: var(--rust); color: var(--cream); }
-.btn-rust:hover { background: #934727; }
+/* Button uses the darker --rust-on-light so cream-on-rust meets WCAG AA
+   contrast (4.5:1 at 15px). The lighter --rust stays available for
+   decorative use on dark backgrounds (pill-on-dark). */
+.btn-rust { background: var(--rust-on-light); color: var(--cream); }
+.btn-rust:hover { background: #6E2F18; }
 .btn-grad { background: var(--grad-logo); color: var(--cream); }
 .btn-grad:hover { transform: translateY(-1px); box-shadow: var(--shadow-mid); }
 .btn-ghost { color: var(--ink-soft); }
@@ -148,7 +164,7 @@ a { color: var(--forest); text-underline-offset: 3px; }
 .nav a.active { background: var(--forest-deep); color: var(--cream); }
 .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
 .lang-pill { display: flex; gap: 2px; padding: 3px; border-radius: 999px; background: rgba(45, 84, 64, 0.08); font-size: 11px; font-weight: 500; font-family: var(--f-mono); }
-.lang-pill a { padding: 4px 9px; border-radius: 999px; color: var(--ink-mute); text-decoration: none; }
+.lang-pill a { padding: 4px 9px; border-radius: 999px; color: var(--ink-soft); text-decoration: none; }
 .lang-pill a.active { background: var(--cream); color: var(--forest-deep); box-shadow: var(--shadow-soft); }
 
 .veining { background-image: repeating-linear-gradient(115deg, transparent, transparent 80px, rgba(168,192,96,.04) 80px, rgba(168,192,96,.04) 81px); }

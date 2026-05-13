@@ -251,7 +251,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
           }}
         >
           <div>
-            <div className="tiny" style={{ color: 'var(--rust)' }}>
+            <div className="tiny" style={{ color: 'var(--rust-on-light)' }}>
               {locale === 'fi' ? 'Elävä kokoelma' : 'The living collection'}
             </div>
             <h2 style={{ fontSize: 52, marginTop: 8 }}>
@@ -387,7 +387,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
           }}
         >
           <div>
-            <div className="tiny" style={{ color: 'var(--rust)' }}>
+            <div className="tiny" style={{ color: 'var(--rust-on-light)' }}>
               {locale === 'fi' ? 'Suojelutarina' : 'The conservation story'}
             </div>
             <h2 style={{ fontSize: 48, marginTop: 12 }}>
@@ -458,7 +458,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
 
       {/* ── JOURNEY ──────────────────────────────────────────────── */}
       <section className="container" style={{ paddingTop: 64, paddingBottom: 80 }}>
-        <div className="tiny" style={{ color: 'var(--rust)' }}>
+        <div className="tiny" style={{ color: 'var(--rust-on-light)' }}>
           {t('howItWorks')}
         </div>
         <h2 style={{ fontSize: 48, marginTop: 12, marginBottom: 40 }}>
@@ -477,7 +477,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
             ] as const
           ).map(([num, icon, title, body]) => (
             <div key={num} className="card card-pad">
-              <div className="tiny" style={{ color: 'var(--rust)' }}>{num}</div>
+              <div className="tiny" style={{ color: 'var(--rust-on-light)' }}>{num}</div>
               <div
                 style={{
                   width: 44,

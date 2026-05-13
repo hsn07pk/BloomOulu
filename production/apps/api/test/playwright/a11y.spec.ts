@@ -10,11 +10,17 @@ interface AxeViolation {
 }
 
 const PAGES = [
-  '/',
   '/fi',
+  '/en',
+  '/sv',
   '/fi/plants/pulsatilla-patens',
+  '/fi/plants/pulsatilla-patens?mode=kid',
+  '/fi/plants/pulsatilla-patens?mode=school',
   '/fi/adopt?plant=pulsatilla-patens',
   '/fi/ask',
+  '/fi/privacy',
+  '/fi/terms',
+  '/fi/accessibility-statement',
 ];
 
 for (const path of PAGES) {

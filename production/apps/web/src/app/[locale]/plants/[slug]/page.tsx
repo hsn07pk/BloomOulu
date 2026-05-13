@@ -245,7 +245,7 @@ export default async function PlantPage({
               className="card card-pad"
               style={{ marginTop: 32, background: 'var(--amber-soft)' }}
             >
-              <div className="tiny" style={{ color: 'var(--rust)' }}>
+              <div className="tiny" style={{ color: 'var(--rust-on-light)' }}>
                 {locale === 'fi' ? 'Tarrakirja' : 'Sticker book'}
               </div>
               <p style={{ marginTop: 8, fontFamily: 'var(--f-display)', fontSize: 18 }}>

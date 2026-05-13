@@ -19,6 +19,7 @@ import { AuditModule } from './modules/audit/audit.module.js';
 import { SettingsModule } from './modules/settings/settings.module.js';
 import { ReconciliationModule } from './modules/reconciliation/reconciliation.module.js';
 import { ContentModule } from './modules/content/content.module.js';
+import { TiersModule } from './modules/tiers/tiers.module.js';
 
 @Module({
   imports: [
@@ -52,6 +53,7 @@ import { ContentModule } from './modules/content/content.module.js';
     GdprModule,
     ReconciliationModule,
     ContentModule,
+    TiersModule,
   ],
   controllers: [HealthController],
 })
