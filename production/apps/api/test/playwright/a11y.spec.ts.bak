@@ -21,8 +21,6 @@ const PAGES = [
   '/fi/privacy',
   '/fi/terms',
   '/fi/accessibility-statement',
-  '/fi/sign-in',
-  '/fi/sign-in/sent',
 ];
 
 for (const path of PAGES) {

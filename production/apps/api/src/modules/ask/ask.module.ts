@@ -51,11 +51,29 @@ class AskController {
     @Req() req: FastifyRequest,
     @Res() res: FastifyReply,
   ) {
+    // We bypass Fastify's normal reply path (writeHead directly so the
+    // headers flush before the first SSE event). That bypass also skips
+    // the CORS plugin's injection, so we re-add the headers manually here.
+    const origin = (req.headers.origin as string | undefined) ?? '';
+    const allowedOrigins = new Set([
+      process.env.NEXT_PUBLIC_WEB_URL ?? 'http://localhost:3000',
+      'http://localhost:3000',
+      'http://localhost:3100',
+    ]);
+    const corsOrigin = allowedOrigins.has(origin) ? origin : '';
+
     res.raw.writeHead(200, {
       'content-type': 'text/event-stream; charset=utf-8',
       'cache-control': 'no-cache, no-transform',
       'x-accel-buffering': 'no',
       connection: 'keep-alive',
+      ...(corsOrigin
+        ? {
+            'access-control-allow-origin': corsOrigin,
+            'access-control-allow-credentials': 'true',
+            vary: 'Origin',
+          }
+        : {}),
     });
     const send = (event: string, data: unknown) => {
       res.raw.write(`event: ${event}\n`);
