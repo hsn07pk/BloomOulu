@@ -19,15 +19,27 @@
  * destructive action prompts for confirmation; locale switcher in the header.
  */
 import Fastify from 'fastify';
-import AdminJS from 'adminjs';
+import AdminJS, { ComponentLoader } from 'adminjs';
 import AdminJSFastify from '@adminjs/fastify';
 import { Database, Resource, getModelByName } from '@adminjs/prisma';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 AdminJS.registerAdapter({ Database, Resource });
 
 const prisma = new PrismaClient();
+
+// AdminJS 7 replaced the static `AdminJS.bundle()` helper with an instance-
+// based ComponentLoader. Custom React panels register with the loader; the
+// returned token is passed as `component` to page/action definitions.
+const here = path.dirname(fileURLToPath(import.meta.url));
+const componentLoader = new ComponentLoader();
+const SettingsPage = componentLoader.add('Settings', path.join(here, 'pages/Settings'));
+const TranslationsPage = componentLoader.add('Translations', path.join(here, 'pages/Translations'));
+const BackupsPage = componentLoader.add('Backups', path.join(here, 'pages/Backups'));
+const ReconciliationPage = componentLoader.add('Reconciliation', path.join(here, 'pages/Reconciliation'));
 
 // AdminJS 7's exported types are looser than its runtime accepts (page `label`,
 // `branding.softwareBrothers`, the static `AdminJS.bundle` helper, action
@@ -36,6 +48,7 @@ const prisma = new PrismaClient();
 // in fact supported by `adminjs@7.8`. Document any further casts inline.
 const adminConfig = new AdminJS({
   rootPath: '/admin',
+  componentLoader,
   branding: {
     companyName: 'BloomOulu',
     softwareBrothers: false,
@@ -159,25 +172,25 @@ const adminConfig = new AdminJS({
       label: 'Settings',
       icon: 'Settings',
       handler: async () => ({}),
-      component: (AdminJS as any).bundle('./pages/Settings.tsx'),
+      component: SettingsPage,
     },
     translations: {
       label: 'Translations',
       icon: 'Globe',
       handler: async () => ({}),
-      component: (AdminJS as any).bundle('./pages/Translations.tsx'),
+      component: TranslationsPage,
     },
     backups: {
       label: 'Backups',
       icon: 'Save',
       handler: async () => ({}),
-      component: (AdminJS as any).bundle('./pages/Backups.tsx'),
+      component: BackupsPage,
     },
     reconciliation: {
       label: 'Reconciliation',
       icon: 'CheckCircle',
       handler: async () => ({}),
-      component: (AdminJS as any).bundle('./pages/Reconciliation.tsx'),
+      component: ReconciliationPage,
     },
   },
 } as any);

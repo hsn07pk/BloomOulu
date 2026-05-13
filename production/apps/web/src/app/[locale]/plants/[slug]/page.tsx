@@ -19,17 +19,20 @@ export async function generateStaticParams() {
 export default async function PlantPage({
   params,
 }: {
-  params: { locale: string; slug: string };
+  params: Promise<{ locale: string; slug: string }>;
 }) {
-  const t = await getTranslations({ locale: params.locale, namespace: 'Plant' });
+  const { locale, slug } = await params;
+  const t = await getTranslations({ locale, namespace: 'Plant' });
   const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
-  const res = await fetch(`${api}/v1/plants/${params.slug}`, {
+  const res = await fetch(`${api}/v1/plants/${slug}`, {
     next: { revalidate: 3600 },
   });
   if (!res.ok) notFound();
   const plant = await res.json();
-  const story = plant.story[params.locale] ?? plant.story.en;
-  const name = plant[`name${params.locale[0]!.toUpperCase()}${params.locale.slice(1)}`] ?? plant.nameEn;
+  const story = plant.story[locale] ?? plant.story.en;
+  const nameField = `name${locale[0]!.toUpperCase()}${locale.slice(1)}`;
+  const altField = `alt${locale[0]!.toUpperCase()}${locale.slice(1)}`;
+  const name = plant[nameField] ?? plant.nameEn;
   return (
     <article>
       <header>
@@ -39,7 +42,7 @@ export default async function PlantPage({
       </header>
       {plant.primaryImage?.url && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={plant.primaryImage.url} alt={plant.primaryImage[`alt${params.locale[0]!.toUpperCase()}${params.locale.slice(1)}`]} loading="lazy" />
+        <img src={plant.primaryImage.url} alt={plant.primaryImage[altField]} loading="lazy" />
       )}
       <section>
         <h2>{t('story')}</h2>

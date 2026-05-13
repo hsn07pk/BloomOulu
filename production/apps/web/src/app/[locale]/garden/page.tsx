@@ -10,7 +10,7 @@
  */
 import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
-import { auth } from '../../../lib/auth.js';
+import { auth } from '../../../lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,10 +20,11 @@ async function fetchGarden(userId: string) {
   return res.ok ? res.json() : null;
 }
 
-export default async function GardenPage({ params }: { params: { locale: string } }) {
+export default async function GardenPage({ params }: { params: Promise<{ locale: string }> }) {
+  const { locale } = await params;
   const session = await auth();
-  if (!session?.user?.id) redirect(`/${params.locale}/sign-in`);
-  const t = await getTranslations({ locale: params.locale, namespace: 'Garden' });
+  if (!session?.user?.id) redirect(`/${locale}/sign-in`);
+  const t = await getTranslations({ locale, namespace: 'Garden' });
   const garden = await fetchGarden(session.user.id);
 
   if (!garden) {
@@ -53,7 +54,7 @@ export default async function GardenPage({ params }: { params: { locale: string 
           {garden.receipts.map((r: any) => (
             <li key={r.id}>
               <a href={r.pdfUrl} target="_blank" rel="noopener">
-                {r.number} · €{(r.amountCents / 100).toFixed(2)} · {new Date(r.issuedAt).toLocaleDateString(params.locale)}
+                {r.number} · €{(r.amountCents / 100).toFixed(2)} · {new Date(r.issuedAt).toLocaleDateString(locale)}
               </a>
             </li>
           ))}

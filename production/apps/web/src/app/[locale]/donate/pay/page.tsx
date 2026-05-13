@@ -22,16 +22,18 @@ export default async function PayPage({
   params,
   searchParams,
 }: {
-  params: { locale: string };
-  searchParams: { orderId?: string; amount?: string; ref?: string };
+  params: Promise<{ locale: string }>;
+  searchParams: Promise<{ orderId?: string; amount?: string; ref?: string }>;
 }) {
-  const t = await getTranslations({ locale: params.locale, namespace: 'Pay' });
+  const { locale } = await params;
+  const sp = await searchParams;
+  const t = await getTranslations({ locale, namespace: 'Pay' });
   const settings = await loadSettings();
   const iban = settings?.bankTransfer?.iban ?? 'FI00 0000 0000 0000 00';
   const bic = settings?.bankTransfer?.bic ?? 'NDEAFIHH';
   const name = settings?.bankTransfer?.beneficiaryName ?? 'BloomOulu';
-  const amount = parseInt(searchParams.amount ?? '0', 10);
-  const ref = searchParams.ref ?? '';
+  const amount = parseInt(sp.amount ?? '0', 10);
+  const ref = sp.ref ?? '';
 
   // SEPA payment QR (EPC069-12: Stiftung EuroBanknotenStandard).
   const epc = [

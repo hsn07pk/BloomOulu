@@ -6,12 +6,13 @@
  * questions show the escalation card.
  */
 import { getTranslations } from 'next-intl/server';
-import AskChat from './chat.client.js';
+import AskChat from './chat.client';
 
 export const dynamic = 'force-dynamic';
 
-export default async function AskPage({ params }: { params: { locale: string } }) {
-  const t = await getTranslations({ locale: params.locale, namespace: 'Ask' });
+export default async function AskPage({ params }: { params: Promise<{ locale: string }> }) {
+  const { locale } = await params;
+  const t = await getTranslations({ locale, namespace: 'Ask' });
   const trending = [
     'What is blooming in the Romeo greenhouse this week?',
     'Which plants here are Endangered or Vulnerable in Finland?',
@@ -23,7 +24,7 @@ export default async function AskPage({ params }: { params: { locale: string } }
         <h1>{t('title')}</h1>
         <p>Grounded · cited · never hallucinated.</p>
       </header>
-      <AskChat locale={params.locale as 'en' | 'fi' | 'sv'} starters={trending} />
+      <AskChat locale={locale as 'en' | 'fi' | 'sv'} starters={trending} />
     </main>
   );
 }

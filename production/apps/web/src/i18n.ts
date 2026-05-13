@@ -1,13 +1,22 @@
 import { getRequestConfig } from 'next-intl/server';
 import { notFound } from 'next/navigation';
+import en from '@bloomoulu/i18n/messages/en.json';
+import fi from '@bloomoulu/i18n/messages/fi.json';
+import sv from '@bloomoulu/i18n/messages/sv.json';
 
 export const LOCALES = ['en', 'fi', 'sv'] as const;
 export type Locale = (typeof LOCALES)[number];
 
-export default getRequestConfig(async ({ locale }) => {
-  if (!LOCALES.includes(locale as Locale)) notFound();
+const MESSAGES: Record<Locale, unknown> = { en, fi, sv };
+
+export default getRequestConfig(async ({ requestLocale }) => {
+  const requested = await requestLocale;
+  const locale: Locale = LOCALES.includes(requested as Locale)
+    ? (requested as Locale)
+    : 'fi';
   return {
-    messages: (await import(`@bloomoulu/i18n/messages/${locale}.json`)).default,
+    locale,
+    messages: MESSAGES[locale] as Record<string, string>,
     timeZone: 'Europe/Helsinki',
   };
 });

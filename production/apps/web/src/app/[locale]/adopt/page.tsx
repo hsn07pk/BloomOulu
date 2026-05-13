@@ -1,19 +1,21 @@
 import { getTranslations } from 'next-intl/server';
-import { adoptAction } from './actions.js';
+import { adoptAction } from './actions';
 
 export default async function AdoptPage({
   params,
   searchParams,
 }: {
-  params: { locale: string };
-  searchParams: { plant?: string };
+  params: Promise<{ locale: string }>;
+  searchParams: Promise<{ plant?: string }>;
 }) {
-  const t = await getTranslations({ locale: params.locale, namespace: 'Adopt' });
+  const { locale } = await params;
+  const { plant } = await searchParams;
+  const t = await getTranslations({ locale, namespace: 'Adopt' });
   return (
     <form action={adoptAction} aria-labelledby="adopt-title">
       <h1 id="adopt-title">{t('title')}</h1>
-      <input type="hidden" name="locale" value={params.locale} />
-      <input type="hidden" name="plantSlug" value={searchParams.plant ?? ''} />
+      <input type="hidden" name="locale" value={locale} />
+      <input type="hidden" name="plantSlug" value={plant ?? ''} />
 
       <fieldset>
         <legend>{t('tier')}</legend>

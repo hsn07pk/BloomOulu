@@ -7,6 +7,7 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
+    "./messages/*.json": "./messages/*.json",
     "./messages/en.json": "./messages/en.json",
     "./messages/fi.json": "./messages/fi.json",
     "./messages/sv.json": "./messages/sv.json"
