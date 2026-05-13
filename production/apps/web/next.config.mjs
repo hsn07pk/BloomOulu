@@ -7,6 +7,27 @@ const nextConfig = {
   output: 'standalone',
   reactStrictMode: true,
   poweredByHeader: false,
+  // Compile workspace TS packages through Next's own pipeline so the
+  // `.js`-extension imports they use (for Node ESM compatibility with the
+  // API + worker) resolve here too. Without this, webpack treats them as
+  // pre-built .js files and 404s on the `.js → .ts` lookup.
+  transpilePackages: [
+    '@bloomoulu/db',
+    '@bloomoulu/payments',
+    '@bloomoulu/emails',
+    '@bloomoulu/rag',
+    '@bloomoulu/i18n',
+    '@bloomoulu/ui',
+  ],
+  webpack: (config) => {
+    // Allow `import './foo.js'` to resolve to `./foo.ts` inside transpiled
+    // workspace packages.
+    config.resolve.extensionAlias = {
+      ...(config.resolve.extensionAlias ?? {}),
+      '.js': ['.ts', '.tsx', '.js'],
+    };
+    return config;
+  },
   experimental: {
     serverActions: { bodySizeLimit: '2mb' },
     typedRoutes: true,
