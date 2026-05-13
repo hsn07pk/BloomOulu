@@ -1,6 +1,10 @@
 # ADR-0004: Payment Provider Abstraction (Stripe + MobilePay)
 
-**Status:** Accepted
+**Status:** ⛔ **Superseded by ADR-0011** on 2026-05-14. The actual production
+rails are **Paytrail + Vipps MobilePay + manual bank transfer**. Stripe was
+deliberately removed (per-transaction fees too high for €25 / €75 tiers,
+Pay-by-Bank not GA in Finland). This document is retained only for
+historical context.
 **Date:** 2026-05-13
 
 ## Context
