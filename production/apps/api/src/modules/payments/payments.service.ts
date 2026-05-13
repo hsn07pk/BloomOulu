@@ -18,7 +18,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { AuditService } from '../audit/audit.service.js';
 import { SettingsService } from '../settings/settings.service.js';
 import { PaymentGatewayFactory } from './payment-gateway.factory.js';
-import { enqueueReceipt } from '../jobs/enqueue.js';
+import { enqueueReceipt, enqueuePaymentRetry } from '../jobs/enqueue.js';
 
 export interface CreatePaymentInput {
   donorId: string;
@@ -241,6 +241,35 @@ export class PaymentsService {
             resource: `Payment/${payment.id}`,
             after: { code: event.failureCode },
           });
+          // Only kick off dunning if this payment is attached to a recurring
+          // Adoption — one-time donations don't escalate, they just notify
+          // the donor that the charge failed.
+          if (payment.adoptionId) {
+            const adoption = await tx.adoption.findUnique({
+              where: { id: payment.adoptionId },
+              select: { recurring: true, status: true },
+            });
+            if (adoption?.recurring && adoption.status === 'active') {
+              // Pause the adoption immediately on the first failure — the
+              // donor sees "paused, retrying" in My Garden; dunning will
+              // attempt to recover automatically.
+              await tx.adoption.update({
+                where: { id: payment.adoptionId },
+                data: { status: 'paused' },
+              });
+              await this.audit.log(tx, {
+                action: 'adoption.dunning.started',
+                resource: `Adoption/${payment.adoptionId}`,
+                after: { code: event.failureCode },
+              });
+              sideEffects.push(() =>
+                enqueuePaymentRetry(
+                  { adoptionId: payment.adoptionId!, attempt: 1, reason: 'first_failure' },
+                  { delay: 3 * 24 * 60 * 60 * 1000 },
+                ),
+              );
+            }
+          }
           break;
         }
         case 'agreement.activated': {

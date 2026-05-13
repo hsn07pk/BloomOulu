@@ -2,13 +2,14 @@
  * Lightweight enqueue helpers used by services + other processors.
  * Returns a Promise that resolves once the job is durably written to Redis.
  */
-import { Queue } from 'bullmq';
+import { Queue, type JobsOptions } from 'bullmq';
 import {
   QUEUE_EMAIL,
   QUEUE_RECEIPT,
   QUEUE_RAG_INGEST,
   QUEUE_GDPR_EXPORT,
   QUEUE_GDPR_ERASE,
+  QUEUE_PAYMENT_RETRY,
   defaultJobOpts,
 } from './queues.js';
 import type { EmailJob } from './processors/email.processor.js';
@@ -16,6 +17,7 @@ import type { ReceiptJob } from './processors/receipt.processor.js';
 import type { RagIngestJob } from './processors/rag-ingest.processor.js';
 import type { GdprExportJob } from './processors/gdpr-export.processor.js';
 import type { GdprEraseJob } from './processors/gdpr-erase.processor.js';
+import type { PaymentRetryJob } from './processors/payment-retry.processor.js';
 
 const connection = { url: process.env.REDIS_URL ?? 'redis://localhost:6379' };
 const cache = new Map<string, Queue>();
@@ -45,3 +47,13 @@ export const enqueueGdprExport = (data: GdprExportJob) =>
 
 export const enqueueGdprErase = (data: GdprEraseJob) =>
   q(QUEUE_GDPR_ERASE).add('erase', data, defaultJobOpts);
+
+export const enqueuePaymentRetry = (data: PaymentRetryJob, opts?: JobsOptions) =>
+  q(QUEUE_PAYMENT_RETRY).add('attempt', data, {
+    ...defaultJobOpts,
+    // Use deterministic jobId so re-enqueueing the same attempt is a no-op —
+    // critical because PaymentsService re-fires payment.failed on each
+    // reconciliation sweep against a still-failed payment.
+    jobId: `dunning-${data.adoptionId}-${data.attempt}`,
+    ...opts,
+  });
