@@ -55,28 +55,87 @@ class KioskController {
   }
 
   @Post('heartbeat')
-  async heartbeat(@Body(new ZodValidationPipe(HeartbeatDto)) body: z.infer<typeof HeartbeatDto>) {
-    await this.prisma.kioskDevice.update({
-      where: { id: body.deviceId },
-      data: { lastSeen: new Date(), buildSha: body.buildSha ?? undefined },
-    });
+  async heartbeat(@Body() body: { deviceId?: string; buildSha?: string }) {
+    // The lobby kiosk doesn't always carry a deviceId (single-instance
+    // install in dev). Heartbeat without an id is allowed and returns ok
+    // — we use it as a connectivity probe from the kiosk watchdog.
+    if (!body.deviceId) return { ok: true };
+    try {
+      await this.prisma.kioskDevice.update({
+        where: { id: body.deviceId },
+        data: { lastSeen: new Date(), buildSha: body.buildSha ?? undefined },
+      });
+    } catch {
+      /* unknown deviceId is fine — first-boot kiosks before pairing */
+    }
     return { ok: true };
   }
 
+  /**
+   * Feed for the lobby kiosk's main display.
+   *
+   * - `featured`: a randomly picked "plant of the day" from currently-
+   *   active plants whose bloomSeason matches the current season. Pinning
+   *   is keyed by UTC date so all kiosks show the same plant on the same
+   *   day.
+   * - `blooming`: next 5 candidates (so the kiosk can rotate without
+   *   re-fetching).
+   * - `recentAdoptions`: last 10 active adoptions whose donor opted to
+   *   show on the donor wall (defaults to true per schema).
+   *
+   * Public, no auth — the kiosk's deviceToken is consulted only by
+   * heartbeat. The data here is safe to expose to a lobby visitor.
+   */
   @Get(':id/feed')
-  async feed(@Param('id') id: string) {
-    const blooming = await this.prisma.plant.findMany({
-      where: { bloomSeason: { in: ['spring', 'summer', 'all'] }, status: 'active' },
-      take: 6,
-      include: { primaryImage: true },
-    });
-    const adoptions = await this.prisma.adoption.findMany({
-      where: { status: 'active' },
+  async feed(@Param('id') _id: string) {
+    const month = new Date().getUTCMonth();
+    const season =
+      month >= 2 && month <= 4
+        ? 'spring'
+        : month >= 5 && month <= 7
+          ? 'summer'
+          : month >= 8 && month <= 10
+            ? 'autumn'
+            : 'winter';
+    const candidates = await this.prisma.plant.findMany({
+      where: {
+        status: 'active',
+        bloomSeason: { in: [season as any, 'all'] },
+      },
+      include: { primaryImage: true, taxon: true },
+      orderBy: { adopterCount: 'desc' },
       take: 12,
-      orderBy: { startedAt: 'desc' },
-      include: { plant: true, donor: { select: { name: true, locale: true } } },
     });
-    return { blooming, adoptions };
+    // Deterministic "plant of the day" — same plant across all kiosks per
+    // UTC day. Falls back to first if no candidates.
+    const dayIdx = Math.floor(Date.now() / (24 * 60 * 60 * 1000));
+    const featured = candidates.length > 0 ? candidates[dayIdx % candidates.length]! : null;
+    const blooming = candidates.filter((p) => p.id !== featured?.id).slice(0, 5);
+
+    const adoptions = await this.prisma.adoption.findMany({
+      where: { status: 'active', showOnDonorWall: true },
+      take: 10,
+      orderBy: { startedAt: 'desc' },
+      include: {
+        plant: { select: { nameFi: true, nameEn: true } },
+        donor: { select: { name: true } },
+        tier: { select: { name: true, nameFi: true } },
+      },
+    });
+    const recentAdoptions = adoptions.map((a) => ({
+      id: a.id,
+      // publicName: prefer the adoption's publicName (donor's chosen wall
+      // name); fall back to first-name-only, then "Anonymous".
+      publicName:
+        a.publicName ??
+        a.donor.name?.split(' ')[0] ??
+        'Anonymous',
+      plantNameFi: a.plant.nameFi,
+      plantNameEn: a.plant.nameEn,
+      tierName: a.tier.name,
+    }));
+
+    return { featured, blooming, recentAdoptions };
   }
 }
 
