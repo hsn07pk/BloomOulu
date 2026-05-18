@@ -1,7 +1,7 @@
 import { request } from 'undici';
 
-const OLLAMA_BASE = process.env.OLLAMA_BASE_URL ?? 'http://ollama:11434';
-const EMBED_MODEL = process.env.EMBED_MODEL ?? 'nomic-embed-text:v1.5';
+const OLLAMA_BASE = process.env.OLLAMA_URL ?? process.env.OLLAMA_BASE_URL ?? 'http://ollama:11434';
+const EMBED_MODEL = process.env.OLLAMA_EMBED_MODEL ?? process.env.EMBED_MODEL ?? 'nomic-embed-text:v1.5';
 
 export async function embed(text: string): Promise<number[]> {
   const res = await request(`${OLLAMA_BASE}/api/embeddings`, {

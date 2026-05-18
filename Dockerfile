@@ -14,6 +14,10 @@ COPY docker/mime.types /etc/nginx/mime.types
 # Copy the site
 COPY index.html        /usr/share/nginx/html/index.html
 COPY vercel.json       /usr/share/nginx/html/vercel.json
+COPY favicon.svg       /usr/share/nginx/html/favicon.svg
+COPY favicon-16.png    /usr/share/nginx/html/favicon-16.png
+COPY favicon-32.png    /usr/share/nginx/html/favicon-32.png
+COPY favicon-180.png   /usr/share/nginx/html/favicon-180.png
 COPY demo-design/      /usr/share/nginx/html/demo-design/
 
 EXPOSE 80

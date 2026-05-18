@@ -15,8 +15,8 @@ import { request } from 'undici';
 import { prisma } from '@bloomoulu/db';
 import { createHash } from 'node:crypto';
 
-const OLLAMA_BASE = process.env.OLLAMA_BASE_URL ?? 'http://ollama:11434';
-const EMBED_MODEL = process.env.EMBED_MODEL ?? 'nomic-embed-text:v1.5';
+const OLLAMA_BASE = process.env.OLLAMA_URL ?? process.env.OLLAMA_BASE_URL ?? 'http://ollama:11434';
+const EMBED_MODEL = process.env.OLLAMA_EMBED_MODEL ?? process.env.EMBED_MODEL ?? 'nomic-embed-text:v1.5';
 
 export interface RagIngestJob {
   documentId?: string; // omit → reindex all

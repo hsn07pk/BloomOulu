@@ -17,6 +17,36 @@ export class AuthService {
     return { token, expiresAt };
   }
 
+  /**
+   * Upsert a user authenticated via University of Oulu OIDC. Caller has
+   * already verified the id_token signature + claims. We persist the
+   * sub as `ouluUid` so subsequent OIDC sign-ins land on the same row.
+   */
+  async upsertByOidc(input: { email: string; ouluUid: string; name: string | null; role: string }) {
+    const allowedRoles = new Set(['donor', 'curator', 'finance', 'admin']);
+    const role = (allowedRoles.has(input.role) ? input.role : 'donor') as
+      | 'donor'
+      | 'curator'
+      | 'finance'
+      | 'admin';
+    return this.prisma.user.upsert({
+      where: { email: input.email },
+      update: {
+        ouluUid: input.ouluUid,
+        name: input.name ?? undefined,
+        emailVerified: new Date(),
+        role,
+      },
+      create: {
+        email: input.email,
+        ouluUid: input.ouluUid,
+        name: input.name,
+        emailVerified: new Date(),
+        role,
+      },
+    });
+  }
+
   async verifyMagicLink(email: string, token: string) {
     const tokenHash = this.hashToken(token);
     const row = await this.prisma.verificationToken.findUnique({

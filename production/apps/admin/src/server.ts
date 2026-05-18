@@ -197,6 +197,17 @@ const adminConfig = new AdminJS({
     { resource: { model: getModelByName('ProcessedEvent'), client: prisma }, options: { navigation: { name: 'Finance' } } },
     // ── RAG ────────────────────────────────────────────────────────────
     { resource: { model: getModelByName('RagDocument'), client: prisma }, options: { navigation: { name: 'AskTheGarden', icon: 'MessageCircle' } } },
+    {
+      resource: { model: getModelByName('RagChunk'), client: prisma },
+      options: {
+        navigation: { name: 'AskTheGarden' },
+        listProperties: ['documentId', 'chunkIndex', 'locale', 'tokenStart', 'tokenEnd'],
+        actions: { new: { isAccessible: false }, edit: { isAccessible: false } },
+        properties: {
+          embedding: { isVisible: { list: false, edit: false, show: false, filter: false } },
+        },
+      },
+    },
     { resource: { model: getModelByName('AskMessage'), client: prisma }, options: { navigation: { name: 'AskTheGarden' } } },
     { resource: { model: getModelByName('AskAnswer'), client: prisma }, options: { navigation: { name: 'AskTheGarden' } } },
     // ── Kiosk ──────────────────────────────────────────────────────────
@@ -216,6 +227,88 @@ const adminConfig = new AdminJS({
       },
     },
     { resource: { model: getModelByName('DataExportRequest'), client: prisma }, options: { navigation: { name: 'Audit & GDPR' } } },
+    // ── Operations config (ADR-0007 admin surfaces) ────────────────────
+    {
+      resource: { model: getModelByName('EmailTemplate'), client: prisma },
+      options: {
+        navigation: { name: 'Operations', icon: 'Mail' },
+        listProperties: ['slug', 'subjectEn', 'subjectFi', 'subjectSv', 'updatedAt'],
+        properties: {
+          slug: { description: 'Stable key referenced by the email worker (e.g. magic-link, adoption-confirmed).' },
+          bodyMjmlEn: { description: 'MJML body (English). Use {{variable}} placeholders — they will be substituted at send time.', type: 'textarea' },
+          bodyMjmlFi: { description: 'MJML body (Finnish).', type: 'textarea' },
+          bodyMjmlSv: { description: 'MJML body (Swedish).', type: 'textarea' },
+        },
+      },
+    },
+    {
+      resource: { model: getModelByName('ContentBlock'), client: prisma },
+      options: {
+        navigation: { name: 'Operations', icon: 'Layout' },
+        listProperties: ['slug', 'kind', 'updatedAt'],
+        properties: {
+          slug: { description: 'Stable key referenced by the web layer (e.g. hero, funds-flow, donor-wall).' },
+          kind: { description: 'Renderer hint — usually one of: hero | callout | wall | story.' },
+          payload: { description: 'JSON payload consumed by the matching React component.', type: 'mixed' },
+        },
+      },
+    },
+    {
+      resource: { model: getModelByName('FeatureFlag'), client: prisma },
+      options: {
+        navigation: { name: 'Operations', icon: 'ToggleRight' },
+        listProperties: ['key', 'enabled', 'updatedAt'],
+        properties: {
+          key: { description: 'Flag identifier (e.g. featurePaytrail, featureMobilePay, featureKiosk).' },
+          enabled: { description: 'Boolean toggle. Reads land in /v1/settings/public.' },
+        },
+      },
+    },
+    {
+      resource: { model: getModelByName('VatRule'), client: prisma },
+      options: {
+        navigation: { name: 'Operations', icon: 'Percent' },
+        properties: {
+          lineType: { description: 'Donation line type this rule applies to (e.g. donation, plaque, corporate).' },
+          ratePct: { description: 'Statutory rate as a percent. Edit only when the Finnish VAT law changes.' },
+        },
+      },
+    },
+    {
+      resource: { model: getModelByName('SystemSetting'), client: prisma },
+      options: {
+        navigation: { name: 'Operations', icon: 'Settings' },
+        listProperties: ['key', 'description', 'updatedAt'],
+        properties: {
+          key: { description: 'Setting identifier. Reads are Zod-validated; changes audited.' },
+          value: { type: 'mixed', description: 'Typed JSON value. See ADR-0001 table for the catalogue of keys.' },
+          description: { description: 'One-sentence explanation shown inline so non-technical staff understand the toggle.' },
+        },
+      },
+    },
+    {
+      resource: { model: getModelByName('Translation'), client: prisma },
+      options: {
+        navigation: { name: 'Operations', icon: 'Globe' },
+        listProperties: ['i18nKey', 'namespace', 'updatedAt'],
+        properties: {
+          i18nKey: { description: 'Translation key (e.g. Home.heroCta).' },
+          namespace: { description: 'next-intl namespace.' },
+          en: { type: 'textarea' },
+          fi: { type: 'textarea' },
+          sv: { type: 'textarea' },
+        },
+      },
+    },
+    {
+      resource: { model: getModelByName('JobRun'), client: prisma },
+      options: {
+        navigation: { name: 'Operations', icon: 'Activity' },
+        listProperties: ['queueName', 'jobName', 'status', 'startedAt', 'finishedAt', 'attempts'],
+        actions: { new: { isAccessible: false }, edit: { isAccessible: false }, delete: { isAccessible: false } },
+        sort: { sortBy: 'createdAt', direction: 'desc' as const },
+      },
+    },
     {
       resource: { model: getModelByName('DataErasureRequest'), client: prisma },
       options: {

@@ -7,6 +7,8 @@
  *   kiosk-watchdog       → every 5 min
  *   rag-ingest (full)    → weekly Sunday 02:00
  *   tax-cert-annual      → annually Jan 5 04:00 (sweeps prior tax year)
+ *   rag-eval             → monthly 1st of month 04:30 (ADR-0005 — curator labels bottom-50)
+ *   audit-gap            → daily 03:30 (ADR-0008 — detects audit log gaps day-over-day)
  *   backup (Postgres)    → daily 02:30 (kicked off by host cron, not BullMQ)
  */
 import { Queue } from 'bullmq';
@@ -16,6 +18,8 @@ import {
   QUEUE_KIOSK_WATCHDOG,
   QUEUE_RAG_INGEST,
   QUEUE_TAX_CERT_ANNUAL,
+  QUEUE_RAG_EVAL,
+  QUEUE_AUDIT_GAP,
   defaultJobOpts,
 } from './queues.js';
 
@@ -55,6 +59,25 @@ export async function registerCronJobs() {
   const taxCert = new Queue(QUEUE_TAX_CERT_ANNUAL, { connection });
   await taxCert.upsertJobScheduler('annual-jan-5', { pattern: '0 4 5 1 *' }, {
     name: 'sweep',
+    data: {},
+    opts: defaultJobOpts,
+  });
+
+  // ADR-0005 monthly RAG evaluation — picks the prior month's bottom-50
+  // answers by helpfulness score for curator labelling. Output lands in a
+  // JobRun row so the admin panel surfaces it.
+  const ragEval = new Queue(QUEUE_RAG_EVAL, { connection });
+  await ragEval.upsertJobScheduler('monthly-1st-0430', { pattern: '30 4 1 * *' }, {
+    name: 'monthly',
+    data: { sampleSize: 50 },
+    opts: defaultJobOpts,
+  });
+
+  // ADR-0008 daily audit-gap detector — compares yesterday's AuditLog row
+  // count to the 30-day median; alerts P0 if < 30 %.
+  const auditGap = new Queue(QUEUE_AUDIT_GAP, { connection });
+  await auditGap.upsertJobScheduler('daily-0330', { pattern: '30 3 * * *' }, {
+    name: 'daily',
     data: {},
     opts: defaultJobOpts,
   });

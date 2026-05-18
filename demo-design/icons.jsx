@@ -45,50 +45,31 @@ const Icon = ({ name, size = 18, stroke = 1.6, className = "", style = {} }) => 
   return <svg {...props}>{paths[name]}</svg>;
 };
 
-// BloomOulu logo - stylised five-petaled bloom with circuit veining
-// Matches the brand mark: forest-green → teal → sage gradient.
+// BloomOulu logo — branded tech-flower mark (forest-green → teal → sage).
+// Renders the brand PNG from /assets/logo-mark.png. For monochrome/light
+// variants (footer on dark forest bg, kiosk lobby, etc.) we apply a CSS
+// filter so the icon reads cleanly on dark surfaces.
 const BloomMark = ({ size = 34, monochrome = false, light = false }) => {
-  const c1 = monochrome ? (light ? "#A8C060" : "#2D5440") : "#2D5440";
-  const c2 = monochrome ? (light ? "#E8EEDE" : "#5FB0A0") : "#5FB0A0";
-  const c3 = monochrome ? (light ? "#FAF7EE" : "#88A050") : "#A8C060";
+  const filter = monochrome && light
+    ? "brightness(0) invert(1)"
+    : monochrome
+    ? "brightness(0)"
+    : "none";
   return (
-    <svg width={size} height={size} viewBox="0 0 100 100" fill="none">
-      <defs>
-        <linearGradient id={`bloomG-${size}`} x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor={c1}/>
-          <stop offset="50%" stopColor={c2}/>
-          <stop offset="100%" stopColor={c3}/>
-        </linearGradient>
-      </defs>
-      <g stroke={`url(#bloomG-${size})`} strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round">
-        {/* 5 leaf petals around centre */}
-        {[0, 1, 2, 3, 4].map(i => {
-          const a = (i * 72 - 90) * Math.PI / 180;
-          const cx = 50 + Math.cos(a) * 22;
-          const cy = 50 + Math.sin(a) * 22;
-          const rotate = i * 72;
-          return (
-            <g key={i} transform={`rotate(${rotate} 50 50)`}>
-              {/* leaf outline */}
-              <path d="M50 50 Q35 28 50 14 Q65 28 50 50 Z"/>
-              {/* central vein */}
-              <path d="M50 50 L50 16"/>
-              {/* side veins with dots */}
-              <path d="M50 30 L42 26"/>
-              <circle cx="42" cy="26" r="1.5" fill={`url(#bloomG-${size})`}/>
-              <path d="M50 30 L58 26"/>
-              <circle cx="58" cy="26" r="1.5" fill={`url(#bloomG-${size})`}/>
-              <path d="M50 38 L44 35"/>
-              <circle cx="44" cy="35" r="1.2" fill={`url(#bloomG-${size})`}/>
-              <path d="M50 38 L56 35"/>
-              <circle cx="56" cy="35" r="1.2" fill={`url(#bloomG-${size})`}/>
-            </g>
-          );
-        })}
-        {/* centre node */}
-        <circle cx="50" cy="50" r="2" fill={`url(#bloomG-${size})`}/>
-      </g>
-    </svg>
+    <img
+      src="assets/logo-mark.png"
+      alt=""
+      aria-hidden="true"
+      width={size}
+      height={size}
+      style={{
+        width: size,
+        height: size,
+        objectFit: "contain",
+        display: "block",
+        filter,
+      }}
+    />
   );
 };
 

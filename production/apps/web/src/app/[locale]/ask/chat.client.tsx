@@ -34,18 +34,55 @@ interface Turn {
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? '';
 
+type AskMode = 'visitor' | 'staff';
+const RECENT_KEY = 'bloom_ask_recent';
+
+const STAFF_STARTERS = {
+  en: [
+    'Draft school-tour script for upper grade (Saxifraga hirculus)',
+    'Generate signage text — Trollius europaeus (FI/SV/EN)',
+    "Summarise this quarter's gardener notes",
+    'Find a Kone Foundation grant template',
+    'Identify a herbarium sample (image upload)',
+  ],
+  fi: [
+    'Luo opastusrunko Yläkoululaisille (Saxifraga hirculus)',
+    'Tuota opastetekstin (FI/SV/EN) Trollius europaeus -lajille',
+    'Tee yhteenveto tämän vuosineljänneksen puutarhurin muistiinpanoista',
+    'Etsi Kone-säätiön apurahapohja',
+    'Tunnista herbaarionäyte (kuvalataus)',
+  ],
+  sv: [
+    'Skapa skolturmanus för högstadiet (Saxifraga hirculus)',
+    'Generera skyltningstext — Trollius europaeus (FI/SV/EN)',
+    'Sammanfatta detta kvartals trädgårdsmästares anteckningar',
+    'Hitta en Kone-stiftelsen-bidragsmall',
+    'Identifiera ett herbarium-prov (bilduppladdning)',
+  ],
+};
+
 export default function AskChat({
   locale,
   starters,
+  signedIn = false,
+  staffEligible = false,
+  userId = null,
 }: {
   locale: Locale;
   starters: string[];
+  signedIn?: boolean;
+  staffEligible?: boolean;
+  userId?: string | null;
 }) {
   const t = useTranslations('Ask');
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [activeTurn, setActiveTurn] = useState<string | null>(null);
+  // Staff mode is only available to signed-in staff. Visitor is the default
+  // for everyone else; the public can use the chat without signing in.
+  const [mode, setMode] = useState<AskMode>('visitor');
+  const [recent, setRecent] = useState<string[]>([]);
   const logRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
 
@@ -53,9 +90,39 @@ export default function AskChat({
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [turns]);
 
+  // Hydrate recent from localStorage
+  useEffect(() => {
+    try {
+      const list = JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]') as string[];
+      setRecent(list.slice(0, 8));
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  function pushRecent(q: string) {
+    setRecent((prev) => {
+      const next = [q, ...prev.filter((x) => x !== q)].slice(0, 8);
+      try {
+        localStorage.setItem(RECENT_KEY, JSON.stringify(next));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }
+
+  function newConversation() {
+    setTurns([]);
+    setActiveTurn(null);
+    setInput('');
+    setTimeout(() => composerRef.current?.focus(), 50);
+  }
+
   async function ask(question: string) {
     if (!question.trim() || busy) return;
     setBusy(true);
+    pushRecent(question.trim());
     const userId = crypto.randomUUID();
     const assistantId = crypto.randomUUID();
     setTurns((tt) => [
@@ -70,7 +137,7 @@ export default function AskChat({
       const res = await fetch(`${API}/v1/ask/stream`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', accept: 'text/event-stream' },
-        body: JSON.stringify({ question, locale }),
+        body: JSON.stringify({ question, locale, userId: userId ?? undefined }),
       });
       if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
 
@@ -149,10 +216,66 @@ export default function AskChat({
 
   return (
     <div className="ask-shell" style={{ display: 'grid', gridTemplateColumns: '280px 1fr 300px', gap: 24, marginTop: 24 }}>
-      <aside className="card card-pad" style={{ alignSelf: 'flex-start' }} aria-label={t('starters')}>
-        <div className="tiny" style={{ marginBottom: 12 }}>{t('starters')}</div>
+      <aside className="card card-pad" style={{ alignSelf: 'flex-start', position: 'sticky', top: 24 }} aria-label={t('starters')}>
+        {/* Mode toggle: Visitor / Staff — Staff only visible for signed-in curators/admins */}
+        {staffEligible && (
+          <div
+            role="group"
+            aria-label={locale === 'fi' ? 'Tila' : locale === 'sv' ? 'Läge' : 'Mode'}
+            style={{ display: 'flex', padding: 4, background: 'rgba(31,58,44,0.06)', borderRadius: 999, marginBottom: 12 }}
+          >
+            {(
+              [
+                ['visitor', locale === 'fi' ? 'Kävijä' : locale === 'sv' ? 'Besökare' : 'Visitor'],
+                ['staff', locale === 'fi' ? 'Henkilökunta' : locale === 'sv' ? 'Personal' : 'Staff'],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setMode(id)}
+                aria-pressed={mode === id}
+                style={{
+                  flex: 1,
+                  padding: '8px 0',
+                  borderRadius: 999,
+                  fontSize: 13,
+                  background: mode === id ? 'var(--paper)' : 'transparent',
+                  color: mode === id ? 'var(--ink)' : 'var(--ink-mute)',
+                  fontWeight: 500,
+                  border: 'none',
+                  cursor: 'pointer',
+                  boxShadow: mode === id ? '0 1px 4px rgba(31,58,44,0.08)' : 'none',
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* "New conversation" — only useful when conversations are saved
+            server-side, which requires sign-in. Hide for anonymous public
+            users; their single ephemeral conversation lives until they
+            close the tab. */}
+        {signedIn && (
+          <button
+            type="button"
+            onClick={newConversation}
+            className="btn btn-secondary"
+            style={{ width: '100%', marginBottom: 16, fontSize: 13 }}
+          >
+            ➕ {locale === 'fi' ? 'Uusi keskustelu' : locale === 'sv' ? 'Ny konversation' : 'New conversation'}
+          </button>
+        )}
+
+        <div className="tiny" style={{ marginBottom: 8 }}>
+          {mode === 'staff'
+            ? locale === 'fi' ? 'Nopeat henkilökuntatoimet' : locale === 'sv' ? 'Snabba personalåtgärder' : 'Quick staff actions'
+            : locale === 'fi' ? 'Suosittua tänään' : locale === 'sv' ? 'Trendar idag' : 'Trending today'}
+        </div>
         <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {starters.map((s) => (
+          {(mode === 'staff' ? STAFF_STARTERS[locale] : starters).map((s) => (
             <li key={s}>
               <button
                 type="button"
@@ -163,12 +286,60 @@ export default function AskChat({
                   borderRadius: 10, fontSize: 13, color: 'var(--ink-soft)', background: 'transparent',
                   border: 0, lineHeight: 1.4, cursor: busy ? 'default' : 'pointer',
                 }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(31,58,44,0.05)')}
+                onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
               >
                 {s}
               </button>
             </li>
           ))}
         </ul>
+
+        {recent.length > 0 && (
+          <>
+            <div
+              style={{
+                borderTop: '1px solid var(--line)',
+                marginTop: 20,
+                paddingTop: 16,
+              }}
+            >
+              <div className="tiny" style={{ marginBottom: 8 }}>
+                {locale === 'fi' ? 'Viimeisimmät' : locale === 'sv' ? 'Senaste' : 'Recent'}
+              </div>
+              <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {recent.slice(0, 5).map((q) => (
+                  <li key={q}>
+                    <button
+                      type="button"
+                      onClick={() => ask(q)}
+                      disabled={busy}
+                      style={{
+                        display: 'block',
+                        width: '100%',
+                        textAlign: 'left',
+                        padding: '10px 12px',
+                        borderRadius: 10,
+                        fontSize: 13,
+                        color: 'var(--ink-mute)',
+                        background: 'transparent',
+                        border: 0,
+                        lineHeight: 1.4,
+                        cursor: busy ? 'default' : 'pointer',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                      title={q}
+                    >
+                      {q}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </>
+        )}
       </aside>
 
       <section aria-labelledby="ask-h" style={{ display: 'flex', flexDirection: 'column' }}>

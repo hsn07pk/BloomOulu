@@ -1,26 +1,32 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">
+    <linearGradient id="bg" x1="50%" y1="100%" x2="50%" y2="0%">
       <stop offset="0%" stop-color="#1F3C2D"/>
-      <stop offset="50%" stop-color="#2D5440"/>
-      <stop offset="100%" stop-color="#3D6A52"/>
-    </linearGradient>
-    <linearGradient id="bloom" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#2D5440"/>
       <stop offset="50%" stop-color="#5FB0A0"/>
       <stop offset="100%" stop-color="#A8C060"/>
     </linearGradient>
-  </defs>
-  <rect width="100" height="100" rx="22" fill="url(#bg)"/>
-  <g transform="translate(50 50)">
-    <g fill="url(#bloom)" stroke="#FAF7EE" stroke-width="1.6" stroke-linejoin="round">
-      <ellipse cx="0" cy="-22" rx="11" ry="20"/>
-      <g transform="rotate(72)"><ellipse cx="0" cy="-22" rx="11" ry="20"/></g>
-      <g transform="rotate(144)"><ellipse cx="0" cy="-22" rx="11" ry="20"/></g>
-      <g transform="rotate(216)"><ellipse cx="0" cy="-22" rx="11" ry="20"/></g>
-      <g transform="rotate(288)"><ellipse cx="0" cy="-22" rx="11" ry="20"/></g>
+    <g id="leaf">
+      <path d="M50 50 Q38 36 38 22 Q44 12 50 10 Q56 12 62 22 Q62 36 50 50 Z"
+            fill="url(#bg)" stroke="#1F3C2D" stroke-width="0.8" stroke-linejoin="round"/>
+      <line x1="50" y1="48" x2="50" y2="12" stroke="#1F3C2D" stroke-width="0.6" stroke-linecap="round"/>
+      <g stroke="#1F3C2D" stroke-width="0.5" stroke-linecap="round" fill="#1F3C2D">
+        <line x1="50" y1="42" x2="44" y2="38"/><circle cx="44" cy="38" r="0.9"/>
+        <line x1="50" y1="42" x2="56" y2="38"/><circle cx="56" cy="38" r="0.9"/>
+        <line x1="50" y1="34" x2="42" y2="30"/><circle cx="42" cy="30" r="0.9"/>
+        <line x1="50" y1="34" x2="58" y2="30"/><circle cx="58" cy="30" r="0.9"/>
+        <line x1="50" y1="26" x2="44" y2="22"/><circle cx="44" cy="22" r="0.9"/>
+        <line x1="50" y1="26" x2="56" y2="22"/><circle cx="56" cy="22" r="0.9"/>
+        <line x1="50" y1="18" x2="46" y2="15"/><circle cx="46" cy="15" r="0.7"/>
+        <line x1="50" y1="18" x2="54" y2="15"/><circle cx="54" cy="15" r="0.7"/>
+      </g>
+      <circle cx="50" cy="11" r="1" fill="#1F3C2D"/>
     </g>
-    <circle r="6" fill="#FAF7EE"/>
-    <circle r="3" fill="#C9A14A"/>
-  </g>
+  </defs>
+  <use href="#leaf" transform="rotate(0 50 50)"/>
+  <use href="#leaf" transform="rotate(72 50 50)"/>
+  <use href="#leaf" transform="rotate(144 50 50)"/>
+  <use href="#leaf" transform="rotate(216 50 50)"/>
+  <use href="#leaf" transform="rotate(288 50 50)"/>
+  <circle cx="50" cy="50" r="2.8" fill="#1F3C2D"/>
+  <circle cx="50" cy="50" r="1.2" fill="#A8C060"/>
 </svg>

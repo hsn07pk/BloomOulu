@@ -13,9 +13,10 @@ const COPY = {
     and: 'and',
     privacyPrivacy: 'privacy policy',
     period: '.',
-    altTitle: 'Are you Garden staff?',
+    altTitle: 'Are you Garden staff or a University of Oulu student?',
     altBody:
-      'Curators, finance, and admins sign in through the University of Oulu SSO (coming soon).',
+      'Sign in with your University of Oulu account. Staff get curator/admin access automatically based on your IdP groups.',
+    altCta: 'Sign in with University of Oulu',
   },
   fi: {
     eyebrow: 'Kirjautuminen',
@@ -29,9 +30,10 @@ const COPY = {
     and: 'ja',
     privacyPrivacy: 'tietosuojaselosteen',
     period: '.',
-    altTitle: 'Oletko puutarhan henkilökuntaa?',
+    altTitle: 'Henkilökunta tai Oulun yliopiston opiskelija?',
     altBody:
-      'Puutarhurit, talous ja ylläpitäjät kirjautuvat Oulun yliopiston SSO:n kautta (tulossa).',
+      'Kirjaudu Oulun yliopiston tunnuksellasi. Henkilökunta saa puutarhuri-/admin-oikeudet IdP-ryhmiensä perusteella.',
+    altCta: 'Kirjaudu Oulun yliopistolla',
   },
   sv: {
     eyebrow: 'Logga in',
@@ -45,9 +47,10 @@ const COPY = {
     and: 'och',
     privacyPrivacy: 'integritetspolicy',
     period: '.',
-    altTitle: 'Är du anställd i trädgården?',
+    altTitle: 'Personal eller student vid Uleåborgs universitet?',
     altBody:
-      'Trädgårdsmästare, ekonomi och admins loggar in via Uleåborgs universitets SSO (kommer snart).',
+      'Logga in med ditt Uleåborgs universitet-konto. Personal får curator-/admin-rättigheter automatiskt baserat på dina IdP-grupper.',
+    altCta: 'Logga in med Uleåborgs universitet',
   },
 } as const;
 
@@ -136,6 +139,13 @@ export default async function SignInPage({ params }: { params: Promise<{ locale:
         <p className="small" style={{ color: 'var(--ink-soft)', lineHeight: 1.55 }}>
           {t.altBody}
         </p>
+        <a
+          href={`/${locale}/auth/oulu`}
+          className="btn btn-secondary"
+          style={{ marginTop: 14, display: 'inline-flex', gap: 8, alignItems: 'center' }}
+        >
+          🎓 {t.altCta}
+        </a>
       </section>
     </main>
   );

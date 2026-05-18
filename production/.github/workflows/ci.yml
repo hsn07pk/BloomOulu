@@ -37,6 +37,7 @@ jobs:
           export DATABASE_URL=postgresql://bloomoulu:bloomoulu@localhost:5432/bloomoulu_test
           pnpm --filter @bloomoulu/db run migrate:deploy
       - run: pnpm lint
+      - run: pnpm lint:css
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build

@@ -12,7 +12,7 @@
 import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import Link from 'next/link';
-import { auth } from '../../../lib/auth';
+import { getSession } from '../../../lib/session';
 
 export const dynamic = 'force-dynamic';
 
@@ -81,6 +81,36 @@ async function fetchGarden(userId: string): Promise<GardenView | null> {
   }
 }
 
+interface SavedRow {
+  id: string;
+  savedAt: string;
+  plant: {
+    id: string;
+    slug: string;
+    nameEn: string;
+    nameFi: string;
+    nameSv: string;
+    redListStatus: string;
+    primaryImage?: { url: string; altEn: string; altFi: string; altSv: string } | null;
+    taxon?: { latinName: string } | null;
+  };
+}
+
+async function fetchSaved(jwt: string): Promise<SavedRow[]> {
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+  try {
+    const res = await fetch(`${apiUrl}/v1/me/saved`, {
+      headers: { Authorization: `Bearer ${jwt}` },
+      cache: 'no-store',
+    });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { items?: SavedRow[] };
+    return data.items ?? [];
+  } catch {
+    return [];
+  }
+}
+
 function localisedPlantName(p: GardenView['adoptions'][number]['plant'], locale: string) {
   if (locale === 'fi') return p.nameFi || p.nameEn;
   if (locale === 'sv') return p.nameSv || p.nameEn;
@@ -102,11 +132,17 @@ export default async function GardenPage({
 }) {
   const { locale } = await params;
   const sp = await searchParams;
-  const session = await auth();
-  if (!session?.user?.id) redirect(`/${locale}/sign-in`);
+  const session = await getSession();
+  if (!session.user?.id) redirect(`/${locale}/sign-in`);
   const t = await getTranslations({ locale, namespace: 'Garden' });
   const tr = await getTranslations({ locale, namespace: 'Receipts' });
-  const garden = await fetchGarden(session.user.id);
+  const { cookies } = await import('next/headers');
+  const jar = await cookies();
+  const sessionJwt = jar.get('bloomoulu.session')?.value ?? '';
+  const [garden, saved] = await Promise.all([
+    fetchGarden(session.user.id),
+    sessionJwt ? fetchSaved(sessionJwt) : Promise.resolve([] as SavedRow[]),
+  ]);
 
   if (!garden) {
     return (
@@ -488,6 +524,106 @@ export default async function GardenPage({
                     </div>
                   </div>
                 </article>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* Saved plants (bookmarks) */}
+        <section aria-labelledby="saved-h" style={{ marginBottom: 56 }}>
+          <div className="eyebrow">
+            {locale === 'fi' ? 'Kirjanmerkit' : locale === 'sv' ? 'Bokmärken' : 'Bookmarks'}
+          </div>
+          <h2 id="saved-h" style={{ fontSize: 28, marginTop: 8, marginBottom: 16 }}>
+            {saved.length}{' '}
+            {saved.length === 1
+              ? locale === 'fi'
+                ? 'tallennettu kasvi'
+                : locale === 'sv'
+                  ? 'sparad växt'
+                  : 'saved plant'
+              : locale === 'fi'
+                ? 'tallennettua kasvia'
+                : locale === 'sv'
+                  ? 'sparade växter'
+                  : 'saved plants'}
+          </h2>
+          {saved.length === 0 ? (
+            <p className="muted">
+              {locale === 'fi'
+                ? 'Klikkaa ☆ kasvisivulla tallentaaksesi kasveja tähän.'
+                : locale === 'sv'
+                  ? 'Klicka på ☆ på en växtsida för att spara hit.'
+                  : 'Click the ☆ on any plant page to save it here.'}
+            </p>
+          ) : (
+            <div
+              data-grid-mobile="2"
+              style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}
+            >
+              {saved.map((s) => (
+                <Link
+                  key={s.id}
+                  href={`/${locale}/plants/${s.plant.slug}`}
+                  className="card"
+                  style={{
+                    padding: 0,
+                    overflow: 'hidden',
+                    textDecoration: 'none',
+                    color: 'inherit',
+                    display: 'block',
+                  }}
+                >
+                  <div
+                    style={{
+                      height: 140,
+                      background: 'var(--sage-pale)',
+                      position: 'relative',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    {s.plant.primaryImage?.url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={s.plant.primaryImage.url}
+                        alt=""
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          height: '100%',
+                          fontSize: 44,
+                        }}
+                        aria-hidden="true"
+                      >
+                        🌿
+                      </div>
+                    )}
+                    <span
+                      className={`badge badge-${s.plant.redListStatus.toLowerCase()}`}
+                      style={{ position: 'absolute', top: 10, left: 10 }}
+                    >
+                      {s.plant.redListStatus}
+                    </span>
+                  </div>
+                  <div style={{ padding: 14 }}>
+                    <div className="serif" style={{ fontSize: 16, fontStyle: 'italic', lineHeight: 1.1 }}>
+                      {s.plant.taxon?.latinName ?? s.plant.nameEn}
+                    </div>
+                    <div className="small muted" style={{ marginTop: 4 }}>
+                      {locale === 'fi'
+                        ? s.plant.nameFi || s.plant.nameEn
+                        : locale === 'sv'
+                          ? s.plant.nameSv || s.plant.nameEn
+                          : s.plant.nameEn}
+                    </div>
+                  </div>
+                </Link>
               ))}
             </div>
           )}

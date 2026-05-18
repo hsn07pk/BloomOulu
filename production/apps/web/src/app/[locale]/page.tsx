@@ -1,31 +1,27 @@
 import { getTranslations } from 'next-intl/server';
 import Link from 'next/link';
+import { type PlantIndexItem } from '../../components/PlantIndex.client';
+import { PlantCard } from '../../components/PlantCard';
 
 export const revalidate = 60;
 
-interface Plant {
-  id: string;
-  slug: string;
-  nameEn: string;
-  nameFi: string;
-  nameSv: string;
-  redListStatus: string;
-  bloomSeason: string;
-  bloomWindow?: string | null;
-  targetCents?: number;
-  adopterCount?: number;
-  primaryImage?: { url: string; altEn: string; altFi: string; altSv: string } | null;
-  taxon?: { latinName: string } | null;
-}
+type Plant = PlantIndexItem;
 
-async function fetchFeaturedPlants(): Promise<Plant[]> {
+// 3 for the hero "Featured plants" card + 8 for the preview grid below.
+const HOME_PLANT_LIMIT = 11;
+
+async function fetchInitialPlants(): Promise<{ items: Plant[] }> {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
   try {
-    const res = await fetch(`${apiUrl}/v1/plants?limit=12`, { next: { revalidate: 60, tags: ['plants'] } });
-    if (!res.ok) return [];
-    return res.json();
+    const res = await fetch(`${apiUrl}/v1/plants?limit=${HOME_PLANT_LIMIT}`, {
+      next: { revalidate: 60, tags: ['plants'] },
+    });
+    if (!res.ok) return { items: [] };
+    const data = await res.json();
+    if (Array.isArray(data)) return { items: data };
+    return { items: data.items ?? [] };
   } catch {
-    return [];
+    return { items: [] };
   }
 }
 
@@ -35,15 +31,13 @@ function localisedName(p: Plant, locale: string): string {
   return p.nameEn;
 }
 
-function rarityClass(s: string): string {
-  return `badge badge-${s.toLowerCase()}`;
-}
-
 export default async function HomePage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: 'Home' });
   const tn = await getTranslations({ locale, namespace: 'Nav' });
-  const plants = await fetchFeaturedPlants();
+  const tp = await getTranslations({ locale, namespace: 'Plants' });
+  const { items: plants } = await fetchInitialPlants();
+  const previewPlants = plants.slice(3, 11);
 
   return (
     <div className="fade-in">
@@ -170,7 +164,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
                 }}
               >
                 <div>
-                  <div className="tiny">{locale === 'fi' ? 'Tällä viikolla puutarhassa' : 'This week in the garden'}</div>
+                  <div className="tiny">{t('thisWeek')}</div>
                   <div className="serif" style={{ fontSize: 22, color: 'var(--ink)', marginTop: 2 }}>
                     {t('featured')}
                   </div>
@@ -229,8 +223,8 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
                 </Link>
               ))}
               <div style={{ padding: '14px 24px', background: 'rgba(31,58,44,0.04)', textAlign: 'center' }}>
-                <Link href={`/${locale}#plants`} className="btn btn-ghost small">
-                  🏛 {locale === 'fi' ? 'Selaa kaikki kasvit' : 'Browse all plants'}
+                <Link href={`/${locale}/plants`} className="btn btn-ghost small">
+                  🏛 {t('browseAll')}
                 </Link>
               </div>
             </div>
@@ -238,7 +232,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
         </div>
       </section>
 
-      {/* ── PLANT INDEX ──────────────────────────────────────────────── */}
+      {/* ── PLANT PREVIEW (8 cards · full browse lives on /plants) ── */}
       <section className="container" id="plants" style={{ paddingTop: 64, paddingBottom: 24 }}>
         <div
           style={{
@@ -247,122 +241,51 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
             justifyContent: 'space-between',
             flexWrap: 'wrap',
             gap: 16,
-            marginBottom: 32,
+            marginBottom: 24,
           }}
         >
           <div>
             <div className="tiny" style={{ color: 'var(--rust-on-light)' }}>
-              {locale === 'fi' ? 'Elävä kokoelma' : 'The living collection'}
+              {tp('collection')}
             </div>
-            <h2 style={{ fontSize: 52, marginTop: 8 }}>
-              {locale === 'fi' ? 'Selaa elävää indeksiä' : 'Browse the living index'}
-            </h2>
+            <h2 style={{ fontSize: 52, marginTop: 8 }}>{tp('indexTitle')}</h2>
             <p className="muted" style={{ marginTop: 12, maxWidth: 520 }}>
-              {locale === 'fi'
-                ? 'Jokaisella puutarhan kasvilla on oma sivu, oma äänikerronta — ja monella myös adoptiokutsu.'
-                : 'Every plant has its own page, its own audio narration, and — for many — a sponsorship invitation.'}
+              {tp('indexDesc')}
             </p>
           </div>
+          <Link href={`/${locale}/plants`} className="btn btn-secondary">
+            🏛 {t('browseAll')}
+          </Link>
         </div>
 
-        <div
-          data-grid-mobile="2"
-          style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20 }}
-        >
-          {plants.map((p) => {
-            const accent = ['#E8EEDE', '#F1E6CB', '#F0DCD0', '#D6EBE3'][
-              Number.parseInt(p.id.replace(/-/g, '').slice(-1), 16) % 4
-            ];
-            const altText =
-              locale === 'fi'
-                ? p.primaryImage?.altFi
-                : locale === 'sv'
-                  ? p.primaryImage?.altSv
-                  : p.primaryImage?.altEn;
-            return (
-              <Link
+        {previewPlants.length > 0 && (
+          <div
+            data-grid-mobile="2"
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(4, 1fr)',
+              gap: 20,
+            }}
+          >
+            {previewPlants.map((p) => (
+              <PlantCard
                 key={p.id}
-                href={`/${locale}/plants/${p.slug}`}
-                className="card"
-                style={{
-                  padding: 0,
-                  overflow: 'hidden',
-                  textDecoration: 'none',
-                  color: 'inherit',
-                  display: 'block',
-                }}
-              >
-                <div
-                  style={{
-                    height: 220,
-                    background: accent,
-                    position: 'relative',
-                    overflow: 'hidden',
-                  }}
-                >
-                  {p.primaryImage?.url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={p.primaryImage.url}
-                      alt={altText ?? p.nameEn}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                      loading="lazy"
-                    />
-                  ) : (
-                    <div
-                      style={{
-                        height: '100%',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: 64,
-                      }}
-                    >
-                      🌿
-                    </div>
-                  )}
-                  <div style={{ position: 'absolute', top: 14, left: 14 }}>
-                    <span className={rarityClass(p.redListStatus)}>{p.redListStatus}</span>
-                  </div>
-                </div>
-                <div style={{ padding: 18 }}>
-                  <div
-                    className="serif"
-                    style={{
-                      fontSize: 22,
-                      color: 'var(--ink)',
-                      fontStyle: 'italic',
-                      lineHeight: 1.05,
-                    }}
-                  >
-                    {p.taxon?.latinName ?? p.nameEn}
-                  </div>
-                  <div className="small muted" style={{ marginTop: 4 }}>
-                    {localisedName(p, locale)}
-                    {locale !== 'en' ? ` · ${p.nameEn}` : ''}
-                  </div>
-                  <div
-                    style={{
-                      marginTop: 14,
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                    }}
-                  >
-                    <div>
-                      <div className="tiny">{locale === 'fi' ? 'Adoptoijia' : 'Adopters'}</div>
-                      <div style={{ fontSize: 15, fontWeight: 600, marginTop: 2 }}>
-                        {p.adopterCount ?? 0}
-                      </div>
-                    </div>
-                    <span className="pill" style={{ fontSize: 11 }}>
-                      {p.bloomWindow ?? p.bloomSeason}
-                    </span>
-                  </div>
-                </div>
-              </Link>
-            );
-          })}
+                plant={p}
+                locale={locale}
+                adoptersLabel={tp('adopters')}
+              />
+            ))}
+          </div>
+        )}
+
+        <div style={{ marginTop: 32, textAlign: 'center' }}>
+          <Link
+            href={`/${locale}/plants`}
+            className="btn btn-primary"
+            style={{ minWidth: 220 }}
+          >
+            {t('browseAll')} →
+          </Link>
         </div>
       </section>
 

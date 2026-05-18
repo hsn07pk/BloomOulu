@@ -17,6 +17,8 @@ export const QUEUE_KIOSK_WATCHDOG = 'kiosk-watchdog';
 export const QUEUE_PAYMENT_RETRY = 'payment-retry';
 export const QUEUE_RENEWAL = 'renewal';
 export const QUEUE_TAX_CERT_ANNUAL = 'tax-cert-annual';
+export const QUEUE_RAG_EVAL = 'rag-eval';
+export const QUEUE_AUDIT_GAP = 'audit-gap';
 
 export const defaultJobOpts: JobsOptions = {
   attempts: 5,

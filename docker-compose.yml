@@ -37,6 +37,10 @@ services:
     volumes:
       - ./index.html:/usr/share/nginx/html/index.html:ro
       - ./vercel.json:/usr/share/nginx/html/vercel.json:ro
+      - ./favicon.svg:/usr/share/nginx/html/favicon.svg:ro
+      - ./favicon-16.png:/usr/share/nginx/html/favicon-16.png:ro
+      - ./favicon-32.png:/usr/share/nginx/html/favicon-32.png:ro
+      - ./favicon-180.png:/usr/share/nginx/html/favicon-180.png:ro
       - ./demo-design:/usr/share/nginx/html/demo-design:ro
       - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - ./docker/mime.types:/etc/nginx/mime.types:ro

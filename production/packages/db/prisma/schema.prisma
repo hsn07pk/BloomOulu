@@ -18,7 +18,7 @@ datasource db {
   provider   = "postgresql"
   url        = env("DATABASE_URL")
   directUrl  = env("DIRECT_URL")
-  extensions = [pgcrypto, pg_trgm, unaccent, vector]
+  extensions = [pgcrypto, pg_trgm, unaccent, vector, btree_gin]
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -63,6 +63,7 @@ model User {
   receipts      Receipt[]
   taxCertificates TaxCertificate[]
   askMessages   AskMessage[]
+  savedPlants   SavedPlant[]
   dataExports   DataExportRequest[]
   erasures      DataErasureRequest[]
   auditLogs     AuditLog[]    @relation("auditActor")
@@ -192,14 +193,25 @@ model Plant {
   narrations      AudioNarration[]
   citations       PlantCitation[]
   ragChunks       RagChunk[]
+  savedBy         SavedPlant[]
+  quizQuestions   QuizQuestion[]
 
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
-  @@index([redListStatus])
-  @@index([bloomSeason])
-  @@index([status])
-  @@index([slug])
+  // Indexes tuned for millions-of-plants scale.
+  // * status, redListStatus, bloomSeason: low-cardinality filter facets.
+  //   Composite indexes match the homepage's "active + red-list + season"
+  //   query so a single scan answers it.
+  // * adopterCount DESC + nameEn ASC: matches the default sort in
+  //   PlantsController.list — Postgres uses it instead of a sort+scan.
+  // * Trigram + full-text indexes on the localised names live in the
+  //   migration (Prisma can't model gin(... gin_trgm_ops) yet); the
+  //   PlantsController.list query uses them for the `q` parameter.
+  @@index([status, redListStatus, bloomSeason])
+  @@index([status, adopterCount(sort: Desc), nameEn])
+  @@index([status, createdAt(sort: Desc)])
+  @@index([taxonId])
 }
 
 model PlantImage {
@@ -403,9 +415,17 @@ model Adoption {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  @@index([donorId])
-  @@index([plantId])
-  @@index([status])
+  // Composite hot-path indexes for thousands-of-adopters scale.
+  // * (donorId, status, createdAt DESC) — My Garden fetches "my adoptions,
+  //   newest first" in one index lookup.
+  // * (plantId, status) — kiosk + plant pages count active adopters.
+  // * (status, recurring, endsAt) — the daily renewal cron scans this
+  //   without touching the rest of the table.
+  // * (status, showOnDonorWall, startedAt DESC) — adopter wall feed.
+  @@index([donorId, status, createdAt(sort: Desc)])
+  @@index([plantId, status])
+  @@index([status, recurring, endsAt])
+  @@index([status, showOnDonorWall, startedAt(sort: Desc)])
   @@index([tierId])
 }
 
@@ -492,10 +512,16 @@ model Payment {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  @@index([donorId])
+  // Hot paths at scale:
+  // * (donorId, status, receivedAt DESC) — annual tax-cert sweep + My
+  //   Garden donor history.
+  // * (status, receivedAt) — daily reconciliation cron's 30-day window
+  //   scan.
+  // * (provider, providerPaymentRef) — webhook lookups (already there).
+  @@index([donorId, status, receivedAt(sort: Desc)])
   @@index([adoptionId])
   @@index([provider, providerPaymentRef])
-  @@index([status])
+  @@index([status, receivedAt])
 }
 
 // Idempotency table — one row per inbound provider event we have processed.
@@ -832,4 +858,64 @@ model JobRun {
   createdAt       DateTime @default(now())
 
   @@index([queueName, status])
+}
+
+// Per-user bookmark list. Click the ☆ on a plant page to add it; the row
+// is the source of truth. Anonymous visitors get a localStorage-only
+// shadow that's synced into this table on first sign-in. The compound
+// unique constraint makes upserts idempotent.
+model SavedPlant {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @db.Uuid
+  plantId   String   @db.Uuid
+  note      String?  // optional donor-side note ("birthday gift for Mom")
+  savedAt   DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plant     Plant    @relation(fields: [plantId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, plantId])
+  @@index([userId, savedAt(sort: Desc)])
+}
+
+// School-mode quiz. Three to five questions per plant per locale, each a
+// 4-option multiple choice. The same shape backs the printable worksheet
+// (just rendered with checkboxes instead of buttons). Curators edit via
+// AdminJS; seed populates Q&A for the shipped plants.
+model QuizQuestion {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  plantId       String   @db.Uuid
+  plant         Plant    @relation(fields: [plantId], references: [id], onDelete: Cascade)
+  locale        Locale
+  prompt        String   @db.Text
+  options       String[] // exactly 4 strings; index of the correct one in `correctIndex`
+  correctIndex  Int      // 0..3
+  explanation   String?  @db.Text
+  difficulty    String   @default("middle") // primary | middle | upper — for the reading-level toggle
+  orderIndex    Int      @default(0)        // sort order within the same (plantId, locale, difficulty)
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([plantId, locale, difficulty, orderIndex])
+}
+
+// Anonymised quiz attempts so we can see "which questions confuse visitors
+// the most" without retaining PII. Anonymous attempts use a session UUID;
+// signed-in attempts also store userId so the donor can see history in /garden.
+model QuizAttempt {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String?  @db.Uuid
+  plantId      String   @db.Uuid
+  locale       Locale
+  difficulty   String
+  questionIds  String[] // ordered list of QuizQuestion.id presented
+  answers      Int[]    // ordered list of selected option indices
+  score        Int      // 0..questionIds.length
+  durationMs   Int      // wall-clock time from quiz open to submit
+
+  createdAt    DateTime @default(now())
+
+  @@index([plantId, createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
 }

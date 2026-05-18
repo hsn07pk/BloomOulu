@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-floating-promises */
-import './telemetry.js'; // <- must be first; sets up OTEL before any other import
+import './env.js'; // <- must be FIRST; loads .env into process.env before module init
+import './telemetry.js'; // <- second; sets up OTEL before any other import
 
 import { NestFactory } from '@nestjs/core';
 import {
@@ -9,8 +10,9 @@ import {
 import helmet from '@fastify/helmet';
 import rawBody from 'fastify-raw-body';
 import cookie from '@fastify/cookie';
-import { Logger, ValidationPipe } from '@nestjs/common';
+import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { Logger as PinoLogger } from 'nestjs-pino';
 import { AppModule } from './app.module.js';
 
 const PORT = parseInt(process.env.PORT ?? '4000', 10);
@@ -19,7 +21,7 @@ async function bootstrap() {
   const adapter = new FastifyAdapter({
     trustProxy: true,
     bodyLimit: 5 * 1024 * 1024, // 5 MB — accommodates camt.054 uploads
-    disableRequestLogging: true,
+    disableRequestLogging: true, // nestjs-pino's pinoHttp owns request logs
   });
 
   // Capture raw body on all routes — payment webhook handlers verify
@@ -34,6 +36,7 @@ async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(AppModule, adapter, {
     bufferLogs: true,
   });
+  app.useLogger(app.get(PinoLogger));
 
   await app.register(helmet as any, {
     contentSecurityPolicy: false, // CSP set at the edge by Caddy
@@ -70,7 +73,7 @@ async function bootstrap() {
   app.enableShutdownHooks();
 
   await app.listen({ port: PORT, host: '0.0.0.0' });
-  Logger.log(`BloomOulu API listening on :${PORT}`, 'Bootstrap');
+  app.get(PinoLogger).log(`BloomOulu API listening on :${PORT}`, 'Bootstrap');
 }
 
 bootstrap().catch((err) => {

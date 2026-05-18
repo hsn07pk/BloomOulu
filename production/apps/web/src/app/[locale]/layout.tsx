@@ -1,3 +1,4 @@
+import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import { NextIntlClientProvider } from 'next-intl';
 import { getMessages, getTranslations } from 'next-intl/server';
@@ -9,6 +10,38 @@ import { Topbar } from '../../components/Topbar';
 import '../globals.css';
 
 export const dynamic = 'force-dynamic';
+
+export const viewport: Viewport = {
+  themeColor: '#1F3C2D',
+};
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  const tc = await getTranslations({ locale, namespace: 'Common' });
+  const th = await getTranslations({ locale, namespace: 'Home' });
+  const appName = tc('appName');
+  const siteName = tc('siteName');
+  return {
+    title: {
+      default: `${appName} · ${siteName}`,
+      template: `%s · ${appName}`,
+    },
+    description: th('heroLead'),
+    applicationName: appName,
+    icons: {
+      icon: [
+        { url: '/favicon.svg', type: 'image/svg+xml' },
+        { url: '/favicon-32.png', type: 'image/png', sizes: '32x32' },
+        { url: '/favicon-16.png', type: 'image/png', sizes: '16x16' },
+      ],
+      apple: [{ url: '/apple-icon.png', sizes: '180x180' }],
+    },
+  };
+}
 
 export async function generateStaticParams() {
   return LOCALES.map((locale) => ({ locale }));

@@ -3,10 +3,14 @@ node_modules
 dist
 build
 .turbo
+.adminjs
 coverage
 playwright-report
 playwright/.cache
 test-results
+# Workspace uses a single pnpm-lock.yaml at the repo root; per-app
+# lockfiles are stray artifacts from running pnpm inside a subdir.
+apps/*/pnpm-lock.yaml
 .env
 .env.local
 .env.*.local

@@ -26,6 +26,8 @@ import {
   QUEUE_PAYMENT_RETRY,
   QUEUE_RENEWAL,
   QUEUE_TAX_CERT_ANNUAL,
+  QUEUE_RAG_EVAL,
+  QUEUE_AUDIT_GAP,
 } from './modules/jobs/queues.js';
 import { registerCronJobs } from './modules/jobs/cron.js';
 import { processReceipt } from './modules/jobs/processors/receipt.processor.js';
@@ -38,6 +40,8 @@ import { processKioskWatchdog } from './modules/jobs/processors/kiosk-watchdog.p
 import { processPaymentRetry } from './modules/jobs/processors/payment-retry.processor.js';
 import { processRenewal } from './modules/jobs/processors/renewal.processor.js';
 import { processTaxCertAnnual } from './modules/jobs/processors/tax-cert-annual.processor.js';
+import { processRagEval } from './modules/jobs/processors/rag-eval.processor.js';
+import { processAuditGap } from './modules/jobs/processors/audit-gap.processor.js';
 
 const logger = new Logger('Worker');
 const connection: ConnectionOptions = {
@@ -61,6 +65,8 @@ const QUEUES: ReadonlyArray<QueueDef> = [
   { name: QUEUE_PAYMENT_RETRY,  concurrency: 4,  handler: processPaymentRetry },
   { name: QUEUE_RENEWAL,        concurrency: 2,  handler: processRenewal },
   { name: QUEUE_TAX_CERT_ANNUAL, concurrency: 1, handler: processTaxCertAnnual },
+  { name: QUEUE_RAG_EVAL,       concurrency: 1,  handler: processRagEval },
+  { name: QUEUE_AUDIT_GAP,      concurrency: 1,  handler: processAuditGap },
 ];
 
 const workers: Worker[] = [];
