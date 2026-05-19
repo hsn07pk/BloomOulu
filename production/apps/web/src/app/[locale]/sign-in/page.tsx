@@ -1,4 +1,4 @@
-import { signInAction } from './actions';
+import { lookupEmailAction, passwordSignInAction, signInAction } from './actions';
 
 const COPY = {
   en: {
@@ -59,10 +59,11 @@ export default async function SignInPage({
   searchParams,
 }: {
   params: Promise<{ locale: string }>;
-  searchParams: Promise<{ reason?: string }>;
+  searchParams: Promise<{ reason?: string; step?: string; email?: string }>;
 }) {
   const { locale } = await params;
-  const { reason } = await searchParams;
+  const { reason, step, email: prefillEmail } = await searchParams;
+  const passwordStep = step === 'password' && prefillEmail;
   const t = COPY[(locale as keyof typeof COPY) in COPY ? (locale as keyof typeof COPY) : 'en'];
 
   // SSO is enabled only when the University of Oulu IdP credentials are
@@ -95,6 +96,28 @@ export default async function SignInPage({
             : locale === 'sv'
               ? 'Uleåborgs universitets IdP svarade inte. Försök igen eller använd e-postlänken.'
               : "Couldn't reach the University of Oulu identity provider. Try again or use the email link.",
+      };
+    }
+    if (reason === 'wrong_password') {
+      return {
+        kind: 'warn',
+        text:
+          locale === 'fi'
+            ? 'Salasana ei täsmää. Yritä uudelleen tai pyydä uusi kirjautumislinkki.'
+            : locale === 'sv'
+              ? 'Lösenordet matchar inte. Försök igen eller begär en ny inloggningslänk.'
+              : "That password didn't match. Try again, or request a fresh sign-in link.",
+      };
+    }
+    if (reason === 'expired' || reason === 'invalid') {
+      return {
+        kind: 'warn',
+        text:
+          locale === 'fi'
+            ? 'Linkki on vanhentunut. Pyydä uusi.'
+            : locale === 'sv'
+              ? 'Länken har gått ut. Begär en ny.'
+              : 'That link has expired. Request a new one below.',
       };
     }
     return null;
@@ -138,51 +161,112 @@ export default async function SignInPage({
         </div>
       )}
 
-      <form
-        action={signInAction}
-        className="card card-pad"
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 18,
-          background: 'var(--paper)',
-        }}
-      >
-        <input type="hidden" name="locale" value={locale} />
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <span className="label">{t.emailLabel}</span>
-          <input
-            type="email"
-            name="email"
-            required
-            autoComplete="email"
-            autoFocus
-            placeholder="name@example.com"
-            style={{
-              padding: '14px 16px',
-              border: '1px solid var(--line)',
-              borderRadius: 12,
-              background: 'var(--cream)',
-              fontSize: 16,
-              fontFamily: 'var(--f-body)',
-              minHeight: 48,
-              color: 'var(--ink)',
-            }}
-          />
-          <span className="small muted">{t.emailHint}</span>
-        </label>
-
-        <button type="submit" className="btn btn-primary btn-lg btn-block" style={{ marginTop: 4 }}>
-          {t.submit}
-        </button>
-
-        <p className="small muted" style={{ marginTop: 4, lineHeight: 1.55, textAlign: 'center' }}>
-          {t.privacyHint}{' '}
-          <a href={`/${locale}/terms`}>{t.privacyTerms}</a> {t.and}{' '}
-          <a href={`/${locale}/privacy`}>{t.privacyPrivacy}</a>
-          {t.period}
-        </p>
-      </form>
+      {passwordStep ? (
+        // ── Step 2a: returning donor with a password ──────────────────
+        <form
+          action={passwordSignInAction}
+          className="card card-pad"
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 18,
+            background: 'var(--paper)',
+          }}
+        >
+          <input type="hidden" name="locale" value={locale} />
+          <input type="hidden" name="email" value={prefillEmail} />
+          <div className="small muted" style={{ lineHeight: 1.5 }}>
+            {locale === 'fi' ? 'Kirjaudutaan sähköpostilla' : locale === 'sv' ? 'Loggar in som' : 'Signing in as'}{' '}
+            <strong style={{ color: 'var(--ink)' }}>{prefillEmail}</strong>{' '}
+            <a href={`/${locale}/sign-in`} style={{ marginLeft: 4 }}>
+              {locale === 'fi' ? '(vaihda)' : locale === 'sv' ? '(byt)' : '(change)'}
+            </a>
+          </div>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <span className="label">
+              {locale === 'fi' ? 'Salasana' : locale === 'sv' ? 'Lösenord' : 'Password'}
+            </span>
+            <input
+              type="password"
+              name="password"
+              required
+              autoFocus
+              autoComplete="current-password"
+              minLength={8}
+              style={{
+                padding: '14px 16px',
+                border: '1px solid var(--line)',
+                borderRadius: 12,
+                background: 'var(--cream)',
+                fontSize: 16,
+                fontFamily: 'var(--f-body)',
+                minHeight: 48,
+                color: 'var(--ink)',
+              }}
+            />
+          </label>
+          <button type="submit" className="btn btn-primary btn-lg btn-block" style={{ marginTop: 4 }}>
+            {locale === 'fi' ? 'Kirjaudu sisään →' : locale === 'sv' ? 'Logga in →' : 'Sign in →'}
+          </button>
+          <p className="small muted" style={{ textAlign: 'center', lineHeight: 1.55 }}>
+            <a href={`/${locale}/sign-in?reason=forgot&email=${encodeURIComponent(prefillEmail)}`}>
+              {locale === 'fi' ? 'Unohditko salasanan?' : locale === 'sv' ? 'Glömt lösenord?' : 'Forgot your password?'}
+            </a>
+          </p>
+        </form>
+      ) : (
+        // ── Step 1: email entry (lookup → password or send link) ──────
+        <form
+          action={lookupEmailAction}
+          className="card card-pad"
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 18,
+            background: 'var(--paper)',
+          }}
+        >
+          <input type="hidden" name="locale" value={locale} />
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <span className="label">{t.emailLabel}</span>
+            <input
+              type="email"
+              name="email"
+              required
+              autoComplete="email"
+              autoFocus
+              placeholder="name@example.com"
+              defaultValue={prefillEmail ?? ''}
+              style={{
+                padding: '14px 16px',
+                border: '1px solid var(--line)',
+                borderRadius: 12,
+                background: 'var(--cream)',
+                fontSize: 16,
+                fontFamily: 'var(--f-body)',
+                minHeight: 48,
+                color: 'var(--ink)',
+              }}
+            />
+            <span className="small muted">
+              {locale === 'fi'
+                ? 'Jos olet jo rekisteröitynyt, pyydämme salasanasi seuraavaksi. Muuten lähetämme sinulle vahvistuslinkin.'
+                : locale === 'sv'
+                  ? 'Om du redan har ett konto frågar vi efter ditt lösenord. Annars skickar vi en bekräftelselänk.'
+                  : "If you already have an account, we'll ask for your password next. Otherwise we'll send you a verify link to set one."}
+            </span>
+          </label>
+          <button type="submit" className="btn btn-primary btn-lg btn-block" style={{ marginTop: 4 }}>
+            {locale === 'fi' ? 'Jatka →' : locale === 'sv' ? 'Fortsätt →' : 'Continue →'}
+          </button>
+          <p className="small muted" style={{ marginTop: 4, lineHeight: 1.55, textAlign: 'center' }}>
+            {t.privacyHint}{' '}
+            <a href={`/${locale}/terms`}>{t.privacyTerms}</a> {t.and}{' '}
+            <a href={`/${locale}/privacy`}>{t.privacyPrivacy}</a>
+            {t.period}
+          </p>
+        </form>
+      )}
 
       {ssoEnabled ? (
         <section
