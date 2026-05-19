@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
 import { useTranslations } from 'next-intl';
 import { adoptAction } from './actions';
 
@@ -864,13 +864,50 @@ function Step2PickPlant({
 }: Step2Props) {
   const t = useTranslations('Adopt');
   const tPlants = useTranslations('Plants');
-  const selectedPlant = plants.find((p) => p.slug === plantSlug) ?? plants[0] ?? null;
+
+  // Live search + filter against the API. 7,954 plants is unusable as a
+  // single grid, so we ship 16 prefetched by the server, plus a search
+  // input that hits /v1/plants?q= as the user types.
+  const [query, setQuery] = useState('');
+  const [redListFilter, setRedListFilter] = useState<'' | 'CR' | 'EN' | 'VU' | 'NT' | 'LC'>('');
+  const [results, setResults] = useState<AdoptPlant[]>(plants);
+  const [searching, setSearching] = useState(false);
+
+  // Debounced server-side search.
+  useEffect(() => {
+    if (!query && !redListFilter) {
+      setResults(plants);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const params = new URLSearchParams({ limit: '40' });
+        if (query) params.set('q', query);
+        if (redListFilter) params.set('redList', redListFilter);
+        const apiBase =
+          (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000').replace(/\/$/, '');
+        const res = await fetch(`${apiBase}/v1/plants?${params}`);
+        if (res.ok) {
+          const data = (await res.json()) as { items: AdoptPlant[] };
+          setResults(data.items ?? []);
+        }
+      } catch {/* keep previous results */}
+      finally {
+        setSearching(false);
+      }
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [query, redListFilter, plants]);
+
+  const visible = results;
+  const selectedPlant = visible.find((p) => p.slug === plantSlug) ?? visible[0] ?? null;
 
   return (
     <section className="fade-in" aria-labelledby="step2-title">
       <header
         style={{
-          marginBottom: 40,
+          marginBottom: 24,
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'flex-end',
@@ -898,13 +935,91 @@ function Step2PickPlant({
         </span>
       </header>
 
+      {/* ── Search + Red-List filter ────────────────────────────────── */}
+      <div
+        style={{
+          display: 'flex',
+          gap: 12,
+          flexWrap: 'wrap',
+          marginBottom: 24,
+          padding: 12,
+          background: 'var(--paper)',
+          border: '1px solid var(--line)',
+          borderRadius: 12,
+        }}
+      >
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={
+            locale === 'fi'
+              ? 'Etsi nimellä tai latinaksi…'
+              : locale === 'sv'
+                ? 'Sök på namn eller latin…'
+                : 'Search plants by name or Latin…'
+          }
+          aria-label={
+            locale === 'fi' ? 'Etsi kasvi' : locale === 'sv' ? 'Sök växt' : 'Search for a plant'
+          }
+          style={{
+            flex: '1 1 280px',
+            minHeight: 44,
+            padding: '10px 14px',
+            borderRadius: 10,
+            border: '1px solid var(--line)',
+            background: 'var(--cream)',
+            fontSize: 15,
+            fontFamily: 'var(--f-body)',
+          }}
+        />
+        <select
+          value={redListFilter}
+          onChange={(e) => setRedListFilter(e.target.value as typeof redListFilter)}
+          aria-label={
+            locale === 'fi' ? 'Suodata uhanalaisuuden mukaan' : locale === 'sv' ? 'Filtrera efter rödlista' : 'Filter by Red List status'
+          }
+          style={{
+            minHeight: 44,
+            padding: '10px 14px',
+            borderRadius: 10,
+            border: '1px solid var(--line)',
+            background: 'var(--cream)',
+            fontSize: 15,
+            fontFamily: 'var(--f-body)',
+          }}
+        >
+          <option value="">
+            {locale === 'fi' ? 'Kaikki' : locale === 'sv' ? 'Alla' : 'Any status'}
+          </option>
+          <option value="CR">CR · {locale === 'fi' ? 'Äärimmäisen uhanalainen' : 'Critically Endangered'}</option>
+          <option value="EN">EN · {locale === 'fi' ? 'Erittäin uhanalainen' : 'Endangered'}</option>
+          <option value="VU">VU · {locale === 'fi' ? 'Vaarantunut' : 'Vulnerable'}</option>
+          <option value="NT">NT · {locale === 'fi' ? 'Silmälläpidettävä' : 'Near Threatened'}</option>
+          <option value="LC">LC · {locale === 'fi' ? 'Elinvoimainen' : 'Least Concern'}</option>
+        </select>
+        <div
+          aria-live="polite"
+          className="small muted"
+          style={{ flexBasis: '100%', marginTop: 4 }}
+        >
+          {searching
+            ? locale === 'fi'
+              ? 'Haetaan…'
+              : locale === 'sv'
+                ? 'Söker…'
+                : 'Searching…'
+            : `${visible.length} ${locale === 'fi' ? 'tulosta' : locale === 'sv' ? 'resultat' : 'matches'}`}
+        </div>
+      </div>
+
       <div
         data-grid-mobile="2"
         role="radiogroup"
         aria-label={t('pickPlant')}
         style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}
       >
-        {plants.map((p) => {
+        {visible.map((p) => {
           const isSelected = p.slug === plantSlug;
           const funded = plantFundedPct(p);
           const needs = funded < 80;

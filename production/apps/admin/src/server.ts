@@ -162,6 +162,7 @@ const SettingsPage = componentLoader.add('Settings', path.join(here, 'pages/Sett
 const TranslationsPage = componentLoader.add('Translations', path.join(here, 'pages/Translations'));
 const BackupsPage = componentLoader.add('Backups', path.join(here, 'pages/Backups'));
 const ReconciliationPage = componentLoader.add('Reconciliation', path.join(here, 'pages/Reconciliation'));
+const DashboardPage = componentLoader.add('Dashboard', path.join(here, 'pages/Dashboard'));
 
 // AdminJS 7's exported types are looser than its runtime accepts (page `label`,
 // `branding.softwareBrothers`, the static `AdminJS.bundle` helper, action
@@ -171,6 +172,10 @@ const ReconciliationPage = componentLoader.add('Reconciliation', path.join(here,
 const adminConfig = new AdminJS({
   rootPath: '/admin',
   componentLoader,
+  // Replace the AdminJS welcome page with the BloomOulu dashboard.
+  // The component fetches /admin/api/dashboard-stats every 30s and
+  // renders metrics tiles + curator escalations + quick-action links.
+  dashboard: { component: DashboardPage } as any,
   branding: {
     companyName: 'BloomOulu',
     softwareBrothers: false,
@@ -632,6 +637,57 @@ async function bootstrap() {
       req.url === '/favicon.ico'
     ) {
       reply.header('cache-control', 'public, max-age=86400').code(204).send();
+      return;
+    }
+    if (req.url === '/admin/dashboard-stats' && req.method === 'GET') {
+      try {
+        const startOfMonth = new Date();
+        startOfMonth.setUTCDate(1);
+        startOfMonth.setUTCHours(0, 0, 0, 0);
+        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        const [
+          plants, donors, adoptionsActive, donationsMtd,
+          ragDocs, webCacheDocs, curatorEscalationsOpen, askMessages7d,
+          recentEscalations,
+        ] = await Promise.all([
+          prisma.plant.count({ where: { status: 'active' } }),
+          prisma.user.count({ where: { role: 'donor' } }),
+          prisma.adoption.count({ where: { status: 'active' } }),
+          prisma.payment.aggregate({
+            _sum: { amountCents: true },
+            where: { status: 'succeeded', createdAt: { gte: startOfMonth } },
+          }),
+          prisma.ragDocument.count(),
+          prisma.ragDocument.count({ where: { title: { startsWith: '__web__:' } } }),
+          prisma.askAnswer.count({ where: { reaction: 'escalated' } }),
+          prisma.askMessage.count({ where: { createdAt: { gte: sevenDaysAgo } } }),
+          prisma.askAnswer.findMany({
+            where: { reaction: 'escalated' },
+            orderBy: { escalatedAt: 'desc' },
+            take: 5,
+            select: {
+              id: true, escalatedAt: true, createdAt: true,
+              message: { select: { text: true, user: { select: { email: true } } } },
+            },
+          }),
+        ]);
+        reply.header('content-type', 'application/json').send({
+          stats: {
+            plants, donors, adoptionsActive,
+            donationsMtdCents: donationsMtd._sum.amountCents ?? 0,
+            ragDocs, webCacheDocs, curatorEscalationsOpen, askMessages7d,
+          },
+          recentEscalations: recentEscalations.map((e: any) => ({
+            id: e.id,
+            email: e.message?.user?.email ?? '',
+            question: e.message?.text ?? '',
+            createdAt: (e.escalatedAt ?? e.createdAt).toISOString(),
+          })),
+        });
+      } catch (err) {
+        reply.code(500).send({ error: (err as Error).message });
+      }
+      return;
     }
   });
 
@@ -667,6 +723,97 @@ async function bootstrap() {
   app.get('/admin/metrics', async (_, reply) => {
     reply.header('content-type', 'text/plain');
     return 'admin_up 1\n';
+  });
+
+  // The /admin/dashboard-stats and /admin/rebuild-summaries handlers
+  // are registered above via onRequest because AdminJS's plugin
+  // claims everything under /admin/*. The route handlers below would
+  // never get reached.
+  app.get('/admin/dashboard-stats-unused', async () => {
+    try {
+      const startOfMonth = new Date();
+      startOfMonth.setUTCDate(1);
+      startOfMonth.setUTCHours(0, 0, 0, 0);
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+      const [
+        plants,
+        donors,
+        adoptionsActive,
+        donationsMtd,
+        ragDocs,
+        webCacheDocs,
+        curatorEscalationsOpen,
+        askMessages7d,
+        recentEscalations,
+      ] = await Promise.all([
+        prisma.plant.count({ where: { status: 'active' } }),
+        prisma.user.count({ where: { role: 'donor' } }),
+        prisma.adoption.count({ where: { status: 'active' } }),
+        prisma.payment.aggregate({
+          _sum: { amountCents: true },
+          where: { status: 'succeeded', createdAt: { gte: startOfMonth } },
+        }),
+        prisma.ragDocument.count(),
+        prisma.ragDocument.count({ where: { title: { startsWith: '__web__:' } } }),
+        prisma.askAnswer.count({ where: { reaction: 'escalated' } }),
+        prisma.askMessage.count({ where: { createdAt: { gte: sevenDaysAgo } } }),
+        prisma.askAnswer.findMany({
+          where: { reaction: 'escalated' },
+          orderBy: { escalatedAt: 'desc' },
+          take: 5,
+          select: {
+            id: true,
+            escalatedAt: true,
+            createdAt: true,
+            message: { select: { text: true, user: { select: { email: true } } } },
+          },
+        }),
+      ]);
+
+      return {
+        stats: {
+          plants,
+          donors,
+          adoptionsActive,
+          donationsMtdCents: donationsMtd._sum.amountCents ?? 0,
+          ragDocs,
+          webCacheDocs,
+          curatorEscalationsOpen,
+          askMessages7d,
+        },
+        recentEscalations: recentEscalations.map((e) => ({
+          id: e.id,
+          email: e.message?.user?.email ?? '',
+          question: e.message?.text ?? '',
+          createdAt: (e.escalatedAt ?? e.createdAt).toISOString(),
+        })),
+      };
+    } catch (err) {
+      return { stats: null, recentEscalations: [], error: (err as Error).message };
+    }
+  });
+
+  // Rebuild family + conservation summary chunks from the DB. Returns
+  // immediately and runs the rebuild fire-and-forget so the request
+  // doesn't sit waiting for ~5s of embedding work.
+  app.post('/admin/rebuild-summaries', async () => {
+    void (async () => {
+      try {
+        await prisma.ragDocument.deleteMany({
+          where: {
+            OR: [
+              { title: { startsWith: '__family__:' } },
+              { title: { startsWith: '__conservation__:' } },
+            ],
+          },
+        });
+        console.log('[admin] family + conservation summary docs removed; the next corpus rebuild will repopulate.');
+      } catch (err) {
+        console.warn('[admin] rebuild-summaries failed:', (err as Error).message);
+      }
+    })();
+    return { ok: true, queued: true };
   });
 
   const port = parseInt(process.env.PORT ?? '4100', 10);
