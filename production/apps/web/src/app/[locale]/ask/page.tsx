@@ -20,7 +20,7 @@ function internalApiUrl(): string {
 
 async function loadStarters(locale: string): Promise<string[]> {
   try {
-    const res = await fetch(`${internalApiUrl()}/v1/ask/starters`, { next: { revalidate: 300 } });
+    const res = await fetch(`${internalApiUrl()}/v1/ask/starters`, { cache: 'no-store' });
     if (!res.ok) return [];
     const all = (await res.json()) as Array<{ text: string; locale: string }>;
     const sameLocale = all.filter((s) => s.locale === locale).map((s) => s.text);
@@ -34,7 +34,7 @@ async function loadStarters(locale: string): Promise<string[]> {
 async function loadStaffStarters(locale: string): Promise<string[]> {
   try {
     const res = await fetch(`${internalApiUrl()}/v1/ask/staff-starters?locale=${locale}`, {
-      next: { revalidate: 300 },
+      cache: 'no-store',
     });
     return res.ok ? res.json() : [];
   } catch {
@@ -44,7 +44,7 @@ async function loadStaffStarters(locale: string): Promise<string[]> {
 
 async function loadCorpusStats(): Promise<CorpusStats | null> {
   try {
-    const res = await fetch(`${internalApiUrl()}/v1/ask/corpus-stats`, { next: { revalidate: 60 } });
+    const res = await fetch(`${internalApiUrl()}/v1/ask/corpus-stats`, { cache: 'no-store' });
     return res.ok ? res.json() : null;
   } catch {
     return null;
@@ -54,7 +54,7 @@ async function loadCorpusStats(): Promise<CorpusStats | null> {
 async function loadAuditMetric(): Promise<AuditMetric | null> {
   try {
     const res = await fetch(`${internalApiUrl()}/v1/ask/audit-metric?window=200`, {
-      next: { revalidate: 300 },
+      cache: 'no-store',
     });
     return res.ok ? res.json() : null;
   } catch {
@@ -64,7 +64,7 @@ async function loadAuditMetric(): Promise<AuditMetric | null> {
 
 async function loadPublicSettings(): Promise<{ ask?: AskSettings } | null> {
   try {
-    const res = await fetch(`${internalApiUrl()}/v1/settings/public`, { next: { revalidate: 60 } });
+    const res = await fetch(`${internalApiUrl()}/v1/settings/public`, { cache: 'no-store' });
     return res.ok ? res.json() : null;
   } catch {
     return null;

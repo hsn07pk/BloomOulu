@@ -30,6 +30,7 @@ import { QuizModule } from './modules/quiz/quiz.module.js';
 import { ExportsModule } from './modules/exports/exports.module.js';
 import { AdminUsersModule } from './modules/admin-users/admin-users.module.js';
 import { AdminPlantsModule } from './modules/admin-plants/admin-plants.module.js';
+import { EventsModule } from './modules/events/events.module.js';
 
 const isProd = process.env.NODE_ENV === 'production';
 
@@ -81,6 +82,7 @@ const isProd = process.env.NODE_ENV === 'production';
     PrometheusModule.register({ defaultMetrics: { enabled: true } }),
     PrismaModule,
     AuditModule,
+    EventsModule,
     SettingsModule,
     AuthModule,
     UsersModule,

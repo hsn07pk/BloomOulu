@@ -11,7 +11,7 @@ async function fetchInitialPlants(): Promise<{ items: PlantIndexItem[]; nextCurs
     process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
   try {
     const res = await fetch(`${apiUrl}/v1/plants?limit=24`, {
-      next: { revalidate: 60, tags: ['plants'] },
+      cache: 'no-store',
     });
     if (!res.ok) return { items: [], nextCursor: null };
     const data = await res.json();

@@ -24,6 +24,7 @@ import AdminJSFastify from '@adminjs/fastify';
 import { Database, Resource, getModelByName } from '@adminjs/prisma';
 import { PrismaClient } from '@prisma/client';
 import { Queue } from 'bullmq';
+import { Redis } from 'ioredis';
 import bcrypt from 'bcryptjs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -32,9 +33,90 @@ const queueConn = { connection: { url: process.env.REDIS_URL ?? 'redis://localho
 const emailQueue = new Queue('email', queueConn);
 const eraseQueue = new Queue('gdpr-erase', queueConn);
 
+// Redis publisher for real-time propagation. Every CRUD action in the
+// admin panel publishes to `admin.changed`, which the API SettingsService
+// subscribes to (invalidates its in-memory cache) and the API SSE
+// endpoint `/v1/events` fans out to every open browser tab so each
+// dashboard refreshes immediately, no hard reload required.
+const redisPub = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379', {
+  maxRetriesPerRequest: null,
+});
+async function broadcastChange(resource: string, action: 'new' | 'edit' | 'delete' | 'bulkDelete', recordId?: string) {
+  try {
+    await redisPub.publish(
+      'admin.changed',
+      JSON.stringify({ resource, action, recordId: recordId ?? null, ts: Date.now() }),
+    );
+    // SettingsService also subscribes to 'settings.updated' specifically,
+    // so when the resource is SystemSetting we publish both channels.
+    if (resource === 'SystemSetting') {
+      await redisPub.publish(
+        'settings.updated',
+        JSON.stringify({ key: recordId ?? null, ts: Date.now() }),
+      );
+    }
+  } catch (err) {
+    console.warn(`[admin] pubsub publish failed: ${(err as Error).message}`);
+  }
+}
+
+/** Wrap any existing actions block with broadcast `after` hooks so every
+ *  mutation publishes a Redis pub/sub message. We preserve the original
+ *  action options and chain a new `after` handler. */
+function withBroadcast(actions: Record<string, any> = {}, resourceName: string): Record<string, any> {
+  const wrap = (action: 'new' | 'edit' | 'delete' | 'bulkDelete') => {
+    const original = actions[action] ?? {};
+    const prevAfter = original.after;
+    return {
+      ...original,
+      after: async (response: any, request: any, context: any) => {
+        const next = typeof prevAfter === 'function'
+          ? await prevAfter(response, request, context)
+          : response;
+        const recordId =
+          next?.record?.params?.id ??
+          response?.record?.params?.id ??
+          request?.params?.recordId ??
+          undefined;
+        void broadcastChange(resourceName, action, recordId);
+        return next;
+      },
+    };
+  };
+  return {
+    ...actions,
+    new: wrap('new'),
+    edit: wrap('edit'),
+    delete: wrap('delete'),
+    bulkDelete: wrap('bulkDelete'),
+  };
+}
+
 AdminJS.registerAdapter({ Database, Resource });
 
-const prisma = new PrismaClient();
+// Prisma client wrapped so every write fires a Redis pub/sub broadcast.
+// AdminJS uses Prisma for CRUD; intercepting at the client level catches
+// every mutation regardless of which resource UI triggered it, with no
+// per-resource boilerplate.
+const basePrisma = new PrismaClient();
+const prisma = basePrisma.$extends({
+  query: {
+    $allModels: {
+      async $allOperations({ model, operation, args, query }) {
+        const result = await query(args);
+        const writes = new Set([
+          'create', 'createMany', 'update', 'updateMany',
+          'upsert', 'delete', 'deleteMany',
+        ]);
+        if (writes.has(operation)) {
+          const id = (result as any)?.id ?? (args as any)?.where?.id ?? undefined;
+          void broadcastChange(model, operation as any, id);
+        }
+        return result;
+      },
+    },
+  },
+}) as unknown as PrismaClient;
 
 type Role = 'donor' | 'curator' | 'finance' | 'admin';
 

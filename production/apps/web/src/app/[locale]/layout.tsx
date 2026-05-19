@@ -7,6 +7,7 @@ import { LOCALES, type Locale } from '../../i18n';
 import { A11yPanel } from '../../components/A11yPanel';
 import { CookieBanner } from '../../components/CookieBanner';
 import { Topbar } from '../../components/Topbar';
+import LiveSync from '../../components/LiveSync.client';
 import '../globals.css';
 
 export const dynamic = 'force-dynamic';
@@ -81,6 +82,11 @@ export default async function RootLayout({
           Skip to main content
         </a>
         <NextIntlClientProvider locale={locale} messages={messages}>
+          {/* Browser-side real-time invalidation. Opens one SSE
+              connection to /v1/events and triggers router.refresh()
+              on any admin-side write so every open tab stays current
+              without a hard reload. */}
+          <LiveSync apiUrl={process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'} />
           <Topbar locale={locale} />
           <main id="main">{children}</main>
           <footer

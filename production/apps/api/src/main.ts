@@ -72,6 +72,20 @@ async function bootstrap() {
   app.setGlobalPrefix('v1', { exclude: ['healthz', 'metrics', 'webhooks/(.*)'] });
   app.enableShutdownHooks();
 
+  // Wire the pub/sub listener into SettingsService so an admin write to
+  // SystemSetting (broadcast on the `admin.changed` channel) invalidates
+  // our in-memory settings cache immediately instead of after the 60-s
+  // TTL.
+  try {
+    const { PubsubService } = await import('./modules/events/pubsub.service.js');
+    const { SettingsService } = await import('./modules/settings/settings.service.js');
+    const pubsub = app.get(PubsubService);
+    const settings = app.get(SettingsService);
+    settings.attachPubsub(pubsub);
+  } catch (err) {
+    app.get(PinoLogger).warn(`pubsub wiring skipped: ${(err as Error).message}`, 'Bootstrap');
+  }
+
   await app.listen({ port: PORT, host: '0.0.0.0' });
   app.get(PinoLogger).log(`BloomOulu API listening on :${PORT}`, 'Bootstrap');
 }

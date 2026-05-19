@@ -23,7 +23,7 @@ function internalApiUrl(): string {
 
 async function fetchTiers(): Promise<AdoptTier[]> {
   try {
-    const res = await fetch(`${internalApiUrl()}/v1/tiers`, { next: { revalidate: 300 } });
+    const res = await fetch(`${internalApiUrl()}/v1/tiers`, { cache: 'no-store' });
     return res.ok ? res.json() : [];
   } catch {
     return [];
@@ -33,7 +33,7 @@ async function fetchTiers(): Promise<AdoptTier[]> {
 async function fetchPlants(limit: number): Promise<AdoptPlant[]> {
   try {
     const res = await fetch(`${internalApiUrl()}/v1/plants?limit=${limit}`, {
-      next: { revalidate: 60 },
+      cache: 'no-store',
     });
     if (!res.ok) return [];
     const data = await res.json();
@@ -46,7 +46,7 @@ async function fetchPlants(limit: number): Promise<AdoptPlant[]> {
 async function fetchPlant(slug: string | undefined): Promise<AdoptPlant | null> {
   if (!slug) return null;
   try {
-    const res = await fetch(`${internalApiUrl()}/v1/plants/${slug}`, { next: { revalidate: 60 } });
+    const res = await fetch(`${internalApiUrl()}/v1/plants/${slug}`, { cache: 'no-store' });
     return res.ok ? res.json() : null;
   } catch {
     return null;
@@ -66,7 +66,7 @@ interface PublicSettingsResponse {
 async function fetchPublicSettings(): Promise<PublicSettingsResponse> {
   try {
     const res = await fetch(`${internalApiUrl()}/v1/settings/public`, {
-      next: { revalidate: 30 },
+      cache: 'no-store',
     });
     return res.ok ? res.json() : {};
   } catch {

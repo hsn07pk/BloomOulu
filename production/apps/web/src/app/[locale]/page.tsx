@@ -14,7 +14,7 @@ const HOME_PLANT_LIMIT = 11;
 async function fetchInitialPlants(): Promise<{ items: Plant[] }> {
   try {
     const res = await fetch(`${internalApiUrl()}/v1/plants?limit=${HOME_PLANT_LIMIT}`, {
-      next: { revalidate: 60, tags: ['plants'] },
+      cache: 'no-store',
     });
     if (!res.ok) return { items: [] };
     const data = await res.json();

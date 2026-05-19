@@ -66,7 +66,7 @@ async function fetchSimilar(plant: Plant, api: string): Promise<SimilarPlant[]> 
     // First try same-family matches via taxonId. Falls back to same-redList.
     // Cheap: one extra api call, cached the same as the plant.
     const url = `${api}/v1/plants?redList=${plant.redListStatus}&limit=12`;
-    const res = await fetch(url, { next: { revalidate: 600 } });
+    const res = await fetch(url, { cache: 'no-store' });
     if (!res.ok) return [];
     const data = (await res.json()) as { items?: SimilarPlant[] };
     const items = data.items ?? [];
@@ -88,7 +88,7 @@ export default async function PlantPage({
   const serverApi =
     process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
   const browserApi = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
-  const res = await fetch(`${serverApi}/v1/plants/${slug}`, { next: { revalidate: 3600 } });
+  const res = await fetch(`${serverApi}/v1/plants/${slug}`, { cache: 'no-store' });
   if (!res.ok) notFound();
   const plant = (await res.json()) as Plant;
   const similar = await fetchSimilar(plant, serverApi);

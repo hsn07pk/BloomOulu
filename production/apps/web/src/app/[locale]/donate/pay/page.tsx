@@ -20,7 +20,7 @@ export const dynamic = 'force-dynamic';
 
 async function loadSettings() {
   try {
-    const res = await fetch(`${internalApiUrl()}/v1/settings/public`, { next: { revalidate: 60 } });
+    const res = await fetch(`${internalApiUrl()}/v1/settings/public`, { cache: 'no-store' });
     return res.ok ? res.json() : null;
   } catch {
     return null;

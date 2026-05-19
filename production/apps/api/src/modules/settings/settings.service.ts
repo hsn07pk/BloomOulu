@@ -151,7 +151,30 @@ export class SettingsService implements OnModuleInit {
   private cache: BloomOuluSettings = DEFAULTS;
   private cacheLoadedAt = 0;
 
+  // Late-injected so the SettingsModule itself doesn't have to import
+  // EventsModule (which would risk a circular dep if Events ever depends
+  // on Settings). The PubsubService is global, so we resolve it through
+  // the module-ref shortcut: a setter called from main.ts at boot.
+  private pubsub: { on: (ch: string, cb: (p: unknown) => void) => void } | null = null;
+
   constructor(private readonly prisma: PrismaService) {}
+
+  /** Wire up the pub/sub listener so any admin write to SystemSetting
+   *  (or any cross-process broadcast) invalidates this instance's cache
+   *  immediately, not after the 60-second TTL expires. Called once from
+   *  app boot. */
+  attachPubsub(pubsub: { on: (ch: string, cb: (p: unknown) => void) => void }) {
+    this.pubsub = pubsub;
+    pubsub.on('admin.changed', () => {
+      this.logger.log('admin.changed pubsub → invalidating settings cache');
+      this.cacheLoadedAt = 0;
+      void this.refresh();
+    });
+    pubsub.on('settings.updated', () => {
+      this.cacheLoadedAt = 0;
+      void this.refresh();
+    });
+  }
 
   async onModuleInit() {
     await this.refresh();
@@ -191,6 +214,12 @@ export class SettingsService implements OnModuleInit {
       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_by = EXCLUDED.updated_by, updated_at = now()
     `;
     await this.refresh();
+  }
+
+  /** Force a reload right now, used after the pub/sub listener fires. */
+  invalidate() {
+    this.cacheLoadedAt = 0;
+    void this.refresh();
   }
 }
 

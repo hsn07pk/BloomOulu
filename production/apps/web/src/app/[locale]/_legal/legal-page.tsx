@@ -27,7 +27,7 @@ async function loadBlock(slug: string): Promise<ContentBlock | null> {
     process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
   try {
     const res = await fetch(`${apiUrl}/v1/content-blocks/${encodeURIComponent(slug)}`, {
-      next: { revalidate: 300, tags: [`content-block:${slug}`] },
+      cache: 'no-store',
     });
     if (!res.ok) return null;
     return res.json();
