@@ -86,6 +86,9 @@ importers:
       '@adminjs/prisma':
         specifier: ^5.0.3
         version: 5.0.4(@prisma/client@5.22.0(prisma@5.22.0))(adminjs@7.8.17(@types/react-dom@18.3.7(@types/react@18.3.28))(@types/react@18.3.28))
+      '@babel/plugin-syntax-import-assertions':
+        specifier: ^7.27.1
+        version: 7.28.6(@babel/core@7.29.0)
       '@bloomoulu/db':
         specifier: workspace:*
         version: link:../../packages/db

@@ -14,13 +14,13 @@
 import { getTranslations } from 'next-intl/server';
 import qrcode from 'qrcode-generator';
 import { PrintButton } from './print-button.client';
+import { internalApiUrl } from '../../../../lib/api';
 
 export const dynamic = 'force-dynamic';
 
 async function loadSettings() {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
   try {
-    const res = await fetch(`${apiUrl}/v1/settings/public`, { next: { revalidate: 60 } });
+    const res = await fetch(`${internalApiUrl()}/v1/settings/public`, { next: { revalidate: 60 } });
     return res.ok ? res.json() : null;
   } catch {
     return null;

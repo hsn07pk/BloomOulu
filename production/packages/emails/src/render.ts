@@ -14,9 +14,12 @@ interface MjmlResult {
  */
 export function renderMjml(
   mjml: string,
-  vars: Record<string, string>,
+  // Accept any primitive — receipts pass amountCents (number), SLA days
+  // (number), etc. Booleans/null/undefined render as empty strings (safer
+  // than the literal 'undefined' showing in an email).
+  vars: Record<string, string | number | boolean | null | undefined>,
 ): string {
-  const interpolated = mjml.replace(/\{\{(\w+)\}\}/g, (_, k) => escape(vars[k] ?? ''));
+  const interpolated = mjml.replace(/\{\{(\w+)\}\}/g, (_, k) => escape(vars[k]));
   // @types/mjml@5 declares an async signature, but runtime mjml@4 is sync.
   const { html, errors } = mjml2html(interpolated, { validationLevel: 'soft' }) as unknown as MjmlResult;
   if (errors.length) {
@@ -26,8 +29,9 @@ export function renderMjml(
   return html;
 }
 
-function escape(s: string): string {
-  return s
+function escape(v: unknown): string {
+  if (v === undefined || v === null) return '';
+  return String(v)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')

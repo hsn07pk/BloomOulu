@@ -36,6 +36,41 @@ AdminJS.registerAdapter({ Database, Resource });
 
 const prisma = new PrismaClient();
 
+type Role = 'donor' | 'curator' | 'finance' | 'admin';
+
+/**
+ * Returns the standard `options.actions` block that gates every CRUD action
+ * on a resource to the given roles. ADR-0007 mandates the matrix:
+ *   • curator → Plant/Accession/Taxon/PlantImage/AudioNarration/Citation/RAG
+ *   • finance → Payment/Receipt/TaxCertificate/ProcessedEvent/Reconciliation
+ *   • admin   → everything (Settings/Translations/role assignment/audit)
+ * Donor-role accounts never see /admin (the bootstrap auth check refuses
+ * them at sign-in), but an extra explicit deny keeps the gate defence-in-depth.
+ */
+function restrictTo(...allowed: Role[]) {
+  const allow = new Set<Role>(allowed);
+  const guard = ({ currentAdmin }: { currentAdmin?: { role?: string } }) =>
+    allow.has((currentAdmin?.role as Role) ?? 'donor');
+  // Read actions
+  const read = { isAccessible: guard };
+  // Write actions — also forbidden when the role is read-only for this resource.
+  const write = { isAccessible: guard };
+  return {
+    list: read,
+    show: read,
+    search: read,
+    new: write,
+    edit: write,
+    delete: write,
+    bulkDelete: write,
+  };
+}
+
+// Shorthand presets for each ADR-0007 surface.
+const CURATOR_OR_ADMIN = ['curator', 'admin'] as const;
+const FINANCE_OR_ADMIN = ['finance', 'admin'] as const;
+const ADMIN_ONLY = ['admin'] as const;
+
 // AdminJS 7 replaced the static `AdminJS.bundle()` helper with an instance-
 // based ComponentLoader. Custom React panels register with the loader; the
 // returned token is passed as `component` to page/action definitions.
@@ -92,23 +127,58 @@ const adminConfig = new AdminJS({
           story: { type: 'mixed', isArray: false, components: {} },
         },
         sort: { sortBy: 'adopterCount', direction: 'desc' as const },
+        actions: restrictTo(...CURATOR_OR_ADMIN),
       },
     },
-    { resource: { model: getModelByName('Taxon'), client: prisma }, options: { navigation: { name: 'Catalogue' } } },
-    { resource: { model: getModelByName('Accession'), client: prisma }, options: { navigation: { name: 'Catalogue' } } },
-    { resource: { model: getModelByName('PlantImage'), client: prisma }, options: { navigation: { name: 'Catalogue' } } },
-    { resource: { model: getModelByName('AudioNarration'), client: prisma }, options: { navigation: { name: 'Catalogue' } } },
-    { resource: { model: getModelByName('Citation'), client: prisma }, options: { navigation: { name: 'Catalogue' } } },
+    { resource: { model: getModelByName('Taxon'), client: prisma }, options: { navigation: { name: 'Catalogue' }, actions: restrictTo(...CURATOR_OR_ADMIN) } },
+    { resource: { model: getModelByName('Accession'), client: prisma }, options: { navigation: { name: 'Catalogue' }, actions: restrictTo(...CURATOR_OR_ADMIN) } },
+    { resource: { model: getModelByName('PlantImage'), client: prisma }, options: { navigation: { name: 'Catalogue' }, actions: restrictTo(...CURATOR_OR_ADMIN) } },
+    { resource: { model: getModelByName('AudioNarration'), client: prisma }, options: { navigation: { name: 'Catalogue' }, actions: restrictTo(...CURATOR_OR_ADMIN) } },
+    { resource: { model: getModelByName('Citation'), client: prisma }, options: { navigation: { name: 'Catalogue' }, actions: restrictTo(...CURATOR_OR_ADMIN) } },
     // ── Tiers + pricing ────────────────────────────────────────────────
     {
       resource: { model: getModelByName('Tier'), client: prisma },
       options: {
         navigation: { name: 'Pricing', icon: 'Tag' },
+        listProperties: ['id', 'name', 'annualPriceCents', 'monthlyPriceCents', 'tagEn', 'sortOrder'],
+        editProperties: [
+          'id', 'sortOrder',
+          'name', 'nameFi', 'nameSv',
+          'tagEn', 'tagFi', 'tagSv',
+          'blurbEn', 'blurbFi', 'blurbSv',
+          'annualPriceCents', 'monthlyPriceCents',
+          'perks',
+          'color', 'bg',
+        ],
         properties: {
-          annualPriceCents: { description: 'Annual price in cents. €25 = 2500.' },
-          monthlyPriceCents: { description: 'Monthly opt-in price in cents. Leave blank for annual-only tiers.' },
-          perks: { description: 'List of perk keys; localized strings come from the Translation editor.' },
+          id: { description: 'Stable id — donor-facing URLs and DTOs reference it. Edit only when introducing a new tier.' },
+          sortOrder: { description: 'Order in the donor-facing tier ladder. 1 = leftmost.' },
+          annualPriceCents: { description: 'Annual price in cents. €25 = 2500, €750 = 75000.' },
+          monthlyPriceCents: { description: 'Monthly opt-in price in cents. Leave blank for annual-only tiers (e.g. Corporate).' },
+          name: { description: 'English tier name shown on the card (e.g. "Seedling").' },
+          nameFi: { description: 'Finnish tier name (e.g. "Siemen").' },
+          nameSv: { description: 'Swedish tier name (e.g. "Frö").' },
+          tagEn: { description: 'Small badge in the upper-right of the tier card ("Most popular gift", "Best value", …). Leave blank to hide.' },
+          tagFi: { description: 'Finnish version of the tag badge.' },
+          tagSv: { description: 'Swedish version of the tag badge.' },
+          blurbEn: { description: 'English one-paragraph description below the price. Keep under 240 chars.' },
+          blurbFi: { description: 'Finnish description.' },
+          blurbSv: { description: 'Swedish description.' },
+          perks: {
+            description:
+              'Bulleted perks shown on the tier card. JSON array. Each entry can be:\n' +
+              '  • a string key from the built-in vocabulary (e.g. "nickname_your_plant"); or\n' +
+              '  • an object with inline locale labels: {"labelEn": "Custom perk", "labelFi": "…", "labelSv": "…"}.\n' +
+              'Mix both freely. Reorder by editing the JSON.',
+            type: 'mixed',
+          },
+          color: { description: 'Tier accent colour (hex, e.g. "#A8C060"). Used for selection borders + check icons.' },
+          bg: { description: 'Tier-card background colour (hex, e.g. "#E8EEDE").' },
         },
+        sort: { sortBy: 'sortOrder', direction: 'asc' as const },
+        // Pricing changes are financially material — admin only. Finance
+        // gets a read-only view via the AuditLog + the Payment resource.
+        actions: restrictTo(...ADMIN_ONLY),
       },
     },
     // ── Adoptions + donors ─────────────────────────────────────────────
@@ -118,6 +188,7 @@ const adminConfig = new AdminJS({
         navigation: { name: 'Donors', icon: 'Heart' },
         listProperties: ['createdAt', 'donorId', 'plantId', 'tierId', 'status', 'amountCents'],
         actions: {
+          ...restrictTo(...FINANCE_OR_ADMIN),
           cancel: {
             actionType: 'record',
             label: 'Cancel adoption',
@@ -129,14 +200,30 @@ const adminConfig = new AdminJS({
                 where: { id: ctx.record!.params['id'] },
                 data: { status: 'cancelled', cancelledAt: new Date() },
               });
+              await prisma.auditLog.create({
+                data: {
+                  actorUserId: ctx.currentAdmin?.id ?? null,
+                  action: 'admin.adoption.cancel',
+                  resource: `Adoption/${ctx.record!.params['id']}`,
+                },
+              });
               return { record: ctx.record!.toJSON(ctx.currentAdmin) };
             },
           },
         },
       },
     },
-    { resource: { model: getModelByName('User'), client: prisma }, options: { navigation: { name: 'Donors' } } },
-    { resource: { model: getModelByName('GiftCode'), client: prisma }, options: { navigation: { name: 'Donors' } } },
+    {
+      // User management is admin-only (role assignment, deactivation).
+      // Finance can find a donor via the Payment list; curator never
+      // needs the User table directly.
+      resource: { model: getModelByName('User'), client: prisma },
+      options: { navigation: { name: 'Donors' }, actions: restrictTo(...ADMIN_ONLY) },
+    },
+    {
+      resource: { model: getModelByName('GiftCode'), client: prisma },
+      options: { navigation: { name: 'Donors' }, actions: restrictTo(...FINANCE_OR_ADMIN) },
+    },
     {
       resource: { model: getModelByName('Plaque'), client: prisma },
       options: {
@@ -144,6 +231,7 @@ const adminConfig = new AdminJS({
         listProperties: ['createdAt', 'adoptionId', 'engravedText', 'status', 'installedAt'],
         sort: { sortBy: 'createdAt', direction: 'desc' as const },
         actions: {
+          ...restrictTo('curator', 'admin'),
           markInstalled: {
             actionType: 'record',
             label: 'Mark installed',
@@ -190,44 +278,81 @@ const adminConfig = new AdminJS({
       options: {
         navigation: { name: 'Finance', icon: 'Dollar' },
         listProperties: ['createdAt', 'provider', 'amountCents', 'status', 'donorId'],
+        actions: restrictTo(...FINANCE_OR_ADMIN),
       },
     },
-    { resource: { model: getModelByName('Receipt'), client: prisma }, options: { navigation: { name: 'Finance' } } },
-    { resource: { model: getModelByName('TaxCertificate'), client: prisma }, options: { navigation: { name: 'Finance' } } },
-    { resource: { model: getModelByName('ProcessedEvent'), client: prisma }, options: { navigation: { name: 'Finance' } } },
-    // ── RAG ────────────────────────────────────────────────────────────
-    { resource: { model: getModelByName('RagDocument'), client: prisma }, options: { navigation: { name: 'AskTheGarden', icon: 'MessageCircle' } } },
+    {
+      resource: { model: getModelByName('Receipt'), client: prisma },
+      options: { navigation: { name: 'Finance' }, actions: restrictTo(...FINANCE_OR_ADMIN) },
+    },
+    {
+      resource: { model: getModelByName('TaxCertificate'), client: prisma },
+      options: { navigation: { name: 'Finance' }, actions: restrictTo(...FINANCE_OR_ADMIN) },
+    },
+    {
+      resource: { model: getModelByName('ProcessedEvent'), client: prisma },
+      options: { navigation: { name: 'Finance' }, actions: restrictTo(...FINANCE_OR_ADMIN) },
+    },
+    // ── RAG (curator-owned, ADR-0007) ─────────────────────────────────
+    {
+      resource: { model: getModelByName('RagDocument'), client: prisma },
+      options: { navigation: { name: 'AskTheGarden', icon: 'MessageCircle' }, actions: restrictTo(...CURATOR_OR_ADMIN) },
+    },
     {
       resource: { model: getModelByName('RagChunk'), client: prisma },
       options: {
         navigation: { name: 'AskTheGarden' },
         listProperties: ['documentId', 'chunkIndex', 'locale', 'tokenStart', 'tokenEnd'],
-        actions: { new: { isAccessible: false }, edit: { isAccessible: false } },
+        // RagChunk is regenerated by the ingest job, not edited inline.
+        actions: { ...restrictTo(...CURATOR_OR_ADMIN), new: { isAccessible: false }, edit: { isAccessible: false } },
         properties: {
           embedding: { isVisible: { list: false, edit: false, show: false, filter: false } },
         },
       },
     },
-    { resource: { model: getModelByName('AskMessage'), client: prisma }, options: { navigation: { name: 'AskTheGarden' } } },
-    { resource: { model: getModelByName('AskAnswer'), client: prisma }, options: { navigation: { name: 'AskTheGarden' } } },
+    {
+      resource: { model: getModelByName('AskMessage'), client: prisma },
+      options: { navigation: { name: 'AskTheGarden' }, actions: restrictTo(...CURATOR_OR_ADMIN) },
+    },
+    {
+      resource: { model: getModelByName('AskAnswer'), client: prisma },
+      options: { navigation: { name: 'AskTheGarden' }, actions: restrictTo(...CURATOR_OR_ADMIN) },
+    },
     // ── Kiosk ──────────────────────────────────────────────────────────
-    { resource: { model: getModelByName('KioskDevice'), client: prisma }, options: { navigation: { name: 'Kiosk', icon: 'Monitor' } } },
-    { resource: { model: getModelByName('KioskEvent'), client: prisma }, options: { navigation: { name: 'Kiosk' } } },
+    {
+      resource: { model: getModelByName('KioskDevice'), client: prisma },
+      options: { navigation: { name: 'Kiosk', icon: 'Monitor' }, actions: restrictTo(...ADMIN_ONLY) },
+    },
+    {
+      resource: { model: getModelByName('KioskEvent'), client: prisma },
+      options: { navigation: { name: 'Kiosk' }, actions: restrictTo(...ADMIN_ONLY) },
+    },
     // ── Audit + GDPR ───────────────────────────────────────────────────
     {
       resource: { model: getModelByName('AuditLog'), client: prisma },
       options: {
         navigation: { name: 'Audit & GDPR', icon: 'Shield' },
         sort: { sortBy: 'occurredAt', direction: 'desc' as const },
+        // Audit log is append-only; finance + admin can read, but no one
+        // can edit or delete via AdminJS (truncation is a DB-level cron).
         actions: {
+          list: { isAccessible: ({ currentAdmin }: { currentAdmin?: { role?: string } }) =>
+            ['admin', 'finance'].includes(currentAdmin?.role as string) },
+          show: { isAccessible: ({ currentAdmin }: { currentAdmin?: { role?: string } }) =>
+            ['admin', 'finance'].includes(currentAdmin?.role as string) },
+          search: { isAccessible: ({ currentAdmin }: { currentAdmin?: { role?: string } }) =>
+            ['admin', 'finance'].includes(currentAdmin?.role as string) },
           new: { isAccessible: false },
           edit: { isAccessible: false },
           delete: { isAccessible: false },
         },
       },
     },
-    { resource: { model: getModelByName('DataExportRequest'), client: prisma }, options: { navigation: { name: 'Audit & GDPR' } } },
-    // ── Operations config (ADR-0007 admin surfaces) ────────────────────
+    {
+      resource: { model: getModelByName('DataExportRequest'), client: prisma },
+      options: { navigation: { name: 'Audit & GDPR' }, actions: restrictTo(...ADMIN_ONLY) },
+    },
+    // ── Operations config (admin only per ADR-0007) ────────────────────
     {
       resource: { model: getModelByName('EmailTemplate'), client: prisma },
       options: {
@@ -239,6 +364,7 @@ const adminConfig = new AdminJS({
           bodyMjmlFi: { description: 'MJML body (Finnish).', type: 'textarea' },
           bodyMjmlSv: { description: 'MJML body (Swedish).', type: 'textarea' },
         },
+        actions: restrictTo(...ADMIN_ONLY),
       },
     },
     {
@@ -251,6 +377,7 @@ const adminConfig = new AdminJS({
           kind: { description: 'Renderer hint — usually one of: hero | callout | wall | story.' },
           payload: { description: 'JSON payload consumed by the matching React component.', type: 'mixed' },
         },
+        actions: restrictTo(...ADMIN_ONLY),
       },
     },
     {
@@ -262,6 +389,7 @@ const adminConfig = new AdminJS({
           key: { description: 'Flag identifier (e.g. featurePaytrail, featureMobilePay, featureKiosk).' },
           enabled: { description: 'Boolean toggle. Reads land in /v1/settings/public.' },
         },
+        actions: restrictTo(...ADMIN_ONLY),
       },
     },
     {
@@ -272,6 +400,7 @@ const adminConfig = new AdminJS({
           lineType: { description: 'Donation line type this rule applies to (e.g. donation, plaque, corporate).' },
           ratePct: { description: 'Statutory rate as a percent. Edit only when the Finnish VAT law changes.' },
         },
+        actions: restrictTo(...FINANCE_OR_ADMIN),
       },
     },
     {
@@ -284,6 +413,7 @@ const adminConfig = new AdminJS({
           value: { type: 'mixed', description: 'Typed JSON value. See ADR-0001 table for the catalogue of keys.' },
           description: { description: 'One-sentence explanation shown inline so non-technical staff understand the toggle.' },
         },
+        actions: restrictTo(...ADMIN_ONLY),
       },
     },
     {
@@ -298,6 +428,7 @@ const adminConfig = new AdminJS({
           fi: { type: 'textarea' },
           sv: { type: 'textarea' },
         },
+        actions: restrictTo(...ADMIN_ONLY),
       },
     },
     {
@@ -305,7 +436,7 @@ const adminConfig = new AdminJS({
       options: {
         navigation: { name: 'Operations', icon: 'Activity' },
         listProperties: ['queueName', 'jobName', 'status', 'startedAt', 'finishedAt', 'attempts'],
-        actions: { new: { isAccessible: false }, edit: { isAccessible: false }, delete: { isAccessible: false } },
+        actions: { ...restrictTo(...ADMIN_ONLY), new: { isAccessible: false }, edit: { isAccessible: false }, delete: { isAccessible: false } },
         sort: { sortBy: 'createdAt', direction: 'desc' as const },
       },
     },

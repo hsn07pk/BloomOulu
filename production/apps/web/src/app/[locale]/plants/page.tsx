@@ -4,7 +4,11 @@ import { PlantIndex, type PlantIndexItem } from '../../../components/PlantIndex.
 export const revalidate = 60;
 
 async function fetchInitialPlants(): Promise<{ items: PlantIndexItem[]; nextCursor: string | null }> {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+  // SSR runs inside the web container — INTERNAL_API_URL points at the
+  // in-cluster api:4000; the public NEXT_PUBLIC_API_URL would resolve
+  // to the container itself and return an empty list.
+  const apiUrl =
+    process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
   try {
     const res = await fetch(`${apiUrl}/v1/plants?limit=24`, {
       next: { revalidate: 60, tags: ['plants'] },
@@ -22,6 +26,7 @@ export default async function PlantsIndexPage({ params }: { params: Promise<{ lo
   const { locale } = await params;
   const tp = await getTranslations({ locale, namespace: 'Plants' });
   const { items: plants, nextCursor } = await fetchInitialPlants();
+  // Browser-side URL (the client picker re-fetches as the user paginates / searches).
   const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 
   return (

@@ -77,24 +77,33 @@ export class AdminUsersController {
     @Body(new ZodValidationPipe(PatchUser)) body: z.infer<typeof PatchUser>,
   ) {
     if (!id || id === actor.sub) {
-      // Prevent admin from accidentally locking themselves out of their own role.
       if (body.role && body.role !== 'admin') {
         throw new BadRequestException("An admin cannot remove their own admin role.");
+      }
+      if (body.status === 'deactivated') {
+        throw new BadRequestException("An admin cannot deactivate their own account.");
       }
     }
     const before = await this.prisma.user.findUnique({
       where: { id },
-      select: { id: true, role: true, name: true, locale: true },
+      select: { id: true, role: true, name: true, locale: true, deactivatedAt: true },
     });
     if (!before) throw new BadRequestException('user not found');
+    const deactivatedAt =
+      body.status === 'deactivated'
+        ? before.deactivatedAt ?? new Date()
+        : body.status === 'active'
+          ? null
+          : undefined;
     const updated = await this.prisma.user.update({
       where: { id },
       data: {
         role: body.role,
         name: body.name === undefined ? undefined : body.name,
         locale: body.locale,
+        deactivatedAt,
       },
-      select: { id: true, email: true, name: true, role: true, locale: true },
+      select: { id: true, email: true, name: true, role: true, locale: true, deactivatedAt: true },
     });
     await this.prisma.auditLog.create({
       data: {

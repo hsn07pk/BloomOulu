@@ -1,0 +1,38 @@
+# Don't ship build artefacts or node_modules into the Docker build context —
+# the Dockerfiles re-install + re-build from pnpm-lock.yaml.
+
+**/node_modules
+**/.next
+**/dist
+**/.turbo
+**/coverage
+**/test-results
+**/.playwright
+**/playwright-report
+**/tsconfig.tsbuildinfo
+**/*.tsbuildinfo
+
+# Git + IDE
+.git
+.gitignore
+.vscode
+.idea
+.DS_Store
+
+# Local-only files
+.env.local
+.env.development
+.env.development.local
+.env.production.local
+
+# Caddy state, MinIO data, etc. (only if accidentally copied)
+infra/caddy/data
+infra/postgres/data
+infra/minio/data
+
+# Logs
+logs
+*.log
+
+# Already-baked Docker artifacts
+docker-compose.override.yml

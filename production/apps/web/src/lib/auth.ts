@@ -21,7 +21,8 @@ const providers: NextAuthConfig['providers'] = [
     credentials: { email: { label: 'Email' }, token: { label: 'Token' } },
     authorize: async (creds) => {
       if (!creds?.email || !creds?.token) return null;
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+      const apiUrl =
+        process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
       const res = await fetch(`${apiUrl}/v1/auth/verify-magic-link`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },

@@ -1,0 +1,57 @@
+# ─── BloomOulu Caddy reverse proxy — LOCALHOST profile ────────────────
+# Skips Let's Encrypt (no public DNS / TLS for *.bloomoulu.fi), serves
+# all sites over HTTP on :80, routes by Host header.
+#
+# Add these lines to /etc/hosts to use hostname-based routing:
+#   127.0.0.1  bloomoulu.localhost api.bloomoulu.localhost admin.bloomoulu.localhost
+#   127.0.0.1  kiosk.bloomoulu.localhost grafana.bloomoulu.localhost files.bloomoulu.localhost
+#
+# Or skip Caddy entirely — every service is also bound to its real port
+# on the host via the docker-compose.localhost.yml override (web:3000,
+# api:4000, admin:4100, kiosk:3100, grafana:3300, minio:9001).
+
+{
+    auto_https off
+    admin off
+}
+
+# Public website
+:80, bloomoulu.localhost, www.bloomoulu.localhost {
+    encode zstd gzip
+    reverse_proxy web:3000 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+    }
+    header {
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+}
+
+# API
+api.bloomoulu.localhost {
+    encode zstd gzip
+    reverse_proxy api:4000
+}
+
+# Admin
+admin.bloomoulu.localhost {
+    encode zstd gzip
+    reverse_proxy admin:4100
+}
+
+# Kiosk
+kiosk.bloomoulu.localhost {
+    encode zstd gzip
+    reverse_proxy kiosk:3100
+}
+
+# Grafana
+grafana.bloomoulu.localhost {
+    reverse_proxy grafana:3000
+}
+
+# MinIO console
+files.bloomoulu.localhost {
+    reverse_proxy minio:9001
+}

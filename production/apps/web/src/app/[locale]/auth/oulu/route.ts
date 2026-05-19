@@ -79,7 +79,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ locale: str
   return res;
 }
 
-// Re-export GET-only callback handler from a separate route file would be
-// cleaner, but Next.js sees /auth/oulu and /auth/oulu/callback as different
-// route segments — the callback lives next to this file with its own route.ts.
-export { GET as default };
+// The callback lives next to this file at /auth/oulu/callback/route.ts;
+// Next.js sees the two segments as distinct routes, so no re-export here.
+// (Earlier versions had `export { GET as default }` but Next's typed-routes
+// gate rejects a `default` export on a route module.)

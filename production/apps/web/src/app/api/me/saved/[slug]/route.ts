@@ -28,7 +28,8 @@ export async function PUT(_req: Request, ctx: { params: Promise<{ slug: string }
   const { slug } = await ctx.params;
   const bearer = await getBearer();
   if (!bearer) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+  const apiUrl =
+    process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
   const res = await fetch(`${apiUrl}/v1/me/saved/${encodeURIComponent(slug)}`, {
     method: 'PUT',
     headers: { Authorization: `Bearer ${bearer}` },
@@ -42,7 +43,8 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ slug: strin
   const { slug } = await ctx.params;
   const bearer = await getBearer();
   if (!bearer) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+  const apiUrl =
+    process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
   const res = await fetch(`${apiUrl}/v1/me/saved/${encodeURIComponent(slug)}`, {
     method: 'DELETE',
     headers: { Authorization: `Bearer ${bearer}` },

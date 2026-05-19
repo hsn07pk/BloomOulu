@@ -23,7 +23,8 @@ interface ContentBlock {
 }
 
 async function loadBlock(slug: string): Promise<ContentBlock | null> {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+  const apiUrl =
+    process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
   try {
     const res = await fetch(`${apiUrl}/v1/content-blocks/${encodeURIComponent(slug)}`, {
       next: { revalidate: 300, tags: [`content-block:${slug}`] },

@@ -50,6 +50,47 @@ export interface BloomOuluSettings {
   defaultAmountCents: number;
   /** Adoption flow steps — admins can reorder/disable in /admin */
   adoptionFlow: string[];
+  /** Adopt-page knobs — surfaced to the wizard via /v1/settings/public.
+   *  Everything in here is editable from /admin/resources/SystemSetting. */
+  adoption: {
+    /** Linen-card gift-wrap upgrade, in cents. €4 = 400. */
+    giftWrapCents: number;
+    /** Share of the gross donation treated as a pure donation (no VAT),
+     *  in basis points. 7200 = 72% donation / 28% benefits — used only
+     *  in the donor-facing tax-disclosure box. Authoritative VAT
+     *  computation still uses vat.donationRateBp / vat.perkRateBp. */
+    donationShareBp: number;
+    /** Tiers that earn an individually engraved plaque. */
+    plaqueEligibleTiers: Array<'seedling' | 'rooted' | 'vulnerable' | 'endangered' | 'corporate'>;
+    /** Max length of the donor-facing dedication string. */
+    dedicationMaxChars: number;
+    /** Max co-adopters per adoption. */
+    coAdopterMax: number;
+    /** Link target shown next to the tax-disclosure box. */
+    fundsFlowUrl: string;
+  };
+  /** AskTheGarden knobs surfaced via /v1/settings/public. Admins edit
+   *  these in /admin/resources/SystemSetting. */
+  ask: {
+    /** Inbox where escalated questions land. */
+    curatorEmail: string;
+    /** Display name shown in the chat ("Curator <Name>"). */
+    curatorName: string;
+    /** Reply-time promise we surface to donors. */
+    curatorReplySlaDays: number;
+    /** RAG min-score floor (basis points). Mirrors MIN_SCORE in ask.service.
+     *  7200 = 0.72 cosine similarity, the threshold from ADR-0005. */
+    confidenceThresholdBp: number;
+    /** Audit error-rate target shown on the right rail. 0.05 = 5% (ADR-0005
+     *  "below 5% threshold for public launch"). */
+    auditErrorTarget: number;
+    /** External link-outs shown in the out-of-domain callout. */
+    outOfDomain: {
+      bgci: string;
+      gbif: string;
+      plantnet: string;
+    };
+  };
 }
 
 const DEFAULTS: BloomOuluSettings = {
@@ -73,6 +114,35 @@ const DEFAULTS: BloomOuluSettings = {
     'payment_method',
     'confirm',
   ],
+  adoption: {
+    giftWrapCents: 400,
+    donationShareBp: 7200,
+    plaqueEligibleTiers: ['endangered', 'corporate'],
+    dedicationMaxChars: 240,
+    coAdopterMax: 10,
+    fundsFlowUrl: '/about#funds-flow',
+  },
+  ask: {
+    curatorEmail: 'curator@bloomoulu.fi',
+    curatorName: 'Anna Liisa Ruotsalainen',
+    curatorReplySlaDays: 2,
+    // BGE-reranker-v2-m3 emits sigmoid logits in [0, 1]. Empirically:
+    //   • Exact factual match ("When does X bloom?")     → 0.90+
+    //   • Listy/aggregate ("Show me carnivorous plants") → 0.15–0.25
+    //     (chunks are per-plant; reranker scores them as "topical, not
+    //      directly answering")
+    //   • Genuinely unrelated                            → < 0.01
+    // We trust the strengthened LLM refusal prompt + citation validator
+    // to catch the rare false positive, so a permissive 0.10 floor lets
+    // list-style and broad queries through while still blocking noise.
+    confidenceThresholdBp: 1000,
+    auditErrorTarget: 0.05,
+    outOfDomain: {
+      bgci: 'https://tools.bgci.org/plant_search.php',
+      gbif: 'https://www.gbif.org/species/search',
+      plantnet: 'https://identify.plantnet.org/',
+    },
+  },
 };
 
 @Injectable()

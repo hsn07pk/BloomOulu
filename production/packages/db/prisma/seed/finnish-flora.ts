@@ -587,34 +587,39 @@ export async function seedFinnishFlora(prisma: PrismaClient) {
       update: {},
     });
 
+    // The curated 8 plants are the public showcase; the seed is the
+    // source of truth for them. Re-running the seed restores every
+    // field so a careless legacy-import pass can't degrade the
+    // donor-facing copy.
+    const seedFields = {
+      taxonId: taxon.id,
+      nameEn: entry.nameEn,
+      nameFi: entry.nameFi,
+      nameSv: entry.nameSv,
+      redListStatus: entry.redListStatus,
+      redListYear: entry.redListYear,
+      origin: entry.origin,
+      habitat: entry.habitat,
+      biome: entry.biome,
+      bloomSeason: entry.bloomSeason,
+      bloomWindow: entry.bloomWindow ?? null,
+      story: entry.story as any,
+      quickFacts: [
+        ['origin', entry.origin],
+        ['bloom', entry.bloomWindow ?? '-'],
+        ['redList', entry.redListStatus],
+        ['habitat', entry.habitat],
+      ] as any,
+      microLat: entry.microLat ?? null,
+      microLng: entry.microLng ?? null,
+      gardenZone: entry.gardenZone ?? null,
+      targetCents: entry.targetCents,
+      status: 'active',
+    };
     const plant = await prisma.plant.upsert({
       where: { slug: entry.slug },
-      create: {
-        slug: entry.slug,
-        taxonId: taxon.id,
-        nameEn: entry.nameEn,
-        nameFi: entry.nameFi,
-        nameSv: entry.nameSv,
-        redListStatus: entry.redListStatus,
-        redListYear: entry.redListYear,
-        origin: entry.origin,
-        habitat: entry.habitat,
-        biome: entry.biome,
-        bloomSeason: entry.bloomSeason,
-        bloomWindow: entry.bloomWindow ?? null,
-        story: entry.story as any,
-        quickFacts: [
-          ['origin', entry.origin],
-          ['bloom', entry.bloomWindow ?? '-'],
-          ['redList', entry.redListStatus],
-          ['habitat', entry.habitat],
-        ] as any,
-        microLat: entry.microLat ?? null,
-        microLng: entry.microLng ?? null,
-        gardenZone: entry.gardenZone ?? null,
-        targetCents: entry.targetCents,
-      },
-      update: {},
+      create: { slug: entry.slug, ...seedFields },
+      update: seedFields,
     });
 
     const image = await prisma.plantImage.create({

@@ -44,7 +44,8 @@ interface SimilarPlant {
 }
 
 export async function generateStaticParams() {
-  const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+  const api =
+    process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
   try {
     const res = await fetch(`${api}/v1/plants?limit=200`);
     if (!res.ok) return [];
@@ -81,11 +82,16 @@ export default async function PlantPage({
   params: Promise<{ locale: string; slug: string }>;
 }) {
   const { locale, slug } = await params;
-  const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
-  const res = await fetch(`${api}/v1/plants/${slug}`, { next: { revalidate: 3600 } });
+  // Server-side: prefer the in-cluster URL (api:4000) so SSR works when
+  // running under Docker. Client-side: pass the public URL so the
+  // browser's fetch calls can hit it.
+  const serverApi =
+    process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+  const browserApi = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+  const res = await fetch(`${serverApi}/v1/plants/${slug}`, { next: { revalidate: 3600 } });
   if (!res.ok) notFound();
   const plant = (await res.json()) as Plant;
-  const similar = await fetchSimilar(plant, api);
+  const similar = await fetchSimilar(plant, serverApi);
 
   const session = await getSession();
 
@@ -94,7 +100,7 @@ export default async function PlantPage({
       plant={plant}
       similarPlants={similar}
       locale={locale as 'en' | 'fi' | 'sv'}
-      apiUrl={api}
+      apiUrl={browserApi}
       signedIn={session.user !== null}
     />
   );

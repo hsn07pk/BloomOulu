@@ -1,14 +1,14 @@
 'use client';
 /**
- * AskTheGarden chat — SSE streaming + citation chips + helpful/off-base/
- * escalate reactions.
+ * AskTheGarden chat — SSE streaming + citation chips (with source title) +
+ * helpful / off-base / escalate reactions + 3-column shell (sidebar,
+ * messages, sources + corpus stats + curator-audit metric).
  *
- * Layout matches the prototype's 3-column shell at desktop; stacks on mobile.
- *
- * The chat speaks SSE to `/v1/ask/stream`. Events:
- *   start  — server acknowledged the question
- *   delta  — incremental text chunk (whitespace-preserving)
- *   final  — { text, citations: [{ marker, chunkId }], escalated }
+ * Streaming contract from /v1/ask/stream:
+ *   start  — { question, locale }
+ *   delta  — { text } (Ollama token chunks)
+ *   final  — { text, citations: [{ marker, chunkId, title, page, year }],
+ *              escalated, messageId, intent, modelUsed }
  *   error  — { message }
  */
 import { useState, useRef, useEffect } from 'react';
@@ -16,9 +16,35 @@ import { useTranslations } from 'next-intl';
 
 type Locale = 'en' | 'fi' | 'sv';
 
+export interface AskSettings {
+  curatorEmail: string;
+  curatorName: string;
+  curatorReplySlaDays: number;
+  confidenceThresholdBp: number;
+  auditErrorTarget: number;
+  outOfDomain: { bgci: string; gbif: string; plantnet: string };
+}
+
+export interface CorpusStats {
+  plants: number;
+  ragDocs: number;
+  citations: number;
+  accessions: number;
+}
+
+export interface AuditMetric {
+  window: number;
+  offBase: number;
+  errorRate: number;
+  target: number;
+}
+
 interface Citation {
   marker: string;
   chunkId: string;
+  title?: string;
+  page?: string | null;
+  year?: number | null;
 }
 
 interface Turn {
@@ -30,59 +56,69 @@ interface Turn {
   streaming?: boolean;
   reaction?: 'helpful' | 'off_base' | 'escalated' | null;
   messageId?: string;
+  /** 'on_topic' answers get reactions + source chips; 'greeting' and
+   *  'meta' get a softer chrome with no reactions (you can't really
+   *  rate "Hi!"). */
+  intent?: 'on_topic' | 'off_topic' | 'harmful' | 'greeting' | 'meta';
+  modelUsed?: string;
 }
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? '';
 
 type AskMode = 'visitor' | 'staff';
 const RECENT_KEY = 'bloom_ask_recent';
 
-const STAFF_STARTERS = {
-  en: [
-    'Draft school-tour script for upper grade (Saxifraga hirculus)',
-    'Generate signage text — Trollius europaeus (FI/SV/EN)',
-    "Summarise this quarter's gardener notes",
-    'Find a Kone Foundation grant template',
-    'Identify a herbarium sample (image upload)',
-  ],
-  fi: [
-    'Luo opastusrunko Yläkoululaisille (Saxifraga hirculus)',
-    'Tuota opastetekstin (FI/SV/EN) Trollius europaeus -lajille',
-    'Tee yhteenveto tämän vuosineljänneksen puutarhurin muistiinpanoista',
-    'Etsi Kone-säätiön apurahapohja',
-    'Tunnista herbaarionäyte (kuvalataus)',
-  ],
-  sv: [
-    'Skapa skolturmanus för högstadiet (Saxifraga hirculus)',
-    'Generera skyltningstext — Trollius europaeus (FI/SV/EN)',
-    'Sammanfatta detta kvartals trädgårdsmästares anteckningar',
-    'Hitta en Kone-stiftelsen-bidragsmall',
-    'Identifiera ett herbarium-prov (bilduppladdning)',
-  ],
-};
+/** Strip [c1]-style citation markers and em/en-dashes from any text the
+ *  model emits. The new prompt asks for clean prose without them, but
+ *  small models occasionally slip — this is the display-time guard. */
+function cleanForDisplay(text: string): string {
+  return text
+    .replace(/\s*\[c[\d,\s-]+\]/g, '')
+    .replace(/\s*[—–]\s*/g, ', ')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\s+([.,;:!?])/g, '$1')
+    .trimEnd();
+}
 
 export default function AskChat({
   locale,
   starters,
+  staffStarters,
   signedIn = false,
   staffEligible = false,
   userId = null,
+  corpusStats,
+  auditMetric,
+  ask,
+  contactEmailDefault,
+  apiUrl,
 }: {
   locale: Locale;
   starters: string[];
+  staffStarters: string[];
   signedIn?: boolean;
   staffEligible?: boolean;
   userId?: string | null;
+  corpusStats: CorpusStats | null;
+  auditMetric: AuditMetric | null;
+  ask: AskSettings;
+  contactEmailDefault: string | null;
+  apiUrl: string;
 }) {
+  // The server component passes the browser-side URL as a prop so the
+  // bundle isn't dependent on build-time env-var inlining. Trailing
+  // slashes get normalised so `${API}/v1/ask/stream` is always clean.
+  const API = apiUrl.replace(/\/$/, '');
   const t = useTranslations('Ask');
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [activeTurn, setActiveTurn] = useState<string | null>(null);
-  // Staff mode is only available to signed-in staff. Visitor is the default
-  // for everyone else; the public can use the chat without signing in.
   const [mode, setMode] = useState<AskMode>('visitor');
   const [recent, setRecent] = useState<string[]>([]);
+  // Layout breakpoint: <= 920px folds the 3-column grid into a single
+  // column with the starters/sources panels stacked below the chat. Read
+  // once on mount + on resize so SSR doesn't break (we default to 'wide'
+  // and let the first client effect correct it).
+  const [layout, setLayout] = useState<'wide' | 'narrow'>('wide');
   const logRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
 
@@ -90,7 +126,15 @@ export default function AskChat({
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [turns]);
 
-  // Hydrate recent from localStorage
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mq = window.matchMedia('(max-width: 920px)');
+    const apply = () => setLayout(mq.matches ? 'narrow' : 'wide');
+    apply();
+    mq.addEventListener('change', apply);
+    return () => mq.removeEventListener('change', apply);
+  }, []);
+
   useEffect(() => {
     try {
       const list = JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]') as string[];
@@ -119,15 +163,15 @@ export default function AskChat({
     setTimeout(() => composerRef.current?.focus(), 50);
   }
 
-  async function ask(question: string) {
+  async function ask_(question: string) {
     if (!question.trim() || busy) return;
     setBusy(true);
     pushRecent(question.trim());
-    const userId = crypto.randomUUID();
+    const userTurnId = crypto.randomUUID();
     const assistantId = crypto.randomUUID();
     setTurns((tt) => [
       ...tt,
-      { id: userId, role: 'user', text: question },
+      { id: userTurnId, role: 'user', text: question },
       { id: assistantId, role: 'assistant', text: '', streaming: true },
     ]);
     setActiveTurn(assistantId);
@@ -163,7 +207,11 @@ export default function AskChat({
           const payload = JSON.parse(data);
           if (event === 'delta') {
             setTurns((all) =>
-              all.map((tn) => (tn.id === assistantId ? { ...tn, text: tn.text + payload.text } : tn)),
+              all.map((tn) =>
+                tn.id === assistantId
+                  ? { ...tn, text: cleanForDisplay(tn.text + payload.text) }
+                  : tn,
+              ),
             );
           } else if (event === 'final') {
             setTurns((all) =>
@@ -171,11 +219,13 @@ export default function AskChat({
                 tn.id === assistantId
                   ? {
                       ...tn,
-                      text: payload.text,
+                      text: cleanForDisplay(payload.text),
                       citations: payload.citations,
                       escalated: payload.escalated,
                       streaming: false,
                       messageId: payload.messageId,
+                      intent: payload.intent,
+                      modelUsed: payload.modelUsed,
                     }
                   : tn,
               ),
@@ -205,24 +255,59 @@ export default function AskChat({
       await fetch(`${API}/v1/ask/react`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ messageId: turn.messageId, reaction }),
+        body: JSON.stringify({
+          messageId: turn.messageId,
+          reaction,
+          contactEmail: reaction === 'escalated' ? contactEmailDefault ?? undefined : undefined,
+        }),
       });
       setTurns((all) => all.map((tn) => (tn.id === turn.id ? { ...tn, reaction } : tn)));
-    } catch { /* best-effort */ }
+    } catch {
+      /* best-effort */
+    }
   }
 
-  const active = turns.find((tn) => tn.id === activeTurn);
+  // Default the right-rail sources to the latest grounded answer so the
+  // user sees what backed it without having to click. Templates and
+  // escalations have no citations — those fall back to the empty hint.
+  const lastAnswerWithCitations = [...turns].reverse().find(
+    (tn) => tn.role === 'assistant' && (tn.citations?.length ?? 0) > 0,
+  );
+  const active =
+    turns.find((tn) => tn.id === activeTurn) ?? lastAnswerWithCitations ?? null;
   const activeCitations = active?.citations ?? [];
 
   return (
-    <div className="ask-shell" style={{ display: 'grid', gridTemplateColumns: '280px 1fr 300px', gap: 24, marginTop: 24 }}>
-      <aside className="card card-pad" style={{ alignSelf: 'flex-start', position: 'sticky', top: 24 }} aria-label={t('starters')}>
-        {/* Mode toggle: Visitor / Staff — Staff only visible for signed-in curators/admins */}
+    <div
+      className="ask-shell"
+      style={{
+        display: 'grid',
+        gridTemplateColumns: layout === 'wide' ? '280px 1fr 320px' : '1fr',
+        gap: layout === 'wide' ? 24 : 16,
+        marginTop: 24,
+      }}
+    >
+      <aside
+        className="card card-pad"
+        style={{
+          alignSelf: 'flex-start',
+          position: layout === 'wide' ? 'sticky' : 'static',
+          top: layout === 'wide' ? 24 : undefined,
+          order: layout === 'narrow' ? 2 : 0,
+        }}
+        aria-label={t('starters')}
+      >
         {staffEligible && (
           <div
             role="group"
             aria-label={locale === 'fi' ? 'Tila' : locale === 'sv' ? 'Läge' : 'Mode'}
-            style={{ display: 'flex', padding: 4, background: 'rgba(31,58,44,0.06)', borderRadius: 999, marginBottom: 12 }}
+            style={{
+              display: 'flex',
+              padding: 4,
+              background: 'rgba(31,58,44,0.06)',
+              borderRadius: 999,
+              marginBottom: 12,
+            }}
           >
             {(
               [
@@ -239,7 +324,7 @@ export default function AskChat({
                   flex: 1,
                   padding: '8px 0',
                   borderRadius: 999,
-                  fontSize: 13,
+                  fontSize: '0.867rem',
                   background: mode === id ? 'var(--paper)' : 'transparent',
                   color: mode === id ? 'var(--ink)' : 'var(--ink-mute)',
                   fontWeight: 500,
@@ -254,16 +339,12 @@ export default function AskChat({
           </div>
         )}
 
-        {/* "New conversation" — only useful when conversations are saved
-            server-side, which requires sign-in. Hide for anonymous public
-            users; their single ephemeral conversation lives until they
-            close the tab. */}
         {signedIn && (
           <button
             type="button"
             onClick={newConversation}
             className="btn btn-secondary"
-            style={{ width: '100%', marginBottom: 16, fontSize: 13 }}
+            style={{ width: '100%', marginBottom: 16, fontSize: '0.867rem' }}
           >
             ➕ {locale === 'fi' ? 'Uusi keskustelu' : locale === 'sv' ? 'Ny konversation' : 'New conversation'}
           </button>
@@ -271,19 +352,27 @@ export default function AskChat({
 
         <div className="tiny" style={{ marginBottom: 8 }}>
           {mode === 'staff'
-            ? locale === 'fi' ? 'Nopeat henkilökuntatoimet' : locale === 'sv' ? 'Snabba personalåtgärder' : 'Quick staff actions'
-            : locale === 'fi' ? 'Suosittua tänään' : locale === 'sv' ? 'Trendar idag' : 'Trending today'}
+            ? locale === 'fi'
+              ? 'Nopeat henkilökuntatoimet'
+              : locale === 'sv'
+                ? 'Snabba personalåtgärder'
+                : 'Quick staff actions'
+            : locale === 'fi'
+              ? 'Suosittua tänään'
+              : locale === 'sv'
+                ? 'Trendar idag'
+                : 'Trending today'}
         </div>
         <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {(mode === 'staff' ? STAFF_STARTERS[locale] : starters).map((s) => (
+          {(mode === 'staff' ? staffStarters : starters).map((s) => (
             <li key={s}>
               <button
                 type="button"
-                onClick={() => ask(s)}
+                onClick={() => ask_(s)}
                 disabled={busy}
                 style={{
                   display: 'block', width: '100%', textAlign: 'left', padding: '10px 12px',
-                  borderRadius: 10, fontSize: 13, color: 'var(--ink-soft)', background: 'transparent',
+                  borderRadius: 10, fontSize: '0.867rem', color: 'var(--ink-soft)', background: 'transparent',
                   border: 0, lineHeight: 1.4, cursor: busy ? 'default' : 'pointer',
                 }}
                 onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(31,58,44,0.05)')}
@@ -296,49 +385,41 @@ export default function AskChat({
         </ul>
 
         {recent.length > 0 && (
-          <>
-            <div
-              style={{
-                borderTop: '1px solid var(--line)',
-                marginTop: 20,
-                paddingTop: 16,
-              }}
-            >
-              <div className="tiny" style={{ marginBottom: 8 }}>
-                {locale === 'fi' ? 'Viimeisimmät' : locale === 'sv' ? 'Senaste' : 'Recent'}
-              </div>
-              <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {recent.slice(0, 5).map((q) => (
-                  <li key={q}>
-                    <button
-                      type="button"
-                      onClick={() => ask(q)}
-                      disabled={busy}
-                      style={{
-                        display: 'block',
-                        width: '100%',
-                        textAlign: 'left',
-                        padding: '10px 12px',
-                        borderRadius: 10,
-                        fontSize: 13,
-                        color: 'var(--ink-mute)',
-                        background: 'transparent',
-                        border: 0,
-                        lineHeight: 1.4,
-                        cursor: busy ? 'default' : 'pointer',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                      title={q}
-                    >
-                      {q}
-                    </button>
-                  </li>
-                ))}
-              </ul>
+          <div style={{ borderTop: '1px solid var(--line)', marginTop: 20, paddingTop: 16 }}>
+            <div className="tiny" style={{ marginBottom: 8 }}>
+              {locale === 'fi' ? 'Viimeisimmät' : locale === 'sv' ? 'Senaste' : 'Recent'}
             </div>
-          </>
+            <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {recent.slice(0, 5).map((q) => (
+                <li key={q}>
+                  <button
+                    type="button"
+                    onClick={() => ask_(q)}
+                    disabled={busy}
+                    style={{
+                      display: 'block',
+                      width: '100%',
+                      textAlign: 'left',
+                      padding: '10px 12px',
+                      borderRadius: 10,
+                      fontSize: '0.867rem',
+                      color: 'var(--ink-mute)',
+                      background: 'transparent',
+                      border: 0,
+                      lineHeight: 1.4,
+                      cursor: busy ? 'default' : 'pointer',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                    title={q}
+                  >
+                    {q}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
       </aside>
 
@@ -351,75 +432,198 @@ export default function AskChat({
           tabIndex={-1}
           ref={logRef}
           style={{
-            flex: 1, overflowY: 'auto', padding: 16, background: 'var(--paper)',
-            border: '1px solid var(--line)', borderRadius: 16, minHeight: 420, maxHeight: 'calc(100vh - 360px)',
+            flex: 1,
+            overflowY: 'auto',
+            padding: 16,
+            background: 'var(--paper)',
+            border: '1px solid var(--line)',
+            borderRadius: 16,
+            minHeight: 420,
+            maxHeight: 'calc(100vh - 360px)',
           }}
         >
           {turns.length === 0 && (
-            <p className="muted" style={{ textAlign: 'center', padding: '64px 16px', fontFamily: 'var(--f-display)', fontSize: 18, lineHeight: 1.5 }}>
-              {t('subtitle')}
-            </p>
+            <WelcomeBubble locale={locale} starters={starters} onPick={ask_} />
           )}
-          {turns.map((tn) => (
-            <article
-              key={tn.id}
-              data-role={tn.role}
-              onClick={() => tn.role === 'assistant' && setActiveTurn(tn.id)}
-              style={{
-                marginBottom: 16, padding: 14, borderRadius: 12,
-                background: tn.role === 'user' ? 'var(--sage-pale)' : 'var(--cream)',
-                cursor: tn.role === 'assistant' ? 'pointer' : 'default',
-                border: tn.role === 'assistant' && activeTurn === tn.id ? '1px solid var(--forest-mid)' : '1px solid transparent',
-              }}
-            >
-              <p style={{ whiteSpace: 'pre-wrap', margin: 0 }}>
-                {tn.text}
-                {tn.streaming && <span aria-hidden="true">▍</span>}
-              </p>
-              {tn.citations && tn.citations.length > 0 && (
-                <ul aria-label={`${tn.citations.length} sources`} style={{ marginTop: 12, listStyle: 'none', padding: 0, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {tn.citations.map((c) => (
-                    <li key={c.marker}>
-                      <a href={`#chunk-${c.chunkId}`} className="pill" style={{ fontSize: 11, padding: '3px 10px', textDecoration: 'none' }}>{c.marker}</a>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {tn.escalated && (
-                <p role="note" className="small" style={{ marginTop: 12, color: 'var(--rust-on-light)' }}>↗ {t('noAnswer')}</p>
-              )}
-              {tn.role === 'assistant' && !tn.streaming && tn.messageId && (
-                <div style={{ marginTop: 12, display: 'flex', gap: 6, paddingTop: 10, borderTop: '1px solid var(--line-soft)' }}>
-                  {(['helpful', 'off_base', 'escalated'] as const).map((r) => {
-                    const label = r === 'helpful' ? `👍 ${t('helpful')}` : r === 'off_base' ? `👎 ${t('offBase')}` : `↗ ${t('escalate')}`;
-                    const bg = tn.reaction === r ? (r === 'helpful' ? 'var(--sage-pale)' : r === 'off_base' ? 'var(--amber-soft)' : 'var(--rust-soft)') : 'rgba(45,84,64,0.07)';
-                    return (
-                      <button
-                        key={r}
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); react(tn, r); }}
-                        aria-pressed={tn.reaction === r}
-                        className="pill"
-                        style={{ padding: '4px 10px', fontSize: 11, background: bg }}
-                      >
-                        {label}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </article>
-          ))}
+          {turns.map((tn) => {
+            // Template replies (greeting, meta) get a softer visual treatment:
+            // no reaction bar, no source chips, no escalation tag. Reactions
+            // make no sense on "Hi!" and surface UI clutter for no benefit.
+            const isTemplate =
+              tn.role === 'assistant' &&
+              (tn.intent === 'greeting' ||
+                tn.intent === 'meta' ||
+                (tn.modelUsed?.startsWith('template:') ?? false));
+            // Escalations (corpus didn't answer / off-topic) get amber chrome
+            // so the user can immediately see this isn't a substantive reply.
+            const isEscalation = tn.role === 'assistant' && tn.escalated && !isTemplate;
+            const bg =
+              tn.role === 'user'
+                ? 'var(--sage-pale)'
+                : isEscalation
+                  ? 'rgba(184,81,58,0.06)'
+                  : isTemplate
+                    ? 'rgba(45,84,64,0.04)'
+                    : 'var(--cream)';
+            const borderColor =
+              tn.role === 'assistant' && activeTurn === tn.id && !isTemplate
+                ? 'var(--forest-mid)'
+                : isEscalation
+                  ? 'rgba(184,81,58,0.18)'
+                  : 'transparent';
+            return (
+              <article
+                key={tn.id}
+                data-role={tn.role}
+                data-template={isTemplate || undefined}
+                onClick={() => tn.role === 'assistant' && !isTemplate && setActiveTurn(tn.id)}
+                style={{
+                  marginBottom: 14,
+                  padding: '14px 16px',
+                  borderRadius: 14,
+                  background: bg,
+                  cursor: tn.role === 'assistant' && !isTemplate ? 'pointer' : 'default',
+                  border: `1px solid ${borderColor}`,
+                  transition: 'border-color 120ms ease',
+                }}
+              >
+                {tn.role === 'assistant' && (
+                  <div
+                    aria-hidden="true"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      marginBottom: 8,
+                      fontSize: '0.733rem',
+                      color: 'var(--ink-mute)',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.06em',
+                    }}
+                  >
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        width: 22,
+                        height: 22,
+                        borderRadius: 999,
+                        background: isEscalation
+                          ? 'rgba(184,81,58,0.12)'
+                          : 'var(--sage-pale)',
+                        color: isEscalation ? 'var(--rust-on-light)' : 'var(--forest)',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '0.8rem',
+                      }}
+                    >
+                      {isEscalation ? '↗' : '🌿'}
+                    </span>
+                    <span>
+                      {isEscalation
+                        ? locale === 'fi'
+                          ? 'Ohjaus puutarhurille'
+                          : locale === 'sv'
+                            ? 'Vidarebefordran'
+                            : 'Curator referral'
+                        : 'AskTheGarden'}
+                    </span>
+                  </div>
+                )}
+                <p style={{ whiteSpace: 'pre-wrap', margin: 0, lineHeight: 1.6 }}>
+                  {tn.text}
+                  {tn.streaming && <span aria-hidden="true">▍</span>}
+                </p>
+                {/* Source pills hidden for now (user request). The
+                 *  citations payload is still received so we can re-enable
+                 *  them later without touching the API. */}
+                {!isTemplate &&
+                  tn.role === 'assistant' &&
+                  !tn.streaming &&
+                  tn.messageId && (
+                    <div
+                      style={{
+                        marginTop: 12,
+                        display: 'flex',
+                        gap: 6,
+                        paddingTop: 10,
+                        borderTop: '1px solid var(--line)',
+                        flexWrap: 'wrap',
+                        alignItems: 'center',
+                      }}
+                    >
+                      {(['helpful', 'off_base', 'escalated'] as const).map((r) => {
+                        const label =
+                          r === 'helpful'
+                            ? t('helpful')
+                            : r === 'off_base'
+                              ? t('offBase')
+                              : t('escalate');
+                        const glyph = r === 'helpful' ? '👍' : r === 'off_base' ? '👎' : '↗';
+                        const active = tn.reaction === r;
+                        const palette =
+                          r === 'helpful'
+                            ? 'var(--sage-pale)'
+                            : r === 'off_base'
+                              ? 'var(--amber-soft)'
+                              : 'var(--rust-soft)';
+                        return (
+                          <button
+                            key={r}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              react(tn, r);
+                            }}
+                            aria-pressed={active}
+                            className="pill"
+                            style={{
+                              padding: '4px 12px',
+                              fontSize: '0.733rem',
+                              background: active ? palette : 'rgba(45,84,64,0.05)',
+                              border: active
+                                ? '1px solid rgba(45,84,64,0.15)'
+                                : '1px solid transparent',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 6,
+                            }}
+                          >
+                            <span aria-hidden="true">{glyph}</span>
+                            {label}
+                          </button>
+                        );
+                      })}
+                      {tn.reaction === 'escalated' && (
+                        <span
+                          className="tiny"
+                          style={{ color: 'var(--forest)', marginLeft: 4 }}
+                        >
+                          ✓{' '}
+                          {locale === 'fi'
+                            ? `Välitetty puutarhurille (${ask.curatorName}).`
+                            : locale === 'sv'
+                              ? `Vidarebefordrat till trädgårdsmästaren (${ask.curatorName}).`
+                              : `Forwarded to ${ask.curatorName}.`}
+                        </span>
+                      )}
+                    </div>
+                  )}
+              </article>
+            );
+          })}
         </div>
 
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            if (input.trim()) ask(input.trim());
+            if (input.trim()) ask_(input.trim());
           }}
           style={{ marginTop: 12, display: 'flex', gap: 8 }}
         >
-          <label htmlFor="ask-input" className="sr-only">{t('placeholder')}</label>
+          <label htmlFor="ask-input" className="sr-only">
+            {t('placeholder')}
+          </label>
           <textarea
             ref={composerRef}
             id="ask-input"
@@ -429,42 +633,355 @@ export default function AskChat({
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                if (input.trim()) ask(input.trim());
+                if (input.trim()) ask_(input.trim());
               }
             }}
             placeholder={t('placeholder')}
             disabled={busy}
-            style={{ flex: 1, padding: '12px 16px', borderRadius: 999, border: '1px solid var(--line)', background: 'var(--paper)', fontSize: 15, resize: 'none', minHeight: 44 }}
+            style={{
+              flex: 1,
+              padding: '12px 16px',
+              borderRadius: 999,
+              border: '1px solid var(--line)',
+              background: 'var(--paper)',
+              fontSize: '1rem',
+              resize: 'none',
+              minHeight: 44,
+            }}
           />
           <button type="submit" disabled={busy || !input.trim()} className="btn btn-primary" style={{ padding: '10px 22px' }}>
             {busy ? t('thinking') : t('send')}
           </button>
         </form>
+        <p
+          className="tiny"
+          style={{
+            textAlign: 'center',
+            marginTop: 12,
+            textTransform: 'none',
+            letterSpacing: 0,
+            lineHeight: 1.55,
+          }}
+        >
+          {locale === 'fi'
+            ? `Vastaukset perustuvat puutarhan kokoelmaan. Jos asia jää epävarmaksi, voimme välittää kysymyksen puutarhurille (${ask.curatorName}).`
+            : locale === 'sv'
+              ? `Svaren bygger på trädgårdens samling. Vid osäkerhet kan vi vidarebefordra frågan till trädgårdsmästaren (${ask.curatorName}).`
+              : `Answers are drawn from the Garden's living collection. If something looks off, we can forward your question to Curator ${ask.curatorName}.`}
+        </p>
       </section>
 
-      <aside className="card card-pad" style={{ alignSelf: 'flex-start' }} aria-label={locale === 'fi' ? 'Lähteet' : locale === 'sv' ? 'Källor' : 'Sources'}>
-        <div className="tiny" style={{ marginBottom: 12 }}>{locale === 'fi' ? 'Lähteet' : locale === 'sv' ? 'Källor' : 'Sources'}</div>
-        {activeCitations.length === 0 ? (
-          <p className="muted small">
-            {locale === 'fi' ? 'Klikkaa vastausta nähdäksesi sen lähteet.' : locale === 'sv' ? 'Klicka på ett svar för att se källorna.' : 'Click a reply to see its sources.'}
-          </p>
-        ) : (
-          <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {activeCitations.map((c) => (
-              <li
-                key={c.marker}
-                id={`chunk-${c.chunkId}`}
-                style={{ padding: 12, background: 'var(--cream)', borderRadius: 8, fontSize: 13, lineHeight: 1.55 }}
-              >
-                <span className="mono" style={{ fontSize: 11, color: 'var(--forest)' }}>{c.marker}</span>
-                <p className="muted" style={{ marginTop: 4 }}>
-                  {locale === 'fi' ? 'Tunniste:' : locale === 'sv' ? 'ID:' : 'Chunk:'} <span className="mono" style={{ fontSize: 10 }}>{c.chunkId.slice(0, 8)}…</span>
-                </p>
+      <aside
+        className="card card-pad"
+        style={{
+          alignSelf: 'flex-start',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 16,
+          order: layout === 'narrow' ? 3 : 0,
+        }}
+        aria-label={locale === 'fi' ? 'Konteksti' : locale === 'sv' ? 'Kontext' : 'Context'}
+      >
+        {/* Sources panel hidden for now per design direction. Corpus
+         *  stats + out-of-domain remain since they describe the Garden,
+         *  not per-answer citations. */}
+        {corpusStats && <CorpusBlock locale={locale} stats={corpusStats} />}
+        <OutOfDomainBlock locale={locale} ask={ask} />
+        {auditMetric && <AuditBlock locale={locale} metric={auditMetric} />}
+      </aside>
+    </div>
+  );
+}
+
+// ─── Subcomponents ──────────────────────────────────────────────────────
+
+function WelcomeBubble({
+  locale,
+  starters,
+  onPick,
+}: {
+  locale: Locale;
+  starters: string[];
+  onPick: (q: string) => void;
+}) {
+  const heading =
+    locale === 'fi'
+      ? 'Tervetuloa.'
+      : locale === 'sv'
+        ? 'Välkommen.'
+        : 'Welcome.';
+  const sub =
+    locale === 'fi'
+      ? 'Kysy puutarhan kasveista. Vastaan tietokannan luetteloon perustuen ja merkitsen lähteen.'
+      : locale === 'sv'
+        ? 'Fråga om växterna i samlingen. Jag svarar utifrån katalogen och visar källan.'
+        : "Ask about a plant in our collection. I answer from the catalogue and cite the entry I draw from.";
+  const ctaLabel =
+    locale === 'fi' ? 'Aloita näistä' : locale === 'sv' ? 'Börja med dessa' : 'Try one of these';
+  const examples = starters.slice(0, 3);
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 18,
+        padding: '28px 8px 8px',
+        textAlign: 'center',
+      }}
+    >
+      <div
+        aria-hidden="true"
+        style={{
+          width: 56,
+          height: 56,
+          borderRadius: '50%',
+          background: 'var(--sage-pale)',
+          color: 'var(--forest)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: '1.6rem',
+          margin: '0 auto',
+        }}
+      >
+        🌿
+      </div>
+      <div>
+        <h2
+          className="serif"
+          style={{
+            margin: 0,
+            fontSize: '1.8rem',
+            color: 'var(--forest-deep)',
+            lineHeight: 1.2,
+          }}
+        >
+          {heading}
+        </h2>
+        <p
+          className="muted"
+          style={{
+            margin: '8px auto 0',
+            maxWidth: 460,
+            fontSize: '0.967rem',
+            lineHeight: 1.55,
+          }}
+        >
+          {sub}
+        </p>
+      </div>
+      {examples.length > 0 && (
+        <div style={{ marginTop: 4 }}>
+          <div className="tiny" style={{ marginBottom: 10 }}>
+            {ctaLabel}
+          </div>
+          <ul
+            style={{
+              listStyle: 'none',
+              padding: 0,
+              margin: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 8,
+              maxWidth: 520,
+              marginInline: 'auto',
+            }}
+          >
+            {examples.map((q) => (
+              <li key={q}>
+                <button
+                  type="button"
+                  onClick={() => onPick(q)}
+                  style={{
+                    width: '100%',
+                    textAlign: 'left',
+                    padding: '12px 16px',
+                    borderRadius: 12,
+                    background: 'var(--paper)',
+                    border: '1px solid var(--line)',
+                    color: 'var(--ink)',
+                    fontSize: '0.933rem',
+                    lineHeight: 1.5,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    transition: 'border-color 120ms ease, background 120ms ease',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = 'var(--forest-mid)';
+                    e.currentTarget.style.background = 'var(--cream)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = 'var(--line)';
+                    e.currentTarget.style.background = 'var(--paper)';
+                  }}
+                >
+                  <span
+                    aria-hidden="true"
+                    style={{ color: 'var(--forest-mid)', fontSize: '0.9rem' }}
+                  >
+                    →
+                  </span>
+                  <span>{q}</span>
+                </button>
               </li>
             ))}
           </ul>
-        )}
-      </aside>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SourcesBlock({ locale, citations }: { locale: Locale; citations: Citation[] }) {
+  return (
+    <div>
+      <div className="tiny" style={{ marginBottom: 12 }}>
+        {locale === 'fi' ? 'Lähteet' : locale === 'sv' ? 'Källor' : 'Sources'}
+      </div>
+      {citations.length === 0 ? (
+        <p className="muted small">
+          {locale === 'fi'
+            ? 'Klikkaa vastausta nähdäksesi sen lähteet.'
+            : locale === 'sv'
+              ? 'Klicka på ett svar för att se källorna.'
+              : 'Click a reply to see its sources.'}
+        </p>
+      ) : (
+        <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {citations.map((c) => (
+            <li
+              key={c.marker}
+              id={`chunk-${c.chunkId}`}
+              style={{ padding: 12, background: 'var(--cream)', borderRadius: 8, fontSize: '0.867rem', lineHeight: 1.55 }}
+            >
+              <span className="mono" style={{ fontSize: '0.733rem', color: 'var(--forest)' }}>{c.marker}</span>
+              {c.title && (
+                <div style={{ marginTop: 4, fontWeight: 500 }}>
+                  {c.title}
+                  {c.year && (
+                    <span className="muted" style={{ marginLeft: 6, fontWeight: 400 }}>
+                      · {c.year}
+                    </span>
+                  )}
+                </div>
+              )}
+              {c.page && (
+                <div className="muted" style={{ marginTop: 2, fontSize: '0.733rem' }}>
+                  {c.page}
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function CorpusBlock({ locale, stats }: { locale: Locale; stats: CorpusStats }) {
+  const labels = {
+    plants:
+      locale === 'fi'
+        ? ['Oulun kokoelmatietokanta', 'Kasveja kokoelmassa']
+        : locale === 'sv'
+          ? ['Uleåborgs samlingsdatabas', 'Växter i samlingen']
+          : ['Oulu accession DB', 'Plants in the living collection'],
+    ragDocs:
+      locale === 'fi'
+        ? ['Tutkimusjulkaisut', 'Indeksoidut dokumentit']
+        : locale === 'sv'
+          ? ['Forskningspublikationer', 'Indexerade dokument']
+          : ['Research corpus', 'Indexed documents'],
+    citations:
+      locale === 'fi'
+        ? ['Lähdeviitteet', 'DOI/raportti/kirja']
+        : locale === 'sv'
+          ? ['Källhänvisningar', 'DOI/rapport/bok']
+          : ['Citations', 'DOI / report / book'],
+    accessions:
+      locale === 'fi'
+        ? ['Kerätyt yksilöt', 'Provenienssitietoineen']
+        : locale === 'sv'
+          ? ['Insamlade exemplar', 'Med proveniens']
+          : ['Accessions', 'With provenance'],
+  } as const;
+  const rows: Array<{ label: string; n: number; desc: string }> = [
+    { label: labels.plants[0]!, n: stats.plants, desc: labels.plants[1]! },
+    { label: labels.ragDocs[0]!, n: stats.ragDocs, desc: labels.ragDocs[1]! },
+    { label: labels.citations[0]!, n: stats.citations, desc: labels.citations[1]! },
+    { label: labels.accessions[0]!, n: stats.accessions, desc: labels.accessions[1]! },
+  ];
+  return (
+    <div>
+      <div className="tiny">
+        {locale === 'fi' ? 'Konteksti · mihin tämä perustuu' : locale === 'sv' ? 'Kontext · vad detta bygger på' : "Context · what's grounding this"}
+      </div>
+      <h3 className="serif" style={{ fontSize: '1.2rem', marginTop: 6 }}>
+        {locale === 'fi' ? 'Elävä korpus' : locale === 'sv' ? 'Levande korpus' : 'Live corpus'}
+      </h3>
+      <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {rows.map((s) => (
+          <div key={s.label} style={{ padding: 12, background: 'var(--cream)', borderRadius: 10 }}>
+            <div className="tiny">{s.label}</div>
+            <div className="serif" style={{ fontSize: '1.467rem', marginTop: 2 }}>
+              {s.n.toLocaleString(locale)}
+            </div>
+            <div className="small muted" style={{ marginTop: 2 }}>{s.desc}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function OutOfDomainBlock({ locale, ask }: { locale: Locale; ask: AskSettings }) {
+  return (
+    <div style={{ padding: 14, background: 'var(--cream)', borderRadius: 10 }}>
+      <div className="tiny" style={{ color: 'var(--rust-on-light)' }}>
+        {locale === 'fi' ? 'Aiheen ulkopuolinen kysymys' : locale === 'sv' ? 'Utanför ämnet' : 'Out-of-domain policy'}
+      </div>
+      <p className="small" style={{ marginTop: 8, color: 'var(--ink-soft)', lineHeight: 1.55 }}>
+        {locale === 'fi'
+          ? 'Jos kysyt kasvista, joka ei ole kokoelmassamme, linkitämme '
+          : locale === 'sv'
+            ? 'Om du frågar om en växt vi inte har länkar vi till '
+            : 'If you ask about a plant not in our collection, we link out to '}
+        <a href={ask.outOfDomain.bgci} target="_blank" rel="noopener noreferrer">BGCI PlantSearch</a>
+        {' · '}
+        <a href={ask.outOfDomain.gbif} target="_blank" rel="noopener noreferrer">GBIF</a>
+        {locale === 'fi' ? '. Kuvatunnistus ohjataan ' : locale === 'sv' ? '. Bildigenkänning skickas till ' : '. For image ID we forward to '}
+        <a href={ask.outOfDomain.plantnet} target="_blank" rel="noopener noreferrer">Pl@ntNet</a>
+        {locale === 'fi' ? ' ja varmistetaan kokoelmaa vasten.' : locale === 'sv' ? ' och verifieras mot samlingen.' : ' and verify against our accessions.'}
+      </p>
+    </div>
+  );
+}
+
+function AuditBlock({ locale, metric }: { locale: Locale; metric: AuditMetric }) {
+  const ratePct = (metric.errorRate * 100).toFixed(1);
+  const targetPct = (metric.target * 100).toFixed(0);
+  const withinTarget = metric.errorRate <= metric.target;
+  return (
+    <div
+      style={{
+        padding: 14,
+        background: withinTarget ? 'rgba(168,192,96,0.12)' : 'rgba(184,81,58,0.10)',
+        borderRadius: 10,
+      }}
+    >
+      <div className="tiny" style={{ color: withinTarget ? 'var(--forest)' : 'var(--rust-on-light)' }}>
+        {locale === 'fi' ? 'Viimeisin kuraattoritarkastus' : locale === 'sv' ? 'Senaste kuratorrevision' : 'Last curator audit'}
+      </div>
+      <div className="small" style={{ marginTop: 8, color: 'var(--ink-soft)' }}>
+        <b style={{ fontFamily: 'var(--f-display)' }}>{ratePct}%</b>{' '}
+        {locale === 'fi'
+          ? `virheprosentti ${metric.window} vastauksen otoksessa. ${withinTarget ? `Alle ${targetPct} %:n julkaisukynnyksen.` : `Yli ${targetPct} %:n kynnyksen — uudelleenarviointi käynnissä.`}`
+          : locale === 'sv'
+            ? `felprocent över ${metric.window} svar. ${withinTarget ? `Under ${targetPct} % -tröskeln.` : `Över ${targetPct} % -tröskeln — granskning pågår.`}`
+            : `error rate across ${metric.window} answers. ${withinTarget ? `Below the ${targetPct}% public-launch threshold.` : `Above the ${targetPct}% threshold — re-audit in progress.`}`}
+      </div>
     </div>
   );
 }

@@ -9,6 +9,7 @@ import { Reflector } from '@nestjs/core';
 import { jwtVerify } from 'jose';
 import type { FastifyRequest } from 'fastify';
 import { ROLES_KEY, type Role } from './roles.decorator.js';
+import { PrismaService } from '../modules/prisma/prisma.service.js';
 
 const SECRET = () => new TextEncoder().encode(process.env.AUTH_SECRET ?? 'dev-secret');
 
@@ -16,10 +17,19 @@ const SECRET = () => new TextEncoder().encode(process.env.AUTH_SECRET ?? 'dev-se
  * Enforces `@Roles(...)` metadata. Methods (and controllers) without the
  * decorator are open — the guard is a no-op there. ADR-0003: role-based
  * access control with three staff roles + the implicit donor role.
+ *
+ * The guard verifies the HS256 JWT, refuses deactivated subjects, and
+ * cross-checks the *claimed* role against the *current* role in the DB —
+ * a stale token whose role has since been demoted is rejected. The DB
+ * lookup is cheap (single uuid index hit) and only fires on @Roles()-
+ * decorated endpoints.
  */
 @Injectable()
 export class RolesGuard implements CanActivate {
-  constructor(private readonly reflector: Reflector) {}
+  constructor(
+    private readonly reflector: Reflector,
+    private readonly prisma: PrismaService,
+  ) {}
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
     const required = this.reflector.getAllAndOverride<Role[] | undefined>(ROLES_KEY, [
@@ -35,22 +45,32 @@ export class RolesGuard implements CanActivate {
       '';
     if (!auth.startsWith('Bearer ')) throw new UnauthorizedException();
 
-    let role: string | undefined;
+    let claimedRole: string | undefined;
     let sub: string | undefined;
     try {
       const { payload } = await jwtVerify(auth.slice('Bearer '.length), SECRET(), {
         algorithms: ['HS256'],
       });
-      role = typeof payload.role === 'string' ? payload.role : undefined;
+      claimedRole = typeof payload.role === 'string' ? payload.role : undefined;
       sub = typeof payload.sub === 'string' ? payload.sub : undefined;
     } catch {
       throw new UnauthorizedException();
     }
-    if (!role || !required.includes(role as Role)) throw new ForbiddenException();
+    if (!sub || !claimedRole) throw new UnauthorizedException();
 
-    (req as { user?: { sub?: string; role?: Role } }).user = {
+    // Look up the current row — token roles can be stale (admin demoted
+    // a user after they signed in). The DB is the source of truth.
+    const user = await this.prisma.user.findUnique({
+      where: { id: sub },
+      select: { id: true, role: true, deactivatedAt: true },
+    });
+    if (!user) throw new UnauthorizedException();
+    if (user.deactivatedAt) throw new ForbiddenException('Account deactivated');
+    if (!required.includes(user.role as Role)) throw new ForbiddenException();
+
+    (req as { user?: { sub: string; role: Role } }).user = {
       sub,
-      role: role as Role,
+      role: user.role as Role,
     };
     return true;
   }

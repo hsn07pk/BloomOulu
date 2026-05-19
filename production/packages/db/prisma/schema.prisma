@@ -55,6 +55,11 @@ model User {
   // Staff-specific
   ouluUid       String?  @unique // OIDC subject id when signed via University SSO
 
+  // Operator-toggled deactivation. Distinct from `deletedAt` (which is the
+  // GDPR-erasure pseudonymisation marker) — an admin disables a staff
+  // account here while finance/legal hold prevents row deletion.
+  deactivatedAt DateTime?
+
   accounts      Account[]
   sessions      Session[]
   adoptions     Adoption[]
@@ -357,6 +362,12 @@ model Tier {
   blurbFi         String
   blurbSv         String
   perks           Json    // [{labelKey: "i_at_h_postcard", localeFallbacks: {...}}]
+  // Marketing flair shown above the tier name (e.g. "Most popular gift",
+  // "Best value", "Donor-wall listing"). Per-locale variants for fi/sv —
+  // null means no tag shown.
+  tagEn           String?
+  tagFi           String?
+  tagSv           String?
   // Visual
   color           String
   bg              String
@@ -395,7 +406,19 @@ model Adoption {
   giftRecipient   User?     @relation("giftRecipient", fields: [giftRecipientId], references: [id])
   giftCodeId      String?   @unique @db.Uuid
   giftCode        GiftCode? @relation(fields: [giftCodeId], references: [id])
+  giftDeliverOn   DateTime? @db.Date   // when to email the recipient
+  giftAnonymous   Boolean   @default(false) // "Send anonymously? Yes/No"
+  giftWrap        Boolean   @default(false) // +€4 linen-card mailed cert
   memorialOf      String?
+  memorialFamilyEmail String?           // bloom-anniversary mailings
+  // Free-form co-adopters (split-the-gift feature) — stored as
+  // [{ name?, email? }, ...]. We deliberately don't model these as
+  // first-class Users so they don't need to verify email to be named.
+  coAdopters      Json?
+  // Donor consents (also mirrored to User.preferences but cached on the
+  // Adoption row so the receipt + admin export reflect the exact moment
+  // the donor opted in).
+  marketingOptIn  Boolean   @default(false)
 
   // Billing
   recurring       Boolean   @default(true)
@@ -602,9 +625,11 @@ model RagDocument {
   @@unique([title, locale])
 }
 
-// Vector embeddings stored as pgvector(1024). Prisma can't (yet) generate the
-// vector type directly; we use Unsupported and lift queries to raw SQL in the
-// repository layer.
+// Vector embeddings stored as pgvector(1024) — matches the Ollama
+// `bge-m3` multilingual embedding model (100+ languages including the
+// FI/SV/EN trio BloomOulu targets). Earlier dev iterations used
+// nomic-embed-text:v1.5 (768-dim, English-only). Switching models
+// requires re-ingesting the corpus and migrating the column width.
 model RagChunk {
   id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   documentId      String   @db.Uuid

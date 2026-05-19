@@ -179,6 +179,127 @@ const DEFAULTS: Setting[] = [
     category: 'flow',
     type: 'json',
   },
+
+  // ── Adopt-wizard knobs (read by /v1/settings/public) ──────────────────────
+  {
+    key: 'adoption.giftWrapCents',
+    value: 400,
+    description: 'Linen-card gift-wrap upgrade price in cents (€4 = 400). Shown in step 3 and folded into amountCents on submit.',
+    category: 'adoption',
+    type: 'number',
+  },
+  {
+    key: 'adoption.donationShareBp',
+    value: 7200,
+    description: 'Donor-facing donation-vs-benefits split, in basis points. 7200 = 72% donation / 28% benefits. Editorial only — the authoritative VAT calc uses vat.donationRateBp / vat.perkRateBp.',
+    category: 'adoption',
+    type: 'number',
+  },
+  {
+    key: 'adoption.plaqueEligibleTiers',
+    value: ['endangered', 'corporate'],
+    description: 'Tiers that earn a physical plaque. Edit when a new tier should include one.',
+    category: 'adoption',
+    type: 'json',
+  },
+  {
+    key: 'adoption.dedicationMaxChars',
+    value: 240,
+    description: 'Hard limit on the dedication / memorial text in the wizard. Matches the Adoption.dedication column.',
+    category: 'adoption',
+    type: 'number',
+  },
+  {
+    key: 'adoption.coAdopterMax',
+    value: 10,
+    description: 'Maximum co-adopters per adoption (UI cap; server enforces the same).',
+    category: 'adoption',
+    type: 'number',
+  },
+  {
+    key: 'adoption.fundsFlowUrl',
+    value: '/about#funds-flow',
+    description: 'Where the "Read the funds-flow policy" link points. Locale-relative.',
+    category: 'adoption',
+    type: 'string',
+  },
+
+  // ── AskTheGarden knobs (read by /v1/settings/public + ask.service) ────────
+  {
+    key: 'ask.curatorEmail',
+    value: 'curator@bloomoulu.fi',
+    description: 'Inbox where escalated questions land. Change when the Garden\'s curator handover lands.',
+    category: 'ask',
+    type: 'string',
+  },
+  {
+    key: 'ask.curatorName',
+    value: 'Anna Liisa Ruotsalainen',
+    description: 'Curator name shown in the donor-facing footer ("Curator typically replies within X days").',
+    category: 'ask',
+    type: 'string',
+  },
+  {
+    key: 'ask.curatorReplySlaDays',
+    value: 2,
+    description: 'Working-day SLA we promise donors after an escalation.',
+    category: 'ask',
+    type: 'number',
+  },
+  {
+    key: 'ask.confidenceThresholdBp',
+    value: 7200,
+    description: 'Minimum re-ranker score (basis points) needed to call the LLM. Below this we escalate. Default 7200 = 0.72 cosine similarity (ADR-0005).',
+    category: 'ask',
+    type: 'number',
+  },
+  {
+    key: 'ask.auditErrorTarget',
+    value: 0.05,
+    description: 'Audit-error-rate target shown on the right rail. 0.05 = 5% — anything above prompts a curator re-audit.',
+    category: 'ask',
+    type: 'number',
+  },
+  {
+    key: 'ask.outOfDomain',
+    value: {
+      bgci: 'https://tools.bgci.org/plant_search.php',
+      gbif: 'https://www.gbif.org/species/search',
+      plantnet: 'https://identify.plantnet.org/',
+    },
+    description: 'External services we link to when a question is out-of-domain.',
+    category: 'ask',
+    type: 'json',
+  },
+  {
+    key: 'ask.staffStarters',
+    value: {
+      en: [
+        'Draft school-tour script for upper grade (Saxifraga hirculus)',
+        'Generate signage text — Trollius europaeus (FI/SV/EN)',
+        "Summarise this quarter's gardener notes",
+        'Find a Kone Foundation grant template',
+        'Identify a herbarium sample (image upload)',
+      ],
+      fi: [
+        'Luo opastusrunko yläkoululaisille (Saxifraga hirculus)',
+        'Tuota opastetekstin (FI/SV/EN) Trollius europaeus -lajille',
+        'Tee yhteenveto tämän vuosineljänneksen puutarhurin muistiinpanoista',
+        'Etsi Kone-säätiön apurahapohja',
+        'Tunnista herbaarionäyte (kuvalataus)',
+      ],
+      sv: [
+        'Skapa skolturmanus för högstadiet (Saxifraga hirculus)',
+        'Generera skyltningstext — Trollius europaeus (FI/SV/EN)',
+        'Sammanfatta detta kvartals trädgårdsmästares anteckningar',
+        'Hitta en Kone-stiftelsen-bidragsmall',
+        'Identifiera ett herbarium-prov (bilduppladdning)',
+      ],
+    },
+    description: 'Quick-start prompts shown to staff in the Ask sidebar. Edit per locale.',
+    category: 'ask',
+    type: 'json',
+  },
 ];
 
 export async function seedSettings(prisma: PrismaClient) {

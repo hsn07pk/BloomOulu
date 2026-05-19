@@ -220,11 +220,10 @@ export class PaymentsService {
                 donor: { select: { name: true, email: true } },
               },
             });
-            // Plaque eligibility: Endangered (€750) and Corporate (€1,250)
-            // tiers get a physical plaque next to their plant. Auto-create
-            // a Plaque row in `requested` state — curators approve + engrave
-            // + install from /admin/resources/Plaque.
-            const eligible: Array<typeof adoption.tierId> = ['endangered', 'corporate'];
+            // Plaque eligibility comes from SystemSetting
+            // (`adoption.plaqueEligibleTiers`) so admins can grow the
+            // perk without a deploy. Defaults to Endangered + Corporate.
+            const eligible = this.settings.get().adoption.plaqueEligibleTiers as Array<typeof adoption.tierId>;
             if (eligible.includes(adoption.tierId)) {
               const existing = await tx.plaque.findUnique({ where: { adoptionId: adoption.id } });
               if (!existing) {

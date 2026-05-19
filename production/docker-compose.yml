@@ -50,8 +50,11 @@ services:
       NEXT_PUBLIC_API_URL: https://api.bloomoulu.fi
       NEXT_PUBLIC_WEB_URL: https://bloomoulu.fi
     healthcheck:
+      # Use curl (every app image installs it) on 127.0.0.1 — alpine's
+      # busybox wget tries IPv6 first against `localhost` and fails with
+      # "Connection refused" because Node binds IPv4-only.
       <<: *default-healthcheck
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/api/healthz"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3000/api/healthz"]
     networks: [internal]
 
   api:
@@ -67,7 +70,7 @@ services:
       ollama:   { condition: service_started }
     healthcheck:
       <<: *default-healthcheck
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:4000/healthz"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:4000/healthz"]
     networks: [internal]
 
   api-worker:
@@ -82,6 +85,13 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       redis:    { condition: service_healthy }
+    healthcheck:
+      # Worker has no HTTP port. Liveness = `node dist/worker.js` is the
+      # PID 1 process. Use a node one-liner to ping Redis (the worker
+      # *requires* Redis to be useful, so a healthy worker is one that
+      # can still reach BullMQ's broker).
+      <<: *default-healthcheck
+      test: ["CMD", "node", "-e", "require('net').createConnection({host:'redis',port:6379}).on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))"]
     networks: [internal]
 
   admin:
@@ -94,7 +104,7 @@ services:
       postgres: { condition: service_healthy }
     healthcheck:
       <<: *default-healthcheck
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:4100/admin/health"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:4100/admin/health"]
     networks: [internal]
 
   kiosk:
@@ -253,12 +263,17 @@ services:
     networks: [internal]
 
   tempo:
-    image: grafana/tempo:latest
+    # Pinned to 2.7.2 (latest stable). Tempo 3.0-rc moved `compactor` out of
+    # the top-level config and would break our `tempo-config.yml` schema.
+    image: grafana/tempo:2.7.2
     <<: *restart-policy
     command: ["-config.file=/etc/tempo.yaml"]
     volumes:
       - ./infra/tempo/tempo-config.yml:/etc/tempo.yaml:ro
       - tempo_data:/var/tempo
+    healthcheck:
+      <<: *default-healthcheck
+      test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:3200/ready | grep -q ready"]
     networks: [internal]
 
   glitchtip:

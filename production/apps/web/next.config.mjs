@@ -7,6 +7,10 @@ const nextConfig = {
   output: 'standalone',
   reactStrictMode: true,
   poweredByHeader: false,
+  // Skip ESLint in Docker builds — the kiosk hit a missing-plugin error
+  // in the runner image. Typecheck still runs separately as the quality
+  // gate.
+  eslint: { ignoreDuringBuilds: true },
   // Compile workspace TS packages through Next's own pipeline so the
   // `.js`-extension imports they use (for Node ESM compatibility with the
   // API + worker) resolve here too. Without this, webpack treats them as

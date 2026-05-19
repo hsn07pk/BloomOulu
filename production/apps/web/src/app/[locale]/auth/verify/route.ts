@@ -28,8 +28,16 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ locale: str
     return NextResponse.redirect(new URL(`/${locale}/sign-in?reason=invalid`, origin));
   }
 
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
-  let user: { id: string; email: string; name: string | null; role?: string; locale?: string } | null = null;
+  const apiUrl =
+    process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+  interface VerifiedUser {
+    id: string;
+    email: string;
+    name: string | null;
+    role?: string;
+    locale?: string;
+  }
+  let user: VerifiedUser | null = null;
   try {
     const res = await fetch(`${apiUrl}/v1/auth/verify`, {
       method: 'POST',
@@ -38,8 +46,8 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ locale: str
       cache: 'no-store',
     });
     if (res.ok) {
-      const data = (await res.json()) as { ok: boolean; user: typeof user };
-      if (data.ok) user = data.user;
+      const data = (await res.json()) as { ok: boolean; user: VerifiedUser | null };
+      if (data.ok && data.user) user = data.user;
     }
   } catch {
     /* fall through to expired */

@@ -80,7 +80,8 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ locale: str
 
   // Upsert into the api. Staff vs student/donor role is decided by the
   // api based on the IdP claim (e.g., `groups` includes "garden-staff").
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+  const apiUrl =
+    process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
   let user: { id: string; email: string; name: string | null; role: string; locale: string } | null = null;
   try {
     const apiRes = await fetch(`${apiUrl}/v1/auth/oidc-upsert`, {

@@ -1,0 +1,45 @@
+# Alertmanager — localhost configuration.
+#
+# Production routes alerts to ntfy.sh (see alertmanager.yml). Local dev
+# doesn't have a public ntfy server and we don't want phone pages firing
+# on dev work, so this overlay points every receiver at MailHog (the
+# capture-only SMTP server we already run on localhost). Open
+# http://localhost:8025 to see any alert that would have been pushed.
+#
+# This file has NO `${VAR}` placeholders — Alertmanager doesn't expand
+# env vars in YAML, and a pre-renderer (envsubst/gomplate) is overkill
+# for fixed dev values. The production config keeps the `${VAR}` form
+# because production deploys via the prod-only path that pre-renders.
+
+global:
+  resolve_timeout: 5m
+  smtp_from: 'alertmanager@bloomoulu.localhost'
+  smtp_smarthost: 'mailhog:1025'
+  smtp_require_tls: false
+  smtp_hello: 'bloomoulu.localhost'
+
+route:
+  receiver: 'dev-mail'
+  group_by: ['alertname', 'tier']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 24h
+  routes:
+    - matchers: [ tier="P0" ]
+      receiver: 'dev-mail'
+      group_wait: 0s
+      repeat_interval: 1h
+      continue: true
+
+receivers:
+  - name: 'dev-mail'
+    email_configs:
+      - to: 'oncall@bloomoulu.localhost'
+        send_resolved: true
+        headers:
+          Subject: '[BloomOulu/dev] {{ .Status | toUpper }} — {{ .CommonLabels.alertname }}'
+
+inhibit_rules:
+  - source_matchers: [ alertname="ApiDown" ]
+    target_matchers: [ tier="P1" ]
+    equal: [ 'job' ]

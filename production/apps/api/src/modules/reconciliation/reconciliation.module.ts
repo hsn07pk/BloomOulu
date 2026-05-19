@@ -18,6 +18,8 @@ import { PaymentsService } from '../payments/payments.service.js';
 import { PaymentsModule } from '../payments/payments.module.js';
 import { isValidRfReference } from '@bloomoulu/payments';
 import { z } from 'zod';
+import { Roles } from '../../common/roles.decorator.js';
+import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.decorator.js';
 
 const EntrySchema = z.object({
   reference: z.string().min(4).max(64),
@@ -29,6 +31,7 @@ const EntrySchema = z.object({
 const EntriesSchema = z.object({ entries: z.array(EntrySchema).min(1).max(500) });
 
 @Controller('reconciliation')
+@Roles('finance', 'admin')
 class ReconciliationController {
   private readonly logger = new Logger(ReconciliationController.name);
 
@@ -45,7 +48,7 @@ class ReconciliationController {
    * downstream jobs fire exactly once via the ProcessedEvent gate.
    */
   @Post('entries')
-  async submitEntries(@Body() rawBody: unknown) {
+  async submitEntries(@CurrentUser() actor: AuthenticatedUser, @Body() rawBody: unknown) {
     const body = EntriesSchema.parse(rawBody);
     const results: Array<{
       reference: string;
@@ -104,6 +107,23 @@ class ReconciliationController {
         reason: event.deduplicated ? 'already_processed' : undefined,
       });
     }
+
+    // ADR-0001 §"Robustness": every mutation gets an audit trail. We log the
+    // batch (not the individual entries; those land as payment.succeeded
+    // audit lines via PaymentsService.handleEvent) so finance can trace
+    // exactly which staff member uploaded a given CSV.
+    await this.prisma.auditLog.create({
+      data: {
+        actorUserId: actor.sub,
+        action: 'reconciliation.entries.submit',
+        resource: `Reconciliation/${new Date().toISOString().slice(0, 10)}`,
+        after: {
+          processed: body.entries.length,
+          matched: results.filter((r) => r.matched).length,
+          unmatched: results.filter((r) => !r.matched).length,
+        },
+      },
+    });
 
     return { processed: body.entries.length, results };
   }

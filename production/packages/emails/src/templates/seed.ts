@@ -148,6 +148,33 @@ export const EMAIL_TEMPLATES: ReadonlyArray<SeedTemplate> = [
     mjmlSv: wrap('Adoption avslutad', "<mj-text>Din adoption av <strong>{{plantName}}</strong> har avslutats efter 21 dagar utan lyckad betalning. Tidigare donationer kvarstår. Tack för stödet — du kan starta en ny adoption när som helst.</mj-text>", { label: 'Adoptera igen', href: '{{adoptUrl}}' }),
   },
   {
+    slug: 'curator-escalation',
+    subjectEn: 'AskTheGarden — a visitor is asking for you',
+    subjectFi: 'AskTheGarden — vierailija kysyy sinulta',
+    subjectSv: 'AskTheGarden — en besökare frågar efter dig',
+    mjmlEn: wrap(
+      'A visitor needs a curator',
+      `<mj-text>{{curatorName}}, AskTheGarden could not answer this question with the corpus we have. A reply within {{slaDays}} working days would be great.</mj-text>
+       <mj-text><strong>Question:</strong> {{question}}</mj-text>
+       <mj-text><strong>What the bot said:</strong> {{answerText}}</mj-text>
+       <mj-text class="muted">Visitor email: {{replyToEmail}} · message id: {{messageId}}</mj-text>`,
+    ),
+    mjmlFi: wrap(
+      'Vierailija pyytää puutarhuria',
+      `<mj-text>{{curatorName}}, AskTheGarden ei löytänyt vastausta nykyisestä korpuksestamme. Vastauksesi {{slaDays}} työpäivän kuluessa olisi loistavaa.</mj-text>
+       <mj-text><strong>Kysymys:</strong> {{question}}</mj-text>
+       <mj-text><strong>Boterin vastaus:</strong> {{answerText}}</mj-text>
+       <mj-text class="muted">Vierailijan sähköposti: {{replyToEmail}} · viestin id: {{messageId}}</mj-text>`,
+    ),
+    mjmlSv: wrap(
+      'En besökare behöver trädgårdsmästaren',
+      `<mj-text>{{curatorName}}, AskTheGarden hittade inte ett svar i vår korpus. Ett svar inom {{slaDays}} arbetsdagar vore toppen.</mj-text>
+       <mj-text><strong>Fråga:</strong> {{question}}</mj-text>
+       <mj-text><strong>Botens svar:</strong> {{answerText}}</mj-text>
+       <mj-text class="muted">Besökarens e-post: {{replyToEmail}} · meddelande-id: {{messageId}}</mj-text>`,
+    ),
+  },
+  {
     slug: 'annual-tax-cert',
     subjectEn: 'Your annual donation tax certificate',
     subjectFi: 'Vuosittainen verotodistuksesi',

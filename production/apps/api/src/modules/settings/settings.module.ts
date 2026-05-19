@@ -23,6 +23,9 @@ class SettingsController {
       features: s.features,
       defaultAmountCents: s.defaultAmountCents,
       adoptionFlow: s.adoptionFlow,
+      adoption: s.adoption,
+      ask: s.ask,
+      vat: s.vat,
     };
   }
 }

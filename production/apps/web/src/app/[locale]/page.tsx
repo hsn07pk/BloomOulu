@@ -2,6 +2,7 @@ import { getTranslations } from 'next-intl/server';
 import Link from 'next/link';
 import { type PlantIndexItem } from '../../components/PlantIndex.client';
 import { PlantCard } from '../../components/PlantCard';
+import { internalApiUrl } from '../../lib/api';
 
 export const revalidate = 60;
 
@@ -11,9 +12,8 @@ type Plant = PlantIndexItem;
 const HOME_PLANT_LIMIT = 11;
 
 async function fetchInitialPlants(): Promise<{ items: Plant[] }> {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
   try {
-    const res = await fetch(`${apiUrl}/v1/plants?limit=${HOME_PLANT_LIMIT}`, {
+    const res = await fetch(`${internalApiUrl()}/v1/plants?limit=${HOME_PLANT_LIMIT}`, {
       next: { revalidate: 60, tags: ['plants'] },
     });
     if (!res.ok) return { items: [] };

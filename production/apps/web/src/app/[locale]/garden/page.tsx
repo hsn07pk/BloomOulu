@@ -71,10 +71,17 @@ interface GardenView {
   }>;
 }
 
-async function fetchGarden(userId: string): Promise<GardenView | null> {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+async function fetchGarden(userId: string, jwt: string): Promise<GardenView | null> {
+  // SSR runs inside the container; prefer INTERNAL_API_URL when running
+  // under Docker (the public NEXT_PUBLIC_API_URL is host-relative and
+  // doesn't resolve from inside the bridge network).
+  const apiUrl =
+    process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
   try {
-    const res = await fetch(`${apiUrl}/v1/users/${userId}/garden`, { cache: 'no-store' });
+    const res = await fetch(`${apiUrl}/v1/users/${userId}/garden`, {
+      headers: { Authorization: `Bearer ${jwt}` },
+      cache: 'no-store',
+    });
     return res.ok ? res.json() : null;
   } catch {
     return null;
@@ -97,7 +104,8 @@ interface SavedRow {
 }
 
 async function fetchSaved(jwt: string): Promise<SavedRow[]> {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+  const apiUrl =
+    process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
   try {
     const res = await fetch(`${apiUrl}/v1/me/saved`, {
       headers: { Authorization: `Bearer ${jwt}` },
@@ -140,7 +148,7 @@ export default async function GardenPage({
   const jar = await cookies();
   const sessionJwt = jar.get('bloomoulu.session')?.value ?? '';
   const [garden, saved] = await Promise.all([
-    fetchGarden(session.user.id),
+    fetchGarden(session.user.id, sessionJwt),
     sessionJwt ? fetchSaved(sessionJwt) : Promise.resolve([] as SavedRow[]),
   ]);
 

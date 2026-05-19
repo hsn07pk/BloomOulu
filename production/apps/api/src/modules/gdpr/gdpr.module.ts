@@ -19,11 +19,17 @@
  *     → status='completed'
  *
  *   Rejection path: admin clicks "Reject" → status='rejected' + reason.
+ *
+ * Both endpoints require an authenticated donor (or staff acting on the
+ * donor's behalf). The userId in the body must match the caller, unless
+ * the caller is admin (staff-mediated request handling).
  */
-import { Body, Controller, Module, Post } from '@nestjs/common';
+import { Body, Controller, Module, Post, ForbiddenException } from '@nestjs/common';
 import { z } from 'zod';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ZodValidationPipe } from '../../common/zod.pipe.js';
+import { Roles } from '../../common/roles.decorator.js';
+import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.decorator.js';
 import { AuditService } from '../audit/audit.service.js';
 import { enqueueGdprExport } from '../jobs/enqueue.js';
 
@@ -34,6 +40,7 @@ const EraseDto = z.object({
 });
 
 @Controller('gdpr')
+@Roles('donor', 'curator', 'finance', 'admin')
 class GdprController {
   constructor(
     private readonly prisma: PrismaService,
@@ -41,40 +48,54 @@ class GdprController {
   ) {}
 
   @Post('export')
-  async export(@Body(new ZodValidationPipe(ExportDto)) body: z.infer<typeof ExportDto>) {
+  async export(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Body(new ZodValidationPipe(ExportDto)) body: z.infer<typeof ExportDto>,
+  ) {
+    // ADR-0003: a donor can only request export of their own data; admins
+    // can act on a donor's behalf (the donor wrote a manual request).
+    if (body.userId !== actor.sub && actor.role !== 'admin') {
+      throw new ForbiddenException();
+    }
     const req = await this.prisma.$transaction(async (tx) => {
       const r = await tx.dataExportRequest.create({
         data: { userId: body.userId, status: 'pending' },
       });
       await this.audit.log(tx, {
-        actorUserId: body.userId,
+        actorUserId: actor.sub,
         action: 'gdpr.export.requested',
         resource: `DataExportRequest/${r.id}`,
+        after: { onBehalfOf: body.userId !== actor.sub ? body.userId : undefined },
       });
       return r;
     });
-    // Fire the worker job right after the txn commits. The worker is
-    // idempotent on requestId.
     await enqueueGdprExport({ requestId: req.id });
     return { requestId: req.id, status: 'queued' };
   }
 
   @Post('erase')
-  async erase(@Body(new ZodValidationPipe(EraseDto)) body: z.infer<typeof EraseDto>) {
+  async erase(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Body(new ZodValidationPipe(EraseDto)) body: z.infer<typeof EraseDto>,
+  ) {
+    if (body.userId !== actor.sub && actor.role !== 'admin') {
+      throw new ForbiddenException();
+    }
     const req = await this.prisma.$transaction(async (tx) => {
       const r = await tx.dataErasureRequest.create({
         data: { userId: body.userId, status: 'pending', reason: body.reason ?? null },
       });
       await this.audit.log(tx, {
-        actorUserId: body.userId,
+        actorUserId: actor.sub,
         action: 'gdpr.erase.requested',
         resource: `DataErasureRequest/${r.id}`,
-        after: { reason: body.reason ?? null },
+        after: {
+          reason: body.reason ?? null,
+          onBehalfOf: body.userId !== actor.sub ? body.userId : undefined,
+        },
       });
       return r;
     });
-    // No worker enqueue here — an admin must approve the request first
-    // (see /admin/resources/DataErasureRequest → "Approve & execute").
     return {
       requestId: req.id,
       status: 'awaiting_admin_review',

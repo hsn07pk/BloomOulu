@@ -1,0 +1,256 @@
+# ─── BloomOulu — Localhost override for docker-compose.yml ────────────
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.localhost.yml up -d --build
+#
+# What this overlay does, relative to the production compose:
+#   * Caddy serves over HTTP only (no Let's Encrypt) using Caddyfile.localhost.
+#   * Web/api/admin/kiosk are bound to their canonical host ports so you
+#     can hit http://localhost:3000/en/adopt directly without DNS hacks.
+#   * App containers talk to data-plane services via their compose service
+#     names (postgres, redis, minio, ollama) instead of localhost.
+#   * Heavy/optional services that don't work without a real domain
+#     (postal email server, glitchtip, ntfy, reranker) are scaled to 0.
+
+services:
+  # ── Reverse proxy ──────────────────────────────────────────────────────
+  caddy:
+    volumes:
+      - ./infra/caddy/Caddyfile.localhost:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    ports:
+      - "8080:80"   # avoid clashing with anything else on :80
+    # Remove :443 mapping from the base — no TLS locally.
+    # (Compose merges port lists, so we replace it entirely below.)
+
+  # ── Application services ───────────────────────────────────────────────
+  web:
+    # NEXT_PUBLIC_* must be in `build.args` (not env) so `next build`
+    # inlines them into the client bundle. Setting them only at runtime
+    # leaves the browser bundle with `undefined`, which is what made
+    # /v1/ask/stream + saved-plants client fetches hit the web origin
+    # and return 404.
+    build:
+      context: .
+      dockerfile: infra/docker/web.Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: "http://localhost:4000"
+        NEXT_PUBLIC_WEB_URL: "http://localhost:3000"
+        NEXT_PUBLIC_ADMIN_URL: "http://localhost:4100"
+        NEXT_PUBLIC_KIOSK_URL: "http://localhost:3100"
+    environment:
+      NODE_ENV: production
+      # Browser-side URL (baked into client bundle at build time):
+      NEXT_PUBLIC_API_URL: "http://localhost:4000"
+      # Server-side / RSC URL inside the Docker network. The adopt page's
+      # SSR fetch picks INTERNAL_API_URL first; without it, localhost:4000
+      # resolves to the web container itself and tiers/plants come back
+      # empty — leaving step 1 blank.
+      INTERNAL_API_URL: "http://api:4000"
+      NEXT_PUBLIC_WEB_URL: "http://localhost:3000"
+      NEXT_PUBLIC_ADMIN_URL: "http://localhost:4100"
+      NEXT_PUBLIC_KIOSK_URL: "http://localhost:3100"
+      AUTH_URL: "http://localhost:3000"
+      DATABASE_URL: "postgresql://bloomoulu:bloomoulu@postgres:5432/bloomoulu?schema=public"
+      DIRECT_URL: "postgresql://bloomoulu:bloomoulu@postgres:5432/bloomoulu?schema=public"
+      REDIS_URL: "redis://redis:6379"
+      S3_ENDPOINT: "http://minio:9000"
+    ports:
+      - "3000:3000"
+
+  api:
+    # The base compose declares `depends_on: ollama` (in-cluster), but
+    # we run Ollama natively on the macOS host for Metal GPU acceleration
+    # (Docker on Apple Silicon can't pass Metal through — Hypervisor.framework
+    # limitation). `!reset` fully REPLACES the map; without it Compose would
+    # merge the keys and keep the `ollama` entry from the base file.
+    depends_on: !reset
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+      minio:    { condition: service_started }
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: "postgresql://bloomoulu:bloomoulu@postgres:5432/bloomoulu?schema=public"
+      DIRECT_URL: "postgresql://bloomoulu:bloomoulu@postgres:5432/bloomoulu?schema=public"
+      REDIS_URL: "redis://redis:6379"
+      S3_ENDPOINT: "http://minio:9000"
+      WEB_ORIGIN: "http://localhost:3000"
+      ALLOWED_ORIGINS: "http://localhost:3000,http://localhost:3100,http://localhost:4100"
+      NEXT_PUBLIC_WEB_URL: "http://localhost:3000"
+      # Ollama runs NATIVELY on the macOS host (not Docker) so it can
+      # use Apple Metal GPU. Docker on Apple Silicon can't access Metal
+      # at all — running Ollama inside Docker fell back to CPU and ran
+      # 3–6× slower than native (vchalyi benchmark: 24 → 4 tok/s).
+      # host.docker.internal is the Mac/Docker bridge address.
+      OLLAMA_URL: "http://host.docker.internal:11434"
+      OLLAMA_BASE_URL: "http://host.docker.internal:11434"
+      # Gemma 3 4B IT — same 140-language training as 12B (incl. Finnish),
+      # IFEval 90.2 (best in its class), ~4 GB resident, 60-90 tok/s on
+      # M-Pro via Metal.
+      # bge-m3 — multilingual embedding (100+ languages incl. FI/SV),
+      # 1024-dim, top MTEB-multi scores.
+      OLLAMA_LLM_MODEL: "gemma3:4b"
+      OLLAMA_EMBED_MODEL: "bge-m3"
+      EMBED_MODEL: "bge-m3"
+      LLM_MODEL: "gemma3:4b"
+      # Real reranker (BAAI/bge-reranker-v2-m3 via TEI). The localhost
+      # override runs this on CPU; without it AskService falls back to
+      # raw vector scores and logs a "reranker unavailable" warn.
+      RERANKER_URL: "http://reranker:8080"
+      # Paytrail's public sandbox credentials (documented at
+      # https://docs.paytrail.com/#/?id=test-credentials) — production
+      # deployments replace these with the merchant's real values.
+      PAYTRAIL_MERCHANT_ID: "375917"
+      PAYTRAIL_SECRET: "SAIPPUAKAUPPIAS"
+      PAYTRAIL_API_URL: "https://services.paytrail.com"
+      PAYTRAIL_WEBHOOK_SECRET: "SAIPPUAKAUPPIAS"
+      # MobilePay sandbox is gated behind KYC — leave keys blank in dev
+      # and the gateway throws on construction (matches production
+      # behaviour: admins toggle the rail off until credentials land).
+    ports:
+      - "4000:4000"
+
+  api-worker:
+    environment:
+      DATABASE_URL: "postgresql://bloomoulu:bloomoulu@postgres:5432/bloomoulu?schema=public"
+      DIRECT_URL: "postgresql://bloomoulu:bloomoulu@postgres:5432/bloomoulu?schema=public"
+      REDIS_URL: "redis://redis:6379"
+      S3_ENDPOINT: "http://minio:9000"
+      # Local-mail capture. MailHog SMTP listens on 1025; web UI on 8025.
+      SMTP_HOST: "mailhog"
+      SMTP_PORT: "1025"
+      SMTP_FROM: "BloomOulu <noreply@bloomoulu.localhost>"
+      EMAIL_FROM: "BloomOulu <noreply@bloomoulu.localhost>"
+
+  # MailHog — captures every outbound email locally so we can inspect
+  # curator escalations, magic-link emails, receipts, etc. without
+  # standing up a full Postal instance.
+  mailhog:
+    image: mailhog/mailhog
+    profiles: []
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    networks: [internal]
+
+  admin:
+    environment:
+      # NODE_ENV stays "development" on localhost so the AdminJS session
+      # cookie isn't marked Secure (plain http://localhost would otherwise
+      # drop the cookie). Production sets NODE_ENV=production and serves
+      # AdminJS over Caddy + HTTPS so Secure works correctly.
+      NODE_ENV: development
+      DATABASE_URL: "postgresql://bloomoulu:bloomoulu@postgres:5432/bloomoulu?schema=public"
+      DIRECT_URL: "postgresql://bloomoulu:bloomoulu@postgres:5432/bloomoulu?schema=public"
+      REDIS_URL: "redis://redis:6379"
+      # Localhost-only demo credentials. Password is "bloomoulu-admin".
+      # In production, set ADMIN_BOOTSTRAP_PASSWORD_HASH to a freshly
+      # generated bcrypt hash and remove the email from any seed runs.
+      ADMIN_BOOTSTRAP_EMAIL: "admin@bloomoulu.localhost"
+      ADMIN_BOOTSTRAP_PASSWORD_HASH: "$$2a$$10$$4JIf6/IEVbp5okcFZ7C2GuwvRacfoV2/Z9/B2oR2A1/xzBu2ZgiCy"
+      AUTH_SECRET: "localhost-demo-secret-rotate-in-real-prod-please-32+chars"
+    ports:
+      - "4100:4100"
+
+  kiosk:
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: "http://localhost:4000"
+    ports:
+      - "3100:3100"
+
+  # ── Data-plane host port exposure ─────────────────────────────────────
+  postgres:
+    ports:
+      - "5432:5432"
+
+  redis:
+    ports:
+      - "6379:6379"
+
+  minio:
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+
+  # Ollama runs natively on the macOS host (via Homebrew) so it can use
+  # the Metal GPU. Putting the dockerized ollama into the `llm-in-docker`
+  # profile means it doesn't start with `docker compose up`. The api
+  # service's `!reset` of depends_on (above) drops the now-orphaned dep.
+  ollama:
+    profiles: ["llm-in-docker"]
+  ollama-bootstrap:
+    profiles: ["llm-in-docker"]
+
+  # ── Observability — keep but expose Grafana on 3300 to avoid 3000 clash ─
+  grafana:
+    ports:
+      - "3300:3000"
+
+  prometheus:
+    ports:
+      - "9090:9090"
+
+  # ── Real Alertmanager (localhost config — emails to MailHog) ─────────
+  # Production routes alerts via ntfy.sh using `${VAR}` placeholders in
+  # alertmanager.yml. Alertmanager has no native env-var expansion (the
+  # upstream maintainers declined to add it), so for dev we mount a
+  # pre-rendered config that sends alerts to MailHog SMTP — visible at
+  # http://localhost:8025 — instead of pushing to ntfy.
+  alertmanager:
+    # `!override` (not `!reset`) replaces the base compose's volumes list
+    # with this one. `!reset` followed by content gets parsed as "reset
+    # then ignore the list" — compose silently drops the whole block.
+    # Long-form syntax avoids a short-form parsing quirk where !override
+    # would only consume the first list entry.
+    volumes: !override
+      - type: bind
+        source: ./infra/alertmanager/alertmanager.localhost.yml
+        target: /etc/alertmanager/alertmanager.yml
+        read_only: true
+      - type: volume
+        source: alertmanager_data
+        target: /alertmanager
+    env_file: !reset []
+    depends_on:
+      mailhog:
+        condition: service_started
+    healthcheck:
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+      test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:9093/-/healthy | grep -q OK"]
+  # Real Grafana Tempo — base compose now pins to 2.7.2 (latest stable),
+  # which accepts the top-level `compactor` schema we use. No override
+  # needed here; the base service definition stands.
+  postal:
+    profiles: ["disabled"]
+  glitchtip:
+    profiles: ["disabled"]
+  glitchtip-worker:
+    profiles: ["disabled"]
+  ntfy:
+    profiles: ["disabled"]
+  # Reranker — bypasses the upstream TEI image (no arm64 build) and runs
+  # BAAI/bge-reranker-v2-m3 via sentence-transformers from a small custom
+  # image. Same HTTP contract as TEI (POST /rerank, GET /health), so the
+  # api treats it identically. Model weights cache in reranker_data on
+  # first boot (~600 MB download); subsequent boots start in seconds.
+  reranker:
+    image: bloomoulu-reranker
+    build:
+      context: .
+      dockerfile: infra/docker/reranker.Dockerfile
+    # Base compose passes TEI-style flags (--model-id …) but our Python
+    # image starts uvicorn from its CMD. !reset drops the inherited args.
+    command: !reset null
+    entrypoint: !reset null
+    environment:
+      MODEL_ID: "BAAI/bge-reranker-v2-m3"
+      MAX_LEN: "512"
+      LOG_LEVEL: "INFO"
+    ports:
+      - "8081:8080"
+    # Healthcheck definition inherited from the Dockerfile.
