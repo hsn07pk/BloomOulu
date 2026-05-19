@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service.js';
 
 @Injectable()
@@ -88,7 +89,6 @@ export class AuthService {
     if (!email || !password) return null;
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user?.passwordHash) return null;
-    const bcrypt = await import('bcryptjs');
     const ok = await bcrypt.compare(password, user.passwordHash);
     return ok ? user : null;
   }
@@ -116,7 +116,6 @@ export class AuthService {
     await this.prisma.verificationToken.delete({
       where: { identifier_token: { identifier: input.email, token: tokenHash } },
     });
-    const bcrypt = await import('bcryptjs');
     const passwordHash = await bcrypt.hash(input.password, 12);
     const user = await this.prisma.user.upsert({
       where: { email: input.email },
