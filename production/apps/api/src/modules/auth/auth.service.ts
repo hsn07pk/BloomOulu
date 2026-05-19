@@ -63,6 +63,78 @@ export class AuthService {
     });
   }
 
+  /** Look up whether an email already has a registered account. Used
+   *  by the sign-in form to decide between asking for a password vs
+   *  starting the verify-and-setup flow. */
+  async lookup(email: string): Promise<{
+    exists: boolean;
+    hasPassword: boolean;
+    verified: boolean;
+  }> {
+    const u = await this.prisma.user.findUnique({
+      where: { email },
+      select: { passwordHash: true, emailVerified: true },
+    });
+    return {
+      exists: Boolean(u),
+      hasPassword: Boolean(u?.passwordHash),
+      verified: Boolean(u?.emailVerified),
+    };
+  }
+
+  /** Sign in with email + password. Returns the user row on success
+   *  or null on failure. Bcrypt comparison is constant-time. */
+  async signInWithPassword(email: string, password: string) {
+    if (!email || !password) return null;
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user?.passwordHash) return null;
+    const bcrypt = await import('bcryptjs');
+    const ok = await bcrypt.compare(password, user.passwordHash);
+    return ok ? user : null;
+  }
+
+  /** Consume a verify token AND set the password + name in one step.
+   *  Used by the sign-up verify-and-setup endpoint, where the user
+   *  clicks the verify link and is presented with a form to finish
+   *  account creation. */
+  async verifyAndSetup(input: {
+    email: string;
+    token: string;
+    password: string;
+    name?: string;
+  }) {
+    if (!input.password || input.password.length < 8) {
+      return { ok: false as const, reason: 'password_too_short' as const };
+    }
+    const tokenHash = this.hashToken(input.token);
+    const row = await this.prisma.verificationToken.findUnique({
+      where: { identifier_token: { identifier: input.email, token: tokenHash } },
+    });
+    if (!row || row.expires < new Date()) {
+      return { ok: false as const, reason: 'invalid_or_expired' as const };
+    }
+    await this.prisma.verificationToken.delete({
+      where: { identifier_token: { identifier: input.email, token: tokenHash } },
+    });
+    const bcrypt = await import('bcryptjs');
+    const passwordHash = await bcrypt.hash(input.password, 12);
+    const user = await this.prisma.user.upsert({
+      where: { email: input.email },
+      update: {
+        emailVerified: new Date(),
+        passwordHash,
+        ...(input.name ? { name: input.name } : {}),
+      },
+      create: {
+        email: input.email,
+        emailVerified: new Date(),
+        passwordHash,
+        name: input.name ?? null,
+      },
+    });
+    return { ok: true as const, user };
+  }
+
   private hashToken(t: string): string {
     return createHmac('sha256', process.env.AUTH_SECRET ?? 'dev-secret')
       .update(t)

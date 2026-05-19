@@ -25,3 +25,8 @@ tsconfig.tsbuildinfo
 *.pem
 .vercel
 .fly/
+
+# Local SMTP overrides (Gmail App Passwords etc.)
+.env.gmail
+.env.gmail.local
+*.bak

@@ -7,6 +7,14 @@ import { sendEmail } from '../../infra/email.js';
 
 const EmailBody = z.object({ email: z.string().email(), locale: z.enum(['en', 'fi', 'sv']).optional() });
 const VerifyBody = z.object({ email: z.string().email(), token: z.string().min(1) });
+const LookupBody = z.object({ email: z.string().email() });
+const SignInBody = z.object({ email: z.string().email(), password: z.string().min(1) });
+const VerifyAndSetupBody = z.object({
+  email: z.string().email(),
+  token: z.string().min(1),
+  password: z.string().min(8).max(200),
+  name: z.string().min(1).max(120).optional(),
+});
 
 @Controller('auth')
 export class AuthController {
@@ -132,6 +140,57 @@ export class AuthController {
         name: user.name ?? null,
         role: user.role,
         locale: user.locale,
+      },
+    };
+  }
+
+  /**
+   * Look up whether an email is already registered so the sign-in form
+   * can either ask for the password or send a verify-and-setup link.
+   * Always returns ok:true and never reveals timing-sensitive info to
+   * an attacker who is trying to enumerate accounts.
+   */
+  @Post('lookup')
+  async lookup(@Body(new ZodValidationPipe(LookupBody)) body: { email: string }) {
+    const info = await this.svc.lookup(body.email);
+    return { ok: true, ...info };
+  }
+
+  /** Email + password sign-in. */
+  @Post('sign-in')
+  async signIn(@Body(new ZodValidationPipe(SignInBody)) body: { email: string; password: string }) {
+    const user = await this.svc.signInWithPassword(body.email, body.password);
+    if (!user) return { ok: false as const, user: null };
+    return {
+      ok: true as const,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name ?? null,
+        role: user.role,
+        locale: user.locale,
+      },
+    };
+  }
+
+  /** Verify a sign-up token AND set the password + name in one step.
+   *  Used by /auth/verify on the web after the new user clicks the
+   *  link in their welcome email. */
+  @Post('verify-and-setup')
+  async verifyAndSetup(
+    @Body(new ZodValidationPipe(VerifyAndSetupBody))
+    body: { email: string; token: string; password: string; name?: string },
+  ) {
+    const r = await this.svc.verifyAndSetup(body);
+    if (!r.ok) return { ok: false as const, reason: r.reason };
+    return {
+      ok: true as const,
+      user: {
+        id: r.user.id,
+        email: r.user.email,
+        name: r.user.name ?? null,
+        role: r.user.role,
+        locale: r.user.locale,
       },
     };
   }

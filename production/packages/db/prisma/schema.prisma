@@ -42,6 +42,10 @@ model User {
   id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   email         String   @unique
   emailVerified DateTime?
+  // bcrypt hash for password-based sign-in. Null for staff using
+  // University SSO or for donors who only ever used the magic-link
+  // path. Set by the sign-up verify-and-setup endpoint.
+  passwordHash  String?
   name          String?
   image         String?
   role          UserRole @default(donor)
