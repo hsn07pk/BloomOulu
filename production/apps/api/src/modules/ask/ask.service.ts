@@ -24,6 +24,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { request } from 'undici';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SettingsService } from '../settings/settings.service.js';
+import { searchWeb, type WebResult } from './web-search.js';
 
 const OLLAMA_BASE = process.env.OLLAMA_URL ?? process.env.OLLAMA_BASE_URL ?? 'http://ollama:11434';
 const LLM_MODEL = process.env.OLLAMA_LLM_MODEL ?? process.env.LLM_MODEL ?? 'llama3.2:1b';
@@ -59,17 +60,26 @@ const ALLOWED_HINTS = [
   /\b(växt|blomma|träd|adoptera|mossa|lav)\b/i,
 ];
 
-// Greetings, thanks, and small-talk openers. Each pattern matches the
-// FULL string (so "Hi, when does Trollius bloom?" still routes to RAG)
-// but allows common addressees like "Hi there!", "Hello garden", and
-// trailing punctuation.
-const GREET_TRAILER = /(\s+(there|all|y'all|everyone|guys|folks|garden|bot|friend))?[\s!.?,]*$/i.source;
+// Greetings, thanks, and small-talk openers. Each pattern anchors to
+// the full message so "Hi, when does Trollius bloom?" still routes to
+// RAG. We allow common trailers ("there", "all", "garden") AND
+// composite forms like "hey, how are you?" or "hi how's it going?".
+const GREET_WORD = `(hi+|hello+|hey+|yo|heya|hej(san)?|hei|moi(kka)?|terve|tere|tervehdys|tervetuloa|hola|salut|bonjour|guten\\s+tag)`;
+const GREET_TRAILER = `(\\s+(there|all|y'all|everyone|guys|folks|garden|bot|friend|chatbot))?[\\s!.?,]*$`;
+const SMALL_TALK = `(how('?s| is)\\s+it\\s+going|how\\s+are\\s+(you|things)|how\\s+have\\s+you\\s+been|what'?s\\s+(up|new|happening|good)|sup|how'?s\\s+everything|nice\\s+to\\s+(meet|see)\\s+you)`;
 const GREETING_HINTS = [
-  new RegExp(`^\\s*(hi+|hello+|hey+|yo|heya|hej(san)?|hei|moi(kka)?|terve|tere|tervehdys|tervetuloa|hola|salut|bonjour|guten\\s+tag)${GREET_TRAILER}`, 'i'),
+  // Plain greeting (optionally with trailer): "Hi", "Hello there!", "Hej friend"
+  new RegExp(`^\\s*${GREET_WORD}${GREET_TRAILER}`, 'i'),
+  // Greeting + small-talk: "hey how are you?", "Hi, how's it going?"
+  new RegExp(`^\\s*${GREET_WORD}[\\s,]+${SMALL_TALK}\\??[\\s!.?,]*$`, 'i'),
+  // Time-of-day greetings: "Good morning", "Good evening!"
   new RegExp(`^\\s*good\\s+(morning|afternoon|evening|day)${GREET_TRAILER}`, 'i'),
-  /^\s*(how('?s| is)\s+it\s+going|how\s+are\s+you|what'?s\s+up|sup)\??[\s!.?,]*$/i,
-  /^\s*(thanks|thank\s+you|thx|ty|cheers|kiitos|tack|merci)(\s+(a\s+lot|so\s+much|very\s+much))?[\s!.?,]*$/i,
-  /^\s*(bye|goodbye|farewell|cya|see\s+you(\s+later)?|hyvästi|näkemiin|hej\s+då)[\s!.?,]*$/i,
+  // Standalone small-talk: "How are you?", "What's up?"
+  new RegExp(`^\\s*${SMALL_TALK}\\??[\\s!.?,]*$`, 'i'),
+  // Thanks
+  /^\s*(thanks|thank\s+you|thx|ty|cheers|kiitos|tack|merci|appreciate(\s+it)?)(\s+(a\s+lot|so\s+much|very\s+much))?[\s!.?,]*$/i,
+  // Bye
+  /^\s*(bye|goodbye|farewell|cya|see\s+you(\s+later)?|take\s+care|hyvästi|näkemiin|hej\s+då)[\s!.?,]*$/i,
 ];
 // Meta-questions about the service itself — what is this, who are you,
 // what is a botanical garden, how does this work. These deserve a real
@@ -120,22 +130,30 @@ const SYSTEM_PROMPT: Record<'en' | 'fi' | 'sv', string> = {
   en: `You are AskTheGarden, the conservation guide of the University of Oulu Botanical Garden. You answer questions about the 7,954 plants in our living collection.
 
 How to answer:
-- Write naturally and conversationally, the way a knowledgeable garden guide would speak to a visitor.
-- One to three sentences usually. Longer only when the answer genuinely needs detail.
+- Write naturally and warmly, the way a knowledgeable garden guide speaks to a visitor. Friendly, informative, never robotic.
+- One to four sentences usually. Longer only when the answer genuinely needs detail.
 - Plain prose. No bullet points, no headers, no markdown.
 - Use periods and commas. Do not use em-dashes or en-dashes anywhere.
-- Contractions are welcome ("we have", "it's").
+- Contractions are welcome ("we have", "it's", "you'll").
 - Just answer. Skip openers like "According to the context" or "Based on the records".
 - Do not write citation markers like [c1] or [c2]. No brackets, no superscripts, no source numbers in the text.
 
 Conversation context:
-- When a <conversation> block appears before the <context>, it shows the dialogue so far. Use it to interpret references like "it", "they", "that one", or short follow-ups, and to keep your answer continuous with what you already said. Do not repeat full information you already gave the user. Build on it.
+- When a <conversation> block appears before <context>, it shows the dialogue so far. Use it to resolve references like "it", "they", "that one" and to stay continuous with what you already said. Do not repeat full information you already gave the user; build on it.
 
-Grounding (very important):
-- Use only facts that appear inside the Context block below. Never invent a species name, family, accession count, status, country, or date.
-- The Context is plant entries only. It does NOT contain garden services info. If the question is about opening hours, admission price, location, parking, accessibility, food, tours, or accommodation, you must refuse, even if the Context mentions "University of Oulu Botanical Garden".
-- If the Context contains nothing relevant to the question, reply with exactly this sentence and nothing else:
-  I don't have a reliable answer to that in our collection.
+What the Context covers:
+- Plant entries (species in the living collection: family, common names, conservation status, bloom season, accessions count).
+- Family-level summaries (carnivorous plants, conifers, orchids, ferns, succulents, aquatic plants, etc.).
+- Conservation summaries (counts by Red List status).
+- Garden information: opening hours, admission, location, parking, the Romeo and Julia greenhouses, outdoor garden, guided tours, history, research programmes, contact details, accessibility, and climate.
+
+Grounding (important):
+- Use only facts that appear inside the Context. Never invent species names, families, accession counts, hours, prices, addresses, phone numbers, or dates.
+- If the question is on-topic for a botanical garden but the Context truly does not contain the answer, offer a warm, helpful response that:
+  1. Acknowledges what you don't have ("I don't have that in our records").
+  2. Suggests a useful next step (ask Curator Anna Liisa Ruotsalainen, check the official site oulu.fi/en/university/botanical-garden, try BGCI PlantSearch or GBIF for plants not in our collection, try Pl@ntNet for image ID).
+- For plant-care questions ("how do I water…", "best soil for…"), say honestly that the garden is a research collection, not a horticultural advice service, and suggest the curator or RHS / Chicago Botanic Garden plant info services.
+- Stay friendly even when redirecting. End with an offer to help with something else in the garden.
 
 Examples — study the tone:
 
@@ -147,17 +165,25 @@ Question: Tell me about Hedera helix.
 Context: Hedera helix, family Araliaceae, 15 accessions.
 Answer: Hedera helix is the common English ivy, a climbing plant in the Araliaceae family. We have 15 accessions in the collection.
 
-Question: How many orchids does the garden have?
-Context: Family ORCHIDACEAE collection summary: 158 species, 234 accessions.
-Answer: Our orchid collection holds 158 species across 234 accessions.
+Question: When are you open?
+Context: Outdoor garden 8:00–20:00 every day; greenhouses Tue–Sun 10:00–16:00, closed Mondays.
+Answer: Our outdoor garden is open every day from 8 in the morning to 8 in the evening, and the Romeo and Julia greenhouses are open Tuesday through Sunday from 10 to 4. The greenhouses are closed on Mondays.
 
-Question: Are there any plants that eat insects?
-Context: Dionaea muscipula (Venus flytrap) and Drosera entries; Droseraceae is a carnivorous family.
-Answer: Yes. We have carnivorous plants including the Venus flytrap and several sundews, all in the Droseraceae family.
+Question: Where are you located?
+Context: Kaitoväylä 5, Linnanmaa campus, near Lake Kuivasjärvi; coordinates 65.06N, 25.47E.
+Answer: We're at Kaitoväylä 5 on the University of Oulu's Linnanmaa campus, in the northern corner of the campus next to Lake Kuivasjärvi.
 
-Question: What is a botanical garden?
-Context: (only Hedera helix, no general definition)
-Answer: I don't have a reliable answer to that in our collection.`,
+Question: How much does it cost to visit?
+Context: Voluntary 5 € admission covering both garden and greenhouses; MobilePay 12657.
+Answer: Admission is a voluntary 5 €, which covers both the outdoor garden and the Romeo and Julia greenhouses. You can pay via MobilePay 12657 or by bank transfer.
+
+Question: How do I take care of my houseplant?
+Context: (only plant catalogue entries, no care guides)
+Answer: We're a research and conservation collection rather than a horticultural advice service, so I don't have care guides here. Curator Anna Liisa Ruotsalainen is happy to help with specific questions; the RHS and Chicago Botanic Garden also run free plant care help lines. Anything I can help with about our collection?
+
+Question: What's the capital of France?
+Context: (only plant entries; question is off-topic)
+Answer: That's outside what I can help with. I'm here for questions about the University of Oulu Botanical Garden, our plants, visiting, and conservation. Anything you'd like to know on those?`,
   fi: `Olet AskTheGarden, Oulun yliopiston kasvitieteellisen puutarhan opastin. Vastaat kysymyksiin kokoelman 7 954 kasvista.
 
 Kuinka vastaat:
@@ -352,11 +378,27 @@ export class AskService {
       translatedQuery && translatedQuery.length > 3 ? translatedQuery : queryForEmbedding;
     const reranked = combined.length > 0 ? await this.rerank(rerankQuery, combined) : [];
 
-    // 6. Score floor.
+    // 6. Score floor + web-search augmentation.
+    //    Two thresholds:
+    //      • hardFloor  (default 0.001) — below this, in-corpus retrieval
+    //        failed; we MUST have web results or escalate to curator.
+    //      • augmentBand (0.001 to 0.25) — corpus matched something but
+    //        the top score is mediocre. Augment with a live Wikipedia
+    //        lookup so the LLM has both signals.
+    //    Above 0.25, corpus alone is strong enough; skip the web call.
     const thresholdBp = this.settings.get().ask.confidenceThresholdBp;
-    const minScore = thresholdBp / 10_000;
+    const hardFloor = thresholdBp / 10_000;
+    const augmentBand = 0.25;
     const top = reranked[0];
-    if (!top || top.score < minScore) {
+    let webResults: WebResult[] = [];
+    if (!top || top.score < augmentBand) {
+      // Use the standalone (rewritten) query for the web search and
+      // prefer English Wikipedia regardless of locale because it has
+      // the broadest species coverage.
+      webResults = await searchWeb(queryForEmbedding, 'en');
+    }
+    if ((!top || top.score < hardFloor) && webResults.length === 0) {
+      // Genuinely nothing — escalate to the curator.
       const text = this.escalation(locale);
       onDelta?.(text);
       await this.prisma.askAnswer.create({
@@ -388,8 +430,13 @@ export class AskService {
     // from the final user-facing text via postProcessAnswer(), but the
     // LLM still sees them so it can ground each claim to a specific chunk.
     const top5 = reranked.slice(0, 5);
-    const contextBlock = top5
-      .map((c, i) => `[c${i + 1}] ${c.text}`)
+    const corpusEntries = top5.map((c) => c.text);
+    const webEntries = webResults.map(
+      (w) => `From ${new URL(w.url).host} ("${w.title}"): ${w.text}`,
+    );
+    const allEntries = [...corpusEntries, ...webEntries];
+    const contextBlock = allEntries
+      .map((t, i) => `[c${i + 1}] ${t}`)
       .join('\n\n');
     const conversationBlock =
       recentHistory.length > 0
@@ -397,8 +444,12 @@ export class AskService {
             .map((t) => `${t.role === 'user' ? 'User' : 'Assistant'}: ${t.text}`)
             .join('\n')}\n</conversation>\n\n`
         : '';
+    const webNotice =
+      webResults.length > 0
+        ? '\n\nNote: some of the context entries above came from an external lookup (Wikipedia). Treat them as starting points and mention briefly that you checked an outside source when you use them.'
+        : '';
     const userPrompt =
-      `${conversationBlock}<context>\n${contextBlock}\n</context>\n\n<question>\n${question}\n</question>`;
+      `${conversationBlock}<context>\n${contextBlock}\n</context>${webNotice}\n\n<question>\n${question}\n</question>`;
 
     const t0 = Date.now();
     let generation: string;
