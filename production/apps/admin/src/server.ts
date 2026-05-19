@@ -537,6 +537,22 @@ const adminConfig = new AdminJS({
 async function bootstrap() {
   const app = Fastify({ logger: true, trustProxy: true });
 
+  // Favicon shim. AdminJS's plugin registers a catch-all under /admin/*
+  // that beats any sibling route, so an `app.get('/admin/static/favicon.ico')`
+  // gets redirected to /admin/login instead. An onRequest hook fires
+  // BEFORE routing, so we intercept favicon requests there and return
+  // 204 No Content silently. The browser auto-requests this URL the
+  // moment the login page renders; without this hook every staff sign-in
+  // flashes a 404 in the network panel.
+  app.addHook('onRequest', async (req, reply) => {
+    if (
+      req.url === '/admin/static/favicon.ico' ||
+      req.url === '/favicon.ico'
+    ) {
+      reply.header('cache-control', 'public, max-age=86400').code(204).send();
+    }
+  });
+
   // The @adminjs/fastify peer-types target an older Fastify generic shape;
   // cast `app` so the call site compiles. The runtime behaviour is unchanged.
   await AdminJSFastify.buildAuthenticatedRouter(
