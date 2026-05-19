@@ -446,7 +446,7 @@ export class AskService {
         : '';
     const webNotice =
       webResults.length > 0
-        ? '\n\nNote: some of the context entries above came from an external lookup (Wikipedia). Treat them as starting points and mention briefly that you checked an outside source when you use them.'
+        ? `\n\nNote: ${webResults.length} of the context entries above were fetched live from Wikipedia (you can spot them by the "From <host>" prefix). Treat them as authoritative for general botany or world facts the garden's catalogue doesn't cover.\n\nWhen you use a Wikipedia entry, do NOT say "I don't have that information in our records" — that's misleading. Instead lead with the answer and briefly attribute the source. Good phrasings: "From what Wikipedia tells us…", "According to Wikipedia…", "Wikipedia describes it as…". Then, if appropriate, mention what the garden's own catalogue does and doesn't have on this topic.`
         : '';
     const userPrompt =
       `${conversationBlock}<context>\n${contextBlock}\n</context>${webNotice}\n\n<question>\n${question}\n</question>`;
@@ -644,7 +644,8 @@ export class AskService {
       `Rules:\n` +
       `- Resolve pronouns (it, they, that, this) using the conversation above.\n` +
       `- Preserve the user's language (English, Finnish, or Swedish — do NOT translate).\n` +
-      `- If the latest message is already self-contained, repeat it verbatim.\n` +
+      `- If the latest message is already self-contained, repeat it VERBATIM. Do not add context from the conversation, do not add extra qualifiers, do not "improve" it.\n` +
+      `- A message is self-contained when it names a specific subject (species name, place, topic) without pronouns. Examples: "Tell me about Rafflesia", "When does Trollius bloom?", "What are your opening hours?".\n` +
       `- Output ONLY the rewritten question, nothing else. No quotes, no explanation, no preface.\n` +
       `- Keep the rewrite short (max 25 words).\n` +
       `\n` +
@@ -663,10 +664,22 @@ export class AskService {
       `Rewrite: which fern in the collection is the rarest?\n` +
       `\n` +
       `Conversation:\n` +
+      `User: how do I adopt a plant?\n` +
+      `Assistant: Pick a tier, choose a plant, pay.\n` +
+      `Latest: Tell me about Rafflesia\n` +
+      `Rewrite: Tell me about Rafflesia\n` +
+      `\n` +
+      `Conversation:\n` +
       `User: Do you have any orchids?\n` +
       `Assistant: Yes, 158 species.\n` +
       `Latest: How many accessions of Trollius europaeus do you have?\n` +
-      `Rewrite: How many accessions of Trollius europaeus do you have?\n`;
+      `Rewrite: How many accessions of Trollius europaeus do you have?\n` +
+      `\n` +
+      `Conversation:\n` +
+      `User: When are you open?\n` +
+      `Assistant: 8 to 8 every day for the outdoor garden.\n` +
+      `Latest: Where are you located?\n` +
+      `Rewrite: Where are you located?\n`;
     try {
       const res = await request(`${OLLAMA_BASE}/api/generate`, {
         method: 'POST',
