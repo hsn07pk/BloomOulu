@@ -141,9 +141,10 @@ How to answer:
 - Do not write citation markers like [c1] or [c2]. No brackets, no superscripts, no source numbers in the text.
 
 Conversation context:
-- When a <conversation> block appears before <context>, it shows the dialogue so far. Use it to resolve references like "it", "they", "that one" and to stay continuous with what you already said. Do not repeat full information you already gave the user; build on it.
-- If the user replies with a short affirmation like "yes", "please", "sure", "go ahead", or "tell me more", look at the previous assistant turn for what was offered, and continue with that offer using the Context provided. Do NOT respond with a generic "What would you like to know?".
-- When a <resolvedQuestion> block appears, it's the literal short message expanded into a self-contained question. Answer the resolved question; treat the original short message as confirmation.
+- When a <conversation> block appears before <context>, it shows the dialogue so far. Use it to resolve references like "it", "they", "that one" and to stay continuous with what you already said.
+- Do NOT repeat full information you already gave the user. Build on it. If you already listed X, Y, Z, expand on ONE of them with a new angle (history, ecology, conservation, how it grows, where it's from, why it matters). Bring fresh details from the Context that the user has not seen yet.
+- If the user replies with a short affirmation like "yes", "please", "sure", "go ahead", or "tell me more", treat that as a request for MORE depth on the topic you just offered. Pick a specific aspect you haven't covered yet and elaborate. NEVER repeat the same sentence or list verbatim.
+- When a <resolvedQuestion> block appears, it's the literal short message expanded into a focused deep-dive question. Answer the resolved question with new information from the Context.
 
 What the Context covers:
 - Plant entries (species in the living collection: family, common names, conservation status, bloom season, accessions count).
@@ -751,13 +752,14 @@ export class AskService {
       .map((t) => `${t.role === 'user' ? 'User' : 'Assistant'}: ${t.text}`)
       .join('\n');
     const sys =
-      `You rewrite a chat user's latest message into a self-contained search query.\n` +
+      `You rewrite a chat user's latest message into a self-contained search query that will retrieve NEW useful information.\n` +
       `\n` +
       `Rules:\n` +
       `- Resolve pronouns (it, they, that, this) using the conversation above.\n` +
+      `- When the latest message is just "yes", "sure", "please", "tell me more", or similar confirmation, the previous assistant turn probably offered more info ("Would you like to know more about X?", "I can tell you about Y too"). REWRITE the user's "yes" as a deeper-aspect or different-angle question about the same subject, so retrieval pulls fresh details, not the same chunks as before. Pick one specific aspect that wasn't covered yet (history, discovery, habitat, accessions, conservation, ecology, cultural use, related species).\n` +
       `- Preserve the user's language (English, Finnish, or Swedish — do NOT translate).\n` +
-      `- If the latest message is already self-contained, repeat it VERBATIM. Do not add context from the conversation, do not add extra qualifiers, do not "improve" it.\n` +
-      `- A message is self-contained when it names a specific subject (species name, place, topic) without pronouns. Examples: "Tell me about Rafflesia", "When does Trollius bloom?", "What are your opening hours?".\n` +
+      `- If the latest message is already self-contained, repeat it VERBATIM.\n` +
+      `- A message is self-contained when it names a specific subject (species name, place, topic) without pronouns: "Tell me about Rafflesia", "When does Trollius bloom?".\n` +
       `- Output ONLY the rewritten question, nothing else. No quotes, no explanation, no preface.\n` +
       `- Keep the rewrite short (max 25 words).\n` +
       `\n` +
@@ -767,25 +769,31 @@ export class AskService {
       `User: When does Trollius europaeus bloom?\n` +
       `Assistant: It blooms in June.\n` +
       `Latest: tell me more about it\n` +
-      `Rewrite: tell me more about Trollius europaeus\n` +
+      `Rewrite: what is the habitat and conservation status of Trollius europaeus\n` +
+      `\n` +
+      `Conversation:\n` +
+      `User: Tell me about Wollemi pine.\n` +
+      `Assistant: We have one accession of Wollemia nobilis. Would you like to know more about this living fossil?\n` +
+      `Latest: yes\n` +
+      `Rewrite: when was Wollemi pine discovered and where does it grow in the wild\n` +
+      `\n` +
+      `Conversation:\n` +
+      `User: Are there any carnivorous plants in the collection?\n` +
+      `Assistant: Yes, 23 Droseraceae, 20 Lentibulariaceae, 13 Nepenthaceae, 10 Sarraceniaceae. Would you like me to tell you more about any of those families?\n` +
+      `Latest: yes\n` +
+      `Rewrite: tell me about the Droseraceae sundews and how they catch insects\n` +
       `\n` +
       `Conversation:\n` +
       `User: What ferns do you have?\n` +
-      `Assistant: We have wood ferns, lady ferns, and royal ferns.\n` +
+      `Assistant: We have wood ferns, lady ferns, royal ferns.\n` +
       `Latest: which is the rarest?\n` +
-      `Rewrite: which fern in the collection is the rarest?\n` +
+      `Rewrite: which fern in the collection is the rarest or most endangered\n` +
       `\n` +
       `Conversation:\n` +
       `User: how do I adopt a plant?\n` +
       `Assistant: Pick a tier, choose a plant, pay.\n` +
       `Latest: Tell me about Rafflesia\n` +
       `Rewrite: Tell me about Rafflesia\n` +
-      `\n` +
-      `Conversation:\n` +
-      `User: Do you have any orchids?\n` +
-      `Assistant: Yes, 158 species.\n` +
-      `Latest: How many accessions of Trollius europaeus do you have?\n` +
-      `Rewrite: How many accessions of Trollius europaeus do you have?\n` +
       `\n` +
       `Conversation:\n` +
       `User: When are you open?\n` +
