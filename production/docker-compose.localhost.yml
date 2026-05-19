@@ -98,6 +98,18 @@ services:
       # override runs this on CPU; without it AskService falls back to
       # raw vector scores and logs a "reranker unavailable" warn.
       RERANKER_URL: "http://reranker:8080"
+      # SMTP → MailHog (the local capture-only SMTP server) so magic-link
+      # sign-in emails, curator escalations, receipts and all other
+      # outbound messages land in http://localhost:8025 instead of trying
+      # to leave the dev machine. The base .env has SMTP_HOST=localhost,
+      # which inside the api container resolves to the container itself
+      # and fails with ECONNREFUSED. Override the host here to the
+      # mailhog service name on the internal compose network.
+      SMTP_HOST: "mailhog"
+      SMTP_PORT: "1025"
+      SMTP_SECURE: "false"
+      SMTP_FROM: "BloomOulu <noreply@bloomoulu.localhost>"
+      EMAIL_FROM: "BloomOulu <noreply@bloomoulu.localhost>"
       # Paytrail's public sandbox credentials (documented at
       # https://docs.paytrail.com/#/?id=test-credentials) — production
       # deployments replace these with the merchant's real values.

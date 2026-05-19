@@ -54,9 +54,51 @@ const COPY = {
   },
 } as const;
 
-export default async function SignInPage({ params }: { params: Promise<{ locale: string }> }) {
+export default async function SignInPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ locale: string }>;
+  searchParams: Promise<{ reason?: string }>;
+}) {
   const { locale } = await params;
+  const { reason } = await searchParams;
   const t = COPY[(locale as keyof typeof COPY) in COPY ? (locale as keyof typeof COPY) : 'en'];
+
+  // SSO is enabled only when the University of Oulu IdP credentials are
+  // present at deploy time. On localhost (and any deploy without those
+  // env vars) we hide the button and explain why, so visitors don't
+  // click a button that silently no-ops.
+  const ssoEnabled = Boolean(process.env.AUTH_OULU_OIDC_CLIENT_ID);
+
+  // Friendly banner copy when the OIDC handler redirected back with a
+  // reason query param (e.g. ?reason=oulu_not_configured).
+  const reasonBanner: { kind: 'info' | 'warn'; text: string } | null = (() => {
+    if (!reason) return null;
+    if (reason === 'oulu_not_configured') {
+      return {
+        kind: 'warn',
+        text:
+          locale === 'fi'
+            ? 'Oulun yliopiston kirjautuminen ei ole vielä käytössä tässä ympäristössä. Käytä sähköpostilinkkiä.'
+            : locale === 'sv'
+              ? 'Inloggning med Uleåborgs universitet är inte aktiverat i denna miljö. Använd e-postlänken.'
+              : "University of Oulu sign-in isn't configured in this environment yet. Please use the email link below.",
+      };
+    }
+    if (reason === 'oulu_discovery_failed') {
+      return {
+        kind: 'warn',
+        text:
+          locale === 'fi'
+            ? 'Oulun yliopiston IdP ei vastannut. Yritä uudelleen tai käytä sähköpostilinkkiä.'
+            : locale === 'sv'
+              ? 'Uleåborgs universitets IdP svarade inte. Försök igen eller använd e-postlänken.'
+              : "Couldn't reach the University of Oulu identity provider. Try again or use the email link.",
+      };
+    }
+    return null;
+  })();
 
   return (
     <main
@@ -77,6 +119,24 @@ export default async function SignInPage({ params }: { params: Promise<{ locale:
           {t.lead}
         </p>
       </header>
+
+      {reasonBanner && (
+        <div
+          role="alert"
+          style={{
+            marginBottom: 20,
+            padding: '12px 16px',
+            borderRadius: 12,
+            background: 'rgba(184,81,58,0.08)',
+            border: '1px solid rgba(184,81,58,0.18)',
+            color: 'var(--rust-on-light)',
+            fontSize: 14,
+            lineHeight: 1.55,
+          }}
+        >
+          {reasonBanner.text}
+        </div>
+      )}
 
       <form
         action={signInAction}
@@ -124,29 +184,52 @@ export default async function SignInPage({ params }: { params: Promise<{ locale:
         </p>
       </form>
 
-      <section
-        className="card card-pad"
-        style={{
-          marginTop: 24,
-          background: 'var(--sage-pale)',
-          border: '1px solid var(--line-soft)',
-        }}
-        aria-labelledby="staff-h"
-      >
-        <h2 id="staff-h" className="serif" style={{ fontSize: 18, marginBottom: 6 }}>
-          {t.altTitle}
-        </h2>
-        <p className="small" style={{ color: 'var(--ink-soft)', lineHeight: 1.55 }}>
-          {t.altBody}
-        </p>
-        <a
-          href={`/${locale}/auth/oulu`}
-          className="btn btn-secondary"
-          style={{ marginTop: 14, display: 'inline-flex', gap: 8, alignItems: 'center' }}
+      {ssoEnabled ? (
+        <section
+          className="card card-pad"
+          style={{
+            marginTop: 24,
+            background: 'var(--sage-pale)',
+            border: '1px solid var(--line-soft)',
+          }}
+          aria-labelledby="staff-h"
         >
-          🎓 {t.altCta}
-        </a>
-      </section>
+          <h2 id="staff-h" className="serif" style={{ fontSize: 18, marginBottom: 6 }}>
+            {t.altTitle}
+          </h2>
+          <p className="small" style={{ color: 'var(--ink-soft)', lineHeight: 1.55 }}>
+            {t.altBody}
+          </p>
+          <a
+            href={`/${locale}/auth/oulu`}
+            className="btn btn-secondary"
+            style={{ marginTop: 14, display: 'inline-flex', gap: 8, alignItems: 'center' }}
+          >
+            🎓 {t.altCta}
+          </a>
+        </section>
+      ) : (
+        <section
+          className="card card-pad"
+          style={{
+            marginTop: 24,
+            background: 'var(--cream)',
+            border: '1px dashed var(--line)',
+          }}
+          aria-labelledby="staff-h"
+        >
+          <h2 id="staff-h" className="serif" style={{ fontSize: 18, marginBottom: 6 }}>
+            {t.altTitle}
+          </h2>
+          <p className="small" style={{ color: 'var(--ink-soft)', lineHeight: 1.55 }}>
+            {locale === 'fi'
+              ? 'Oulun yliopiston kirjautuminen on käytössä vain tuotantoympäristössä. Käytä yliopiston sähköpostilinkkiäsi yllä.'
+              : locale === 'sv'
+                ? 'Inloggning med Uleåborgs universitet är endast aktiverad i produktion. Använd din universitetspost ovan.'
+                : 'University of Oulu sign-in is enabled only in the production environment. Use your university email above and the magic link will work the same way.'}
+          </p>
+        </section>
+      )}
     </main>
   );
 }
