@@ -14,6 +14,69 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import qrcode from 'qrcode-generator';
+import { useCart } from '../../../../lib/cart.client';
+
+/** Add-to-cart CTA on the plant detail page. Toggles between "Add to
+ *  cart" and "✓ In cart" with a "Go to cart" link, so the visitor can
+ *  keep browsing without losing the selection. */
+function AddToCartButton({ slug, locale }: { slug: string; locale: string }) {
+  const { add, has, hydrated } = useCart();
+  if (!hydrated) {
+    return (
+      <button
+        type="button"
+        disabled
+        className="btn btn-primary btn-block btn-lg"
+        style={{ marginTop: 16, opacity: 0.6 }}
+      >
+        🌱 …
+      </button>
+    );
+  }
+  const inCart = has(slug);
+  if (inCart) {
+    return (
+      <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+        <button
+          type="button"
+          disabled
+          className="btn btn-block btn-lg"
+          style={{
+            flex: 1,
+            background: 'var(--sage-pale)',
+            color: 'var(--forest-deep)',
+            border: '1px solid var(--forest-mid)',
+            cursor: 'default',
+          }}
+        >
+          ✓ {locale === 'fi' ? 'Lisätty koriin' : locale === 'sv' ? 'I korgen' : 'In your cart'}
+        </button>
+        <Link
+          href={`/${locale}/cart`}
+          className="btn btn-secondary btn-lg"
+          style={{ whiteSpace: 'nowrap' }}
+        >
+          {locale === 'fi' ? 'Koriin →' : locale === 'sv' ? 'Till korg →' : 'View cart →'}
+        </Link>
+      </div>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => add(slug, 'seedling')}
+      className="btn btn-primary btn-block btn-lg"
+      style={{ marginTop: 16 }}
+    >
+      🌱{' '}
+      {locale === 'fi'
+        ? 'Lisää adoptiokoriin'
+        : locale === 'sv'
+          ? 'Lägg i adoptionskorg'
+          : 'Add to my adoption cart'}
+    </button>
+  );
+}
 
 // Leaflet bundles browser APIs (window) — never SSR. Loaded lazily so the
 // page-chunk stays small if the user never opens the map modal.
@@ -1023,13 +1086,7 @@ export function PlantPageClient({ plant, similarPlants, locale, apiUrl: _apiUrl,
                 </div>
               </div>
 
-              <Link
-                href={`/${locale}/adopt?plant=${plant.slug}`}
-                className="btn btn-primary btn-block btn-lg"
-                style={{ marginTop: 16 }}
-              >
-                🌱 {t('adoptCta')}
-              </Link>
+              <AddToCartButton slug={plant.slug} locale={locale} />
               <Link
                 href={`/${locale}/adopt?plant=${plant.slug}&intent=gift`}
                 className="btn btn-secondary btn-block"

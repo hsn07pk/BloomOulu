@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 import { getSession } from '../lib/session';
+import CartBadge from './CartBadge.client';
 
 /**
  * Shared site chrome — logo · primary nav · locale switcher · sign-in/account.
@@ -51,6 +52,7 @@ export async function Topbar({
           </Link>
         </nav>
         <div className="topbar-right">
+          <CartBadge locale={locale} />
           <div className="lang-pill" role="group" aria-label="Language">
             <Link href={`/en`} className={locale === 'en' ? 'active' : ''} hrefLang="en" aria-label="English">EN</Link>
             <Link href={`/fi`} className={locale === 'fi' ? 'active' : ''} hrefLang="fi" aria-label="Suomi">FI</Link>
