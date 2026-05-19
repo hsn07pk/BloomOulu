@@ -247,7 +247,12 @@ export function AdoptWizard({
   adopt,
 }: AdoptWizardProps) {
   const t = useTranslations('Adopt');
-  const [step, setStep] = useState(1);
+  // When the donor arrived from a plant-detail page's "Adopt this plant"
+  // button (presetPlantSlug is set), skip the tier+pick steps and drop
+  // them straight into the personalise step. They picked already.
+  // Otherwise start at step 1 (tier).
+  const initialStep = presetPlantSlug ? 3 : 1;
+  const [step, setStep] = useState(initialStep);
 
   // Tier + billing
   const orderedTiers = useMemo(

@@ -639,6 +639,24 @@ async function bootstrap() {
       reply.header('cache-control', 'public, max-age=86400').code(204).send();
       return;
     }
+    if (req.url === '/admin/rebuild-summaries' && req.method === 'POST') {
+      void (async () => {
+        try {
+          await prisma.ragDocument.deleteMany({
+            where: {
+              OR: [
+                { title: { startsWith: '__family__:' } },
+                { title: { startsWith: '__conservation__:' } },
+              ],
+            },
+          });
+        } catch (err) {
+          console.warn('[admin] rebuild-summaries:', (err as Error).message);
+        }
+      })();
+      reply.send({ ok: true, queued: true });
+      return;
+    }
     if (req.url === '/admin/dashboard-stats' && req.method === 'GET') {
       try {
         const startOfMonth = new Date();

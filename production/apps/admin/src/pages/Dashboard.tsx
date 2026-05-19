@@ -122,6 +122,67 @@ const Dashboard: React.FC = () => {
         <QuickLink href="http://localhost:8025" external>MailHog inbox</QuickLink>
         <QuickLink href="http://localhost:3300" external>Grafana dashboards</QuickLink>
       </div>
+
+      {/* ── RAG maintenance ───────────────────────────────────────── */}
+      <h4 style={{ fontSize: 16, fontWeight: 500, marginTop: 32, marginBottom: 12, color: '#1F3C2D' }}>
+        RAG corpus maintenance
+      </h4>
+      <RebuildButton />
+      <p style={{ fontSize: 12, color: '#88897C', marginTop: 8, maxWidth: 640 }}>
+        Drops the cached family + conservation summary chunks so the
+        next `pnpm tsx scripts/build-family-summary-corpus.ts` and
+        `…/build-conservation-summary.ts` rebuild from scratch. Use
+        this after editing the family-biology table in the build
+        scripts, or after adding new species the summaries should now
+        cover. Per-plant chunks are not affected — those are
+        rebuilt by `scripts/build-plant-rag-corpus.ts`.
+      </p>
+    </div>
+  );
+};
+
+const RebuildButton: React.FC = () => {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  return (
+    <div>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={async () => {
+          if (!confirm('Drop family + conservation summary RagDocs? They\'ll be empty until the rebuild scripts run.')) return;
+          setBusy(true);
+          setMsg(null);
+          try {
+            const res = await fetch('/admin/rebuild-summaries', {
+              method: 'POST',
+              credentials: 'include',
+            });
+            const data = await res.json();
+            setMsg(data.ok ? '✓ Queued. Run the rebuild scripts to refill.' : `Error: ${data.error ?? '?'}`);
+          } catch (e) {
+            setMsg(`Failed: ${(e as Error).message}`);
+          } finally {
+            setBusy(false);
+          }
+        }}
+        style={{
+          padding: '10px 16px',
+          background: busy ? '#88897C' : '#B8513A',
+          color: 'white',
+          border: 'none',
+          borderRadius: 8,
+          fontSize: 14,
+          cursor: busy ? 'wait' : 'pointer',
+        }}
+      >
+        {busy ? 'Working…' : 'Drop summary chunks (force rebuild on next run)'}
+      </button>
+      {msg && (
+        <div style={{ marginTop: 8, fontSize: 13, color: msg.startsWith('✓') ? '#2D5440' : '#B8513A' }}>
+          {msg}
+        </div>
+      )}
     </div>
   );
 };
