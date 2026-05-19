@@ -55,6 +55,19 @@ const AskDto = z.object({
   question: z.string().min(2).max(500),
   locale: z.enum(['en', 'fi', 'sv']).default('fi'),
   userId: z.string().uuid().optional(),
+  // Recent conversation turns sent by the client so the server can
+  // rewrite anaphoric follow-ups ("tell me more about it") into
+  // standalone questions before retrieval, and so the LLM sees the
+  // dialogue context during generation. Capped to keep the prompt small.
+  history: z
+    .array(
+      z.object({
+        role: z.enum(['user', 'assistant']),
+        text: z.string().min(1).max(2000),
+      }),
+    )
+    .max(12)
+    .default([]),
 });
 type AskDtoT = z.infer<typeof AskDto>;
 
@@ -129,6 +142,7 @@ class AskController {
         body.locale,
         body.userId,
         (delta) => send('delta', { text: delta }),
+        body.history,
       );
       // Re-fetch citation chunks so the final event carries human-readable
       // titles instead of raw chunk UUIDs.

@@ -128,6 +128,9 @@ How to answer:
 - Just answer. Skip openers like "According to the context" or "Based on the records".
 - Do not write citation markers like [c1] or [c2]. No brackets, no superscripts, no source numbers in the text.
 
+Conversation context:
+- When a <conversation> block appears before the <context>, it shows the dialogue so far. Use it to interpret references like "it", "they", "that one", or short follow-ups, and to keep your answer continuous with what you already said. Do not repeat full information you already gave the user. Build on it.
+
 Grounding (very important):
 - Use only facts that appear inside the Context block below. Never invent a species name, family, accession count, status, country, or date.
 - The Context is plant entries only. It does NOT contain garden services info. If the question is about opening hours, admission price, location, parking, accessibility, food, tours, or accommodation, you must refuse, even if the Context mentions "University of Oulu Botanical Garden".
@@ -213,14 +216,19 @@ export class AskService {
   ) {}
 
   /** Streaming entry point. `onDelta` fires for every token chunk the LLM
-   *  emits; the resolved value carries the final text + citations. */
+   *  emits; the resolved value carries the final text + citations.
+   *  `history` is the recent conversation (last N turns) used for
+   *  follow-up resolution and given to the LLM during generation. */
   async answerStream(
     question: string,
     locale: 'en' | 'fi' | 'sv',
     userId: string | undefined,
     onDelta?: (text: string) => void,
+    history: ReadonlyArray<{ role: 'user' | 'assistant'; text: string }> = [],
   ): Promise<AskResult> {
-    // 1. Guardrail.
+    // 1. Guardrail. We classify the ORIGINAL message (not the rewrite)
+    // because greetings and off-topic intents apply to what the user
+    // actually typed.
     const decision = classifyQuestion(question, locale);
     const messageRow = await this.prisma.askMessage.create({
       data: {
@@ -286,15 +294,28 @@ export class AskService {
       };
     }
 
+    // 1b. Multi-turn rewrite. When the user follows up with an anaphoric
+    // message like "tell me more about it" or "what's its bloom time?",
+    // retrieval needs the resolved subject ("Trollius europaeus") to
+    // find anything. We call the LLM once to rewrite the latest message
+    // as a self-contained question, using the recent history. Cheap
+    // when history is empty (skip), and on simple cases the rewriter
+    // returns the original verbatim.
+    const recentHistory = history.slice(-6); // last 6 turns max
+    const standalone =
+      recentHistory.length > 0
+        ? await this.rewriteAsStandaloneQuestion(question, recentHistory, locale).catch(() => question)
+        : question;
+
     // 2. For non-English locales, retrieve using BOTH the original and an
     // English-translated query and union the candidate chunks before
     // reranking. bge-m3 is multilingual but cross-lingual query/document
     // similarity is weaker than monolingual, so the translation gives a
     // second pass that catches sentences the original embed misses
     // ("Milloin kullero kukkii?" via "When does the globeflower bloom?").
-    const queryForEmbedding = question;
+    const queryForEmbedding = standalone;
     const translatedQuery =
-      locale === 'en' ? null : await this.translateToEn(question, locale).catch(() => null);
+      locale === 'en' ? null : await this.translateToEn(standalone, locale).catch(() => null);
 
     // 3. Embed. If the model isn't available (Ollama down, model not
     // pulled), escalate gracefully rather than returning a 500.
@@ -363,14 +384,21 @@ export class AskService {
     // 7. Generate (streamed). Build the context block once.
     // XML tags help small open-weight models stay grounded — gemma3 / llama3
     // tokenize `<context>` as a single boundary token and won't blur it into
-    // free text. Each chunk is labelled [c1]..[c5] so the citation markers
-    // the model emits map 1:1 to the displayed sources list.
+    // free text. Each chunk is labelled [c1]..[c5]; we strip those markers
+    // from the final user-facing text via postProcessAnswer(), but the
+    // LLM still sees them so it can ground each claim to a specific chunk.
     const top5 = reranked.slice(0, 5);
     const contextBlock = top5
       .map((c, i) => `[c${i + 1}] ${c.text}`)
       .join('\n\n');
+    const conversationBlock =
+      recentHistory.length > 0
+        ? `<conversation>\n${recentHistory
+            .map((t) => `${t.role === 'user' ? 'User' : 'Assistant'}: ${t.text}`)
+            .join('\n')}\n</conversation>\n\n`
+        : '';
     const userPrompt =
-      `<context>\n${contextBlock}\n</context>\n\n<question>\n${question}\n</question>`;
+      `${conversationBlock}<context>\n${contextBlock}\n</context>\n\n<question>\n${question}\n</question>`;
 
     const t0 = Date.now();
     let generation: string;
@@ -541,6 +569,81 @@ export class AskService {
   }
 
   // ─── Internals ─────────────────────────────────────────────────────────
+
+  /** Rewrite a follow-up question as a self-contained one using recent
+   *  conversation history. Resolves anaphora (it / they / that), fills
+   *  in implied subjects ("more about Trollius europaeus"), and keeps
+   *  the language of the original message. If the latest message is
+   *  already self-contained, the rewriter returns it unchanged.
+   *
+   *  This is the LangChain `create_history_aware_retriever` pattern:
+   *  one LLM call before retrieval whose output goes into the embedder.
+   *  Cost ~300-500ms with gemma3:4b; only runs when history is non-empty. */
+  private async rewriteAsStandaloneQuestion(
+    question: string,
+    history: ReadonlyArray<{ role: 'user' | 'assistant'; text: string }>,
+    locale: 'en' | 'fi' | 'sv',
+  ): Promise<string> {
+    const transcript = history
+      .map((t) => `${t.role === 'user' ? 'User' : 'Assistant'}: ${t.text}`)
+      .join('\n');
+    const sys =
+      `You rewrite a chat user's latest message into a self-contained search query.\n` +
+      `\n` +
+      `Rules:\n` +
+      `- Resolve pronouns (it, they, that, this) using the conversation above.\n` +
+      `- Preserve the user's language (English, Finnish, or Swedish — do NOT translate).\n` +
+      `- If the latest message is already self-contained, repeat it verbatim.\n` +
+      `- Output ONLY the rewritten question, nothing else. No quotes, no explanation, no preface.\n` +
+      `- Keep the rewrite short (max 25 words).\n` +
+      `\n` +
+      `Examples:\n` +
+      `\n` +
+      `Conversation:\n` +
+      `User: When does Trollius europaeus bloom?\n` +
+      `Assistant: It blooms in June.\n` +
+      `Latest: tell me more about it\n` +
+      `Rewrite: tell me more about Trollius europaeus\n` +
+      `\n` +
+      `Conversation:\n` +
+      `User: What ferns do you have?\n` +
+      `Assistant: We have wood ferns, lady ferns, and royal ferns.\n` +
+      `Latest: which is the rarest?\n` +
+      `Rewrite: which fern in the collection is the rarest?\n` +
+      `\n` +
+      `Conversation:\n` +
+      `User: Do you have any orchids?\n` +
+      `Assistant: Yes, 158 species.\n` +
+      `Latest: How many accessions of Trollius europaeus do you have?\n` +
+      `Rewrite: How many accessions of Trollius europaeus do you have?\n`;
+    try {
+      const res = await request(`${OLLAMA_BASE}/api/generate`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          model: LLM_MODEL,
+          prompt: `${sys}\n\nConversation:\n${transcript}\nLatest: ${question}\nRewrite:`,
+          stream: false,
+          options: { temperature: 0.1, num_ctx: 2048, num_predict: 80 },
+        }),
+      });
+      const json = (await res.body.json()) as { response?: string };
+      const rewritten = (json.response ?? '')
+        .trim()
+        .replace(/^["'`]|["'`]$/g, '')
+        .replace(/^Rewrite:\s*/i, '')
+        .trim();
+      // Sanity guards: rewrite must be 2-300 chars and not a refusal /
+      // explanation. If it doesn't look like a question/phrase, fall back.
+      if (rewritten.length < 2 || rewritten.length > 300) return question;
+      if (/^(i (don'?t|cannot)|sorry|here is|the user)/i.test(rewritten)) return question;
+      this.logger.log(`Rewrite: "${question}" -> "${rewritten}"`);
+      return rewritten;
+    } catch (err) {
+      this.logger.warn(`Standalone-rewrite failed: ${(err as Error).message}`);
+      return question;
+    }
+  }
 
   /** Translate a question to canonical English for retrieval and rerank.
    *  Includes a short botany glossary so the small model preserves plant

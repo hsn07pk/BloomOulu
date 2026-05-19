@@ -177,11 +177,28 @@ export default function AskChat({
     setActiveTurn(assistantId);
     setInput('');
 
+    // Recent conversation context for multi-turn follow-ups. Server
+    // rewrites anaphoric questions ("tell me more about it") using this
+    // history before retrieving, and gives the LLM the same context for
+    // generation. We cap at the last 6 turns and trim long assistant
+    // replies so the prompt stays compact for gemma3:4b.
+    const recentHistory = turns
+      .slice(-6)
+      .filter((tn) => !tn.streaming && tn.text)
+      .map((tn) => ({
+        role: tn.role,
+        text: tn.text.length > 800 ? tn.text.slice(0, 800) : tn.text,
+      }));
     try {
       const res = await fetch(`${API}/v1/ask/stream`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', accept: 'text/event-stream' },
-        body: JSON.stringify({ question, locale, userId: userId ?? undefined }),
+        body: JSON.stringify({
+          question,
+          locale,
+          userId: userId ?? undefined,
+          history: recentHistory,
+        }),
       });
       if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
 
