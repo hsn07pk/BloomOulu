@@ -392,12 +392,17 @@ function docForPlant(plant: {
   const genusCommon = GENUS_COMMON_NAMES[genus];
   // Resolve the Red List code to its plain-English name so a question
   // like "what's endangered" or "show me vulnerable species" can match.
+  // Don't claim "Finland's Red List" for plants that aren't Finnish
+  // natives — Wollemia, Dionaea, etc. are tracked under IUCN globally.
   const statusCode = (plant.redListStatus ?? '').toUpperCase().trim();
   const statusName = RED_LIST_NAMES[statusCode];
   const isRedListed = statusCode && !['', '-', 'LC', 'NE', 'DD'].includes(statusCode);
+  const isFinnishNative = /\b(suomi|finland|fennoscand|nordic|circumpolar|boreal|tundra)\b/i.test(
+    `${plant.origin ?? ''} ${plant.habitat ?? ''}`,
+  );
   const redListLine = statusName
     ? isRedListed
-      ? `Conservation status: ${statusCode} (${statusName}) on Finland's Red List, a protected and at-risk species.`
+      ? `Conservation status: ${statusCode} (${statusName})${isFinnishNative ? ' on the Finnish Red List' : ' on the IUCN Red List'}, a protected and at-risk species.`
       : `Conservation status: ${statusCode} (${statusName}).`
     : `Conservation status: ${plant.redListStatus || 'unknown'}.`;
   const lines = [

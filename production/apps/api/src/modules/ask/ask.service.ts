@@ -20,11 +20,13 @@
  *      0.2; if still invalid, fall back to the escalation template.
  *   9. Persist AskMessage + AskAnswer + retrievedChunkIds + reaction.
  */
+import { createHash } from 'node:crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import { request } from 'undici';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SettingsService } from '../settings/settings.service.js';
 import { searchWeb, type WebResult } from './web-search.js';
+import { chunkText } from '@bloomoulu/rag';
 
 const OLLAMA_BASE = process.env.OLLAMA_URL ?? process.env.OLLAMA_BASE_URL ?? 'http://ollama:11434';
 const LLM_MODEL = process.env.OLLAMA_LLM_MODEL ?? process.env.LLM_MODEL ?? 'llama3.2:1b';
@@ -140,6 +142,8 @@ How to answer:
 
 Conversation context:
 - When a <conversation> block appears before <context>, it shows the dialogue so far. Use it to resolve references like "it", "they", "that one" and to stay continuous with what you already said. Do not repeat full information you already gave the user; build on it.
+- If the user replies with a short affirmation like "yes", "please", "sure", "go ahead", or "tell me more", look at the previous assistant turn for what was offered, and continue with that offer using the Context provided. Do NOT respond with a generic "What would you like to know?".
+- When a <resolvedQuestion> block appears, it's the literal short message expanded into a self-contained question. Answer the resolved question; treat the original short message as confirmation.
 
 What the Context covers:
 - Plant entries (species in the living collection: family, common names, conservation status, bloom season, accessions count).
@@ -396,6 +400,16 @@ export class AskService {
       // prefer English Wikipedia regardless of locale because it has
       // the broadest species coverage.
       webResults = await searchWeb(queryForEmbedding, 'en');
+      // Persist web results to the corpus so the second query on the
+      // same topic finds them via normal hybrid retrieval (no Wikipedia
+      // round-trip needed). Fire-and-forget — never blocks the user
+      // response. The cache lives under titles `__web__:wikipedia:<slug>`
+      // so it's easy to invalidate / TTL later.
+      if (webResults.length > 0) {
+        this.persistWebResultsToCorpus(webResults).catch((err) => {
+          this.logger.warn(`Web-result persistence failed: ${(err as Error).message}`);
+        });
+      }
     }
     if ((!top || top.score < hardFloor) && webResults.length === 0) {
       // Genuinely nothing — escalate to the curator.
@@ -448,8 +462,19 @@ export class AskService {
       webResults.length > 0
         ? `\n\nNote: ${webResults.length} of the context entries above were fetched live from Wikipedia (you can spot them by the "From <host>" prefix). Treat them as authoritative for general botany or world facts the garden's catalogue doesn't cover.\n\nWhen you use a Wikipedia entry, do NOT say "I don't have that information in our records" — that's misleading. Instead lead with the answer and briefly attribute the source. Good phrasings: "From what Wikipedia tells us…", "According to Wikipedia…", "Wikipedia describes it as…". Then, if appropriate, mention what the garden's own catalogue does and doesn't have on this topic.`
         : '';
+    // If the rewriter resolved a short/anaphoric message into a different
+    // self-contained question, include both so the LLM has the resolved
+    // intent without losing the user's literal words. Otherwise just the
+    // original message goes in the prompt.
+    const showResolved =
+      standalone &&
+      standalone !== question &&
+      standalone.length > question.length + 4;
+    const questionBlock = showResolved
+      ? `<question>\n${question}\n</question>\n<resolvedQuestion>\n${standalone}\n</resolvedQuestion>`
+      : `<question>\n${question}\n</question>`;
     const userPrompt =
-      `${conversationBlock}<context>\n${contextBlock}\n</context>${webNotice}\n\n<question>\n${question}\n</question>`;
+      `${conversationBlock}<context>\n${contextBlock}\n</context>${webNotice}\n\n${questionBlock}`;
 
     const t0 = Date.now();
     let generation: string;
@@ -620,6 +645,93 @@ export class AskService {
   }
 
   // ─── Internals ─────────────────────────────────────────────────────────
+
+  /** Persist a batch of web-search results into the RAG corpus so future
+   *  queries on the same topic can find them via the normal hybrid
+   *  retrieval path. This is the "real-time RAG" behaviour: a question
+   *  the bot can't answer triggers a Wikipedia fetch, the answer is
+   *  cached, and a similar question later goes straight to corpus.
+   *
+   *  Keyed by `__web__:wikipedia:<lang>:<slug>` so the entries are easy
+   *  to spot, easy to invalidate by prefix, and don't collide with
+   *  curator-managed plant or family docs.
+   *
+   *  Async fire-and-forget — never delays the user's response. Embedding
+   *  cost is amortized: only paid once per unique topic. */
+  private async persistWebResultsToCorpus(results: WebResult[]): Promise<void> {
+    const embedModel = process.env.OLLAMA_EMBED_MODEL ?? process.env.EMBED_MODEL ?? 'bge-m3';
+    for (const result of results) {
+      try {
+        let host: string;
+        let slug: string;
+        try {
+          const u = new URL(result.url);
+          host = u.host;
+          slug = (u.pathname.split('/').pop() ?? '').toLowerCase();
+        } catch {
+          continue;
+        }
+        if (!slug) continue;
+        const lang = host.split('.')[0] ?? 'en';
+        const title = `__web__:wikipedia:${lang}:${slug}`;
+        const body = `# ${result.title}\n\nSource: ${result.url}\n\n${result.text}`;
+        const bodyHash = createHash('sha256').update(body).digest('hex');
+        // Skip if we already have an identical-body chunk.
+        const existing = await this.prisma.ragDocument.findFirst({
+          where: { title, locale: 'en' },
+          select: { id: true, bodyHash: true, _count: { select: { chunks: true } } },
+        });
+        if (existing && existing.bodyHash === bodyHash && existing._count.chunks > 0) {
+          continue;
+        }
+        const chunks = chunkText(body, { size: 500, overlap: 50 });
+        const embeddings = await Promise.all(
+          chunks.map((c) =>
+            request(`${OLLAMA_BASE}/api/embeddings`, {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ model: embedModel, prompt: c }),
+            })
+              .then((r) => r.body.json())
+              .then((j) => (j as { embedding: number[] }).embedding),
+          ),
+        );
+        await this.prisma.$transaction(async (tx) => {
+          let docId: string;
+          if (existing) {
+            await tx.ragChunk.deleteMany({ where: { documentId: existing.id } });
+            const u = await tx.ragDocument.update({
+              where: { id: existing.id },
+              data: { body, bodyHash, isPublished: true },
+            });
+            docId = u.id;
+          } else {
+            const c = await tx.ragDocument.create({
+              data: { title, locale: 'en', body, bodyHash, isPublished: true },
+            });
+            docId = c.id;
+          }
+          for (let i = 0; i < chunks.length; i++) {
+            const vec = `[${embeddings[i]!.join(',')}]`;
+            await tx.$executeRawUnsafe(
+              `INSERT INTO "RagChunk" (id, "documentId", "chunkIndex", text, "tokenStart", "tokenEnd", locale, embedding)
+               VALUES (gen_random_uuid(), $1::uuid, $2::int, $3, $4::int, $5::int, $6::"Locale", $7::vector)`,
+              docId,
+              i,
+              chunks[i],
+              0,
+              chunks[i]!.length,
+              'en',
+              vec,
+            );
+          }
+        });
+        this.logger.log(`Cached web result to corpus: ${title}`);
+      } catch (err) {
+        this.logger.warn(`Failed to persist web result "${result.title}": ${(err as Error).message}`);
+      }
+    }
+  }
 
   /** Rewrite a follow-up question as a self-contained one using recent
    *  conversation history. Resolves anaphora (it / they / that), fills

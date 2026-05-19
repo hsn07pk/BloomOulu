@@ -45,6 +45,20 @@ export interface WebResult {
   source: 'wikipedia';
 }
 
+/** Strip conversational filler so the search engine sees the real
+ *  entity. "Tell me about Rafflesia" -> "Rafflesia" so we don't match
+ *  pages that happen to contain "tell", "me", or "about". */
+function focusSearchQuery(q: string): string {
+  return q
+    .replace(
+      /^(tell\s+me|tell\s+us|please\s+tell|please|could\s+you|can\s+you|i\s+want\s+to\s+know|i'd\s+like\s+to\s+know|i\s+wonder|do\s+you\s+know|what\s+is|what\s+are|what's|who\s+is|who's|who\s+are|how\s+do|how\s+does|how\s+is|how\s+are|how\s+can|how\s+to|where\s+is|where\s+are|when\s+is|when\s+does|why\s+is|why\s+does|is\s+there|are\s+there|does\s+the|does\s+it|describe|explain)\s+(about\s+)?(the\s+|a\s+|an\s+)?/i,
+      '',
+    )
+    .replace(/\?+\s*$/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 /** Wikipedia search + summary. We use `list=search` (full-text) instead
  *  of `opensearch` because the latter only matches page titles — useless
  *  for natural-language questions like "What is photosynthesis?". The
@@ -53,7 +67,8 @@ export interface WebResult {
  *  endpoint to get a clean extract for each top hit. */
 async function wikipediaSearch(query: string, limit = 3, lang: 'en' | 'fi' | 'sv' = 'en'): Promise<WebResult[]> {
   const host = `${lang}.wikipedia.org`;
-  const searchUrl = `https://${host}/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&srlimit=${limit}&srnamespace=0&format=json&utf8=1`;
+  const focused = focusSearchQuery(query);
+  const searchUrl = `https://${host}/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(focused)}&srlimit=${limit}&srnamespace=0&format=json&utf8=1`;
   let titles: string[] = [];
   try {
     const res = await request(searchUrl, { headers: HEADERS, headersTimeout: 6000, bodyTimeout: 6000 });
@@ -118,8 +133,23 @@ export async function searchWeb(query: string, locale: 'en' | 'fi' | 'sv' = 'en'
     : query;
   try {
     const results = await wikipediaSearch(probe, 3, locale);
-    log.log(`Web fallback: "${query}" -> ${results.length} Wikipedia result(s) (${locale})`);
-    return results;
+    // Post-filter: keep only results whose extract actually contains
+    // tokens from the focused query (filters out unrelated noise like
+    // "Miraculous Ladybug" pages matching against "tell me about").
+    const focused = focusSearchQuery(probe);
+    const focusTokens = focused
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((t) => t.length >= 4);
+    const relevant = results.filter((r) => {
+      if (focusTokens.length === 0) return true;
+      const text = `${r.title} ${r.text}`.toLowerCase();
+      return focusTokens.some((tok) => text.includes(tok));
+    });
+    log.log(
+      `Web fallback: "${query}" -> ${relevant.length}/${results.length} Wikipedia result(s) (${locale}, focused="${focused}")`,
+    );
+    return relevant;
   } catch (err) {
     log.warn(`Web search failed: ${(err as Error).message}`);
     return [];
