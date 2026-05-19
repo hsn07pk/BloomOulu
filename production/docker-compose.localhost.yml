@@ -159,8 +159,12 @@ services:
       # Localhost-only demo credentials. Password is "bloomoulu-admin".
       # In production, set ADMIN_BOOTSTRAP_PASSWORD_HASH to a freshly
       # generated bcrypt hash and remove the email from any seed runs.
-      ADMIN_BOOTSTRAP_EMAIL: "admin@bloomoulu.localhost"
-      ADMIN_BOOTSTRAP_PASSWORD_HASH: "$$2a$$10$$4JIf6/IEVbp5okcFZ7C2GuwvRacfoV2/Z9/B2oR2A1/xzBu2ZgiCy"
+      # Localhost demo credentials: admin@admin.com / admin
+      # ($$ is the compose escape for a literal $ in the bcrypt hash).
+      # In production, set ADMIN_BOOTSTRAP_PASSWORD_HASH to a freshly
+      # generated hash and use a real University SSO login instead.
+      ADMIN_BOOTSTRAP_EMAIL: "admin@admin.com"
+      ADMIN_BOOTSTRAP_PASSWORD_HASH: "$$2a$$10$$VqmIiItcVOjhqcmEltayJeG91uPRox2nnuNGdP.0xAu4oHPE1FFES"
       AUTH_SECRET: "localhost-demo-secret-rotate-in-real-prod-please-32+chars"
     ports:
       - "4100:4100"

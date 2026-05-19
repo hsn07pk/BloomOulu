@@ -1,0 +1,31 @@
+# Overlay that routes every outbound email to a real SMTP provider
+# (default: Gmail) instead of MailHog. Layer it last:
+#
+#   docker compose -f docker-compose.yml \
+#                  -f docker-compose.localhost.yml \
+#                  -f docker-compose.gmail.yml \
+#                  --env-file .env.gmail up -d --force-recreate api api-worker
+#
+# All values are pulled from environment variables (.env.gmail). Nothing
+# is hard-coded here so you can switch providers without touching the file.
+
+services:
+  api:
+    environment:
+      SMTP_HOST: "${SMTP_HOST}"
+      SMTP_PORT: "${SMTP_PORT}"
+      SMTP_SECURE: "${SMTP_SECURE}"
+      SMTP_USER: "${SMTP_USER}"
+      SMTP_PASS: "${SMTP_PASS}"
+      SMTP_FROM: "${SMTP_FROM}"
+      EMAIL_FROM: "${EMAIL_FROM}"
+
+  api-worker:
+    environment:
+      SMTP_HOST: "${SMTP_HOST}"
+      SMTP_PORT: "${SMTP_PORT}"
+      SMTP_SECURE: "${SMTP_SECURE}"
+      SMTP_USER: "${SMTP_USER}"
+      SMTP_PASS: "${SMTP_PASS}"
+      SMTP_FROM: "${SMTP_FROM}"
+      EMAIL_FROM: "${EMAIL_FROM}"
