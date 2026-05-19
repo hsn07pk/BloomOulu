@@ -756,7 +756,7 @@ export class AskService {
       `\n` +
       `Rules:\n` +
       `- Resolve pronouns (it, they, that, this) using the conversation above.\n` +
-      `- When the latest message is just "yes", "sure", "please", "tell me more", or similar confirmation, the previous assistant turn probably offered more info ("Would you like to know more about X?", "I can tell you about Y too"). REWRITE the user's "yes" as a deeper-aspect or different-angle question about the same subject, so retrieval pulls fresh details, not the same chunks as before. Pick one specific aspect that wasn't covered yet (history, discovery, habitat, accessions, conservation, ecology, cultural use, related species).\n` +
+      `- When the latest message is just "yes", "sure", "please", "tell me more", or similar confirmation: look at the LAST assistant turn for the offer it just made. If it offered specific named options ("Would you like to know more about A, or perhaps about B?"), pick ONE of those EXACT options and rewrite "yes" as a specific question about that named option. Do NOT invent a different aspect — the user is consenting to what was already offered. If the offer was open-ended ("Would you like to know more about this plant?"), then pick a specific aspect (history, discovery, habitat, conservation, ecology, related species) that has not been covered yet in the conversation.\n` +
       `- Preserve the user's language (English, Finnish, or Swedish — do NOT translate).\n` +
       `- If the latest message is already self-contained, repeat it VERBATIM.\n` +
       `- A message is self-contained when it names a specific subject (species name, place, topic) without pronouns: "Tell me about Rafflesia", "When does Trollius bloom?".\n` +
@@ -782,6 +782,18 @@ export class AskService {
       `Assistant: Yes, 23 Droseraceae, 20 Lentibulariaceae, 13 Nepenthaceae, 10 Sarraceniaceae. Would you like me to tell you more about any of those families?\n` +
       `Latest: yes\n` +
       `Rewrite: tell me about the Droseraceae sundews and how they catch insects\n` +
+      `\n` +
+      `Conversation:\n` +
+      `User: how does the Venus flytrap catch insects?\n` +
+      `Assistant: Two hinged lobes snap shut when trigger hairs are stimulated. Would you like to know more about the specific enzymes involved, or perhaps how the plant detects the touch?\n` +
+      `Latest: yes\n` +
+      `Rewrite: what specific digestive enzymes does the Venus flytrap use to break down insect prey\n` +
+      `\n` +
+      `Conversation:\n` +
+      `User: tell me about Trollius europaeus\n` +
+      `Assistant: Globeflower, blooms June, 28 accessions. Would you like to know about its habitat or its conservation status?\n` +
+      `Latest: yes\n` +
+      `Rewrite: what habitat does Trollius europaeus prefer\n` +
       `\n` +
       `Conversation:\n` +
       `User: What ferns do you have?\n` +
