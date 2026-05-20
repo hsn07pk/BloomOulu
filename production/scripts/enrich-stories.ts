@@ -1,17 +1,28 @@
 #!/usr/bin/env tsx
 /**
- * Auto-generate plant stories from Wikipedia.
+ * Auto-generate plant stories from open data.
  *
  *   pnpm tsx scripts/enrich-stories.ts [--limit N] [--slug <slug>] [--dry-run] [--force]
  *
  * For every plant that still lacks a real story (empty, or a "Curator to
- * write…" / "Imported from the legacy database…" placeholder), this looks
- * the species up on Wikidata, finds its English / Finnish / Swedish
- * Wikipedia articles, and stores each article's summary into Plant.story.
+ * write…" / "Imported from the legacy database…" placeholder), this finds a
+ * description and stores it into Plant.story (EN/FI/SV).
  *
- * The Plant.story JSON keeps a `source` block recording the Wikipedia
- * provenance + licence (CC-BY-SA-4.0). The plant page can use it to show a
- * credit, and re-runs use it to skip already-enriched rows.
+ * Description sources, tried in order until one yields text:
+ *   1. Wikipedia — via Wikidata (taxon → article), falling back to a direct
+ *      title lookup so synonyms still resolve. Per language (EN/FI/SV).
+ *   2. GBIF species descriptions — used when Wikipedia has nothing.
+ *   3. Encyclopedia of Life (EOL) — used when GBIF also has nothing.
+ * Only openly-licensed text is kept (CC0 / CC-BY / CC-BY-SA); non-commercial
+ * or no-derivatives content is skipped (this is a donation-funded site).
+ *
+ * The Plant.story JSON keeps a `source` block recording the provider + the
+ * licence. The plant page can use it to show a credit; re-runs use it to
+ * skip already-enriched rows.
+ *
+ * Robustness: every network call has a 20s timeout and is retried; a failure
+ * on one plant is logged and the run moves on to the next — the process does
+ * not crash. Idempotent and resumable: just re-run it.
  *
  * Behaviour:
  *   * Default  — only fills plants WITHOUT a real story. Curator-written and
@@ -20,11 +31,6 @@
  *   * --slug   — process a single plant by slug (for testing).
  *   * --limit  — stop after N plants.
  *   * --dry-run— fetch + print, write nothing.
- *
- * Idempotent and resumable: just re-run it.
- *
- * Sources: Wikidata (CC0) for the taxon → article mapping; the Wikipedia
- * REST summary API (article text is CC-BY-SA-4.0) for the description.
  */
 
 import { PrismaClient } from '@prisma/client';
@@ -35,15 +41,15 @@ const prisma = new PrismaClient();
 const UA =
   'BloomOulu-StoryEnrich/1.0 (University of Oulu Botanical Garden adoption platform)';
 const WIKIDATA_SPARQL = 'https://query.wikidata.org/sparql';
+const GBIF = 'https://api.gbif.org/v1';
+const EOL = 'https://eol.org/api';
+const REQUEST_TIMEOUT_MS = 20_000;
+
 const LANGS = ['en', 'fi', 'sv'] as const;
 type Lang = (typeof LANGS)[number];
 
 // Lower-cased substrings that mark a story as a placeholder, not real content.
-const PLACEHOLDER_MARKERS = [
-  'curator to write',
-  'imported from the garden',
-  'pending',
-];
+const PLACEHOLDER_MARKERS = ['curator to write', 'imported from the garden', 'pending'];
 
 interface CliArgs {
   limit: number;
@@ -80,30 +86,81 @@ function alreadyEnriched(story: unknown): boolean {
   return (
     !!story &&
     typeof story === 'object' &&
-    (story as Record<string, any>).source?.provider === 'Wikipedia'
+    typeof (story as Record<string, any>).source?.provider === 'string'
   );
 }
 
-/** GET JSON with retry on 429 / 5xx / network errors. Returns null on 404 or give-up. */
-async function fetchJson(url: string, retries = 2): Promise<any | null> {
+/** Strip HTML tags and decode the few entities that turn up in source text. */
+function stripHtml(input: string): string {
+  return input
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** True only for licences we may reuse on a public, donation-funded site. */
+function licenseOk(license: string | null | undefined): boolean {
+  const l = (license ?? '').toLowerCase();
+  if (!l) return false;
+  // Reject non-commercial and no-derivatives.
+  if (l.includes('-nc') || l.includes('-nd') || l.includes('noncommercial') || l.includes('noderiv'))
+    return false;
+  // Accept public domain and plain Attribution / ShareAlike.
+  return (
+    l.includes('cc0') ||
+    l.includes('zero') ||
+    l.includes('publicdomain') ||
+    l.includes('public domain') ||
+    l.includes('cc-by') ||
+    l.includes('/by/') ||
+    l.includes('/by-sa/') ||
+    l.includes('by-sa') ||
+    l.includes('attribution')
+  );
+}
+
+/** GET JSON with a timeout + generous retry. Returns null on 404 / give-up; never throws. */
+async function fetchJson(url: string, retries = 4): Promise<any | null> {
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const res = await fetch(url, {
         headers: { 'user-agent': UA, accept: 'application/json' },
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
       if (res.status === 404) return null;
       if (res.status === 429 || res.status >= 500) {
-        await sleep(1000 * (attempt + 1));
-        continue;
+        // Rate-limited or server error — back off (longer each time) and retry.
+        if (attempt < retries) {
+          await sleep(2000 * (attempt + 1));
+          continue;
+        }
+        console.warn(`    request failed (HTTP ${res.status}): ${url.slice(0, 80)}`);
+        return null;
       }
       if (!res.ok) return null;
       return await res.json();
-    } catch {
-      await sleep(500 * (attempt + 1));
+    } catch (err) {
+      const reason =
+        (err as Error)?.name === 'TimeoutError'
+          ? 'timed out'
+          : ((err as Error)?.message ?? 'network error');
+      if (attempt < retries) {
+        await sleep(1000 * (attempt + 1));
+      } else {
+        console.warn(`    request failed (${reason}): ${url.slice(0, 80)}`);
+      }
     }
   }
   return null;
 }
+
+// ── Source 1: Wikipedia (via Wikidata) ──────────────────────────────────────
 
 /** Look up the EN/FI/SV Wikipedia article titles for a species via Wikidata. */
 async function wikidataArticles(latin: string): Promise<Partial<Record<Lang, string>>> {
@@ -145,6 +202,80 @@ async function wikipediaSummary(
   return { text, url: pageUrl };
 }
 
+// ── Source 2: GBIF species descriptions ─────────────────────────────────────
+
+const GBIF_DESC_TYPES = ['description', 'general', 'summary', 'morphology', 'biology', 'diagnostic'];
+
+/** Fallback description from GBIF's species descriptions. */
+async function gbifDescription(
+  latin: string,
+): Promise<{ text: string; license: string; url: string } | null> {
+  const match = await fetchJson(`${GBIF}/species/match?name=${encodeURIComponent(latin)}`);
+  const key = match?.usageKey;
+  if (!key) return null;
+  const data = await fetchJson(`${GBIF}/species/${key}/descriptions?limit=60`);
+  const results: any[] = Array.isArray(data?.results) ? data.results : [];
+  const usable = results
+    .map((d) => ({
+      text: stripHtml(String(d?.description ?? '')),
+      license: String(d?.license ?? ''),
+      type: String(d?.type ?? '').toLowerCase(),
+      language: String(d?.language ?? 'en').toLowerCase(),
+      source: d?.source ? String(d.source) : '',
+    }))
+    .filter((d) => d.text.length >= 60 && licenseOk(d.license));
+  if (usable.length === 0) return null;
+  // Prefer English + a general-description type, then the longest text.
+  usable.sort((a, b) => {
+    const score = (d: (typeof usable)[number]) =>
+      (d.language.startsWith('en') ? 2 : 0) + (GBIF_DESC_TYPES.includes(d.type) ? 1 : 0);
+    return score(b) - score(a) || b.text.length - a.text.length;
+  });
+  const pick = usable[0]!;
+  return {
+    text: pick.text,
+    license: pick.license,
+    url: pick.source || `https://www.gbif.org/species/${key}`,
+  };
+}
+
+// ── Source 3: Encyclopedia of Life ──────────────────────────────────────────
+
+/** Fallback description from EOL. Best-effort — tolerates EOL API shape changes. */
+async function eolDescription(
+  latin: string,
+): Promise<{ text: string; license: string; url: string } | null> {
+  const search = await fetchJson(
+    `${EOL}/search/1.0.json?q=${encodeURIComponent(latin)}&exact=true`,
+  );
+  const pageId = search?.results?.[0]?.id;
+  if (!pageId) return null;
+  const page = await fetchJson(
+    `${EOL}/pages/1.0/${pageId}.json?details=true&texts=15&images=0&videos=0&maps=0&iucn=false&vetted=0`,
+  );
+  const objects: any[] = Array.isArray(page?.taxonConcept?.dataObjects)
+    ? page.taxonConcept.dataObjects
+    : Array.isArray(page?.dataObjects)
+      ? page.dataObjects
+      : [];
+  const usable = objects
+    .map((o) => ({
+      text: stripHtml(String(o?.description ?? '')),
+      license: String(o?.license ?? ''),
+      language: String(o?.language ?? 'en').toLowerCase(),
+    }))
+    .filter((o) => o.text.length >= 60 && licenseOk(o.license));
+  if (usable.length === 0) return null;
+  usable.sort((a, b) => {
+    const en = (d: (typeof usable)[number]) => (d.language.startsWith('en') ? 1 : 0);
+    return en(b) - en(a) || b.text.length - a.text.length;
+  });
+  const pick = usable[0]!;
+  return { text: pick.text, license: pick.license, url: `https://eol.org/pages/${pageId}` };
+}
+
+// ── Main ────────────────────────────────────────────────────────────────────
+
 async function main() {
   const args = parseArgs();
   console.log(
@@ -164,43 +295,35 @@ async function main() {
     },
     orderBy: { slug: 'asc' },
   });
-  console.log(`${plants.length} plant(s) loaded.\n`);
 
-  let processed = 0;
+  const work = args.force
+    ? plants
+    : plants.filter((p) => !alreadyEnriched(p.story) && needsStory(p.story));
+  const target = Math.min(work.length, args.limit);
+  console.log(
+    `${plants.length} loaded · ${plants.length - work.length} already done/curated · ` +
+      `processing ${target}.\n`,
+  );
+
   let updated = 0;
-  let skipped = 0;
   let noData = 0;
   let errors = 0;
+  const byProvider: Record<string, number> = {};
 
-  for (const plant of plants) {
-    if (processed >= args.limit) break;
-
-    // Decide whether to touch this plant.
-    if (!args.force) {
-      if (alreadyEnriched(plant.story)) {
-        skipped++;
-        continue;
-      }
-      if (!needsStory(plant.story)) {
-        // A real, curator-written story — protect it.
-        skipped++;
-        continue;
-      }
-    }
-
-    processed++;
+  for (let i = 0; i < target; i++) {
+    const plant = work[i]!;
+    const n = i + 1;
     const latin = plant.taxon.latinName;
     try {
+      // Source 1 — Wikipedia, per language.
       const articles = await wikidataArticles(latin);
       await sleep(250); // gentle on Wikidata
-
       const story: Record<string, any> = { en: '', fi: '', sv: '' };
       const urls: Partial<Record<Lang, string>> = {};
       let got = 0;
       for (const lang of LANGS) {
-        // Prefer the Wikidata-resolved article title; fall back to the latin
-        // name — Wikipedia's REST API follows redirects, so synonyms and
-        // names Wikidata missed still resolve.
+        // Prefer the Wikidata-resolved title; fall back to the latin name —
+        // Wikipedia's REST API follows redirects, so synonyms still resolve.
         const title = articles[lang] ?? latin;
         const summary = await wikipediaSummary(lang, title);
         await sleep(120); // gentle on Wikipedia
@@ -211,50 +334,66 @@ async function main() {
         }
       }
 
-      if (got === 0) {
+      let source: Record<string, any> | null = null;
+      if (got > 0) {
+        // Fill any language we missed with whatever text we did get.
+        const primary = story.en || story.fi || story.sv;
+        for (const lang of LANGS) if (!story[lang]) story[lang] = primary;
+        source = { provider: 'Wikipedia', license: 'CC-BY-SA-4.0', urls };
+      } else {
+        // Nothing on Wikipedia — try the fallback sources.
+        let fb = await gbifDescription(latin);
+        await sleep(150);
+        let provider = 'GBIF';
+        if (!fb) {
+          fb = await eolDescription(latin);
+          await sleep(150);
+          provider = 'EOL';
+        }
+        if (fb) {
+          story.en = fb.text;
+          story.fi = fb.text;
+          story.sv = fb.text;
+          source = { provider, license: fb.license, url: fb.url };
+        }
+      }
+
+      if (!source) {
         noData++;
-        console.log(`· ${latin}  — no Wikipedia article found`);
+        console.log(`[${n}/${target}] · ${latin} — no description (Wikipedia / GBIF / EOL)`);
         continue;
       }
 
-      // Fill any language we couldn't find with whatever text we did get,
-      // so no language ever renders an empty story.
-      const primary = story.en || story.fi || story.sv;
-      for (const lang of LANGS) {
-        if (!story[lang]) story[lang] = primary;
-      }
-
-      story.source = {
-        provider: 'Wikipedia',
-        license: 'CC-BY-SA-4.0',
-        urls,
-        fetchedAt: new Date().toISOString(),
-      };
+      source.fetchedAt = new Date().toISOString();
+      story.source = source;
+      byProvider[source.provider] = (byProvider[source.provider] ?? 0) + 1;
 
       if (args.dryRun) {
         console.log(
-          `DRY ${latin}  en=${urls.en ? 'Y' : '-'} fi=${urls.fi ? 'Y' : '-'} sv=${urls.sv ? 'Y' : '-'}`,
+          `[${n}/${target}] DRY ${latin} — via ${source.provider}\n` +
+            `        "${String(story.en).slice(0, 150)}…"`,
         );
-        console.log(`     "${primary.slice(0, 160)}${primary.length > 160 ? '…' : ''}"`);
       } else {
         await prisma.plant.update({
           where: { id: plant.id },
           data: { story: story as any },
         });
         updated++;
-        console.log(
-          `+ ${latin}  en=${urls.en ? 'Y' : '-'} fi=${urls.fi ? 'Y' : '-'} sv=${urls.sv ? 'Y' : '-'}`,
-        );
+        console.log(`[${n}/${target}] + ${latin} — via ${source.provider}`);
       }
     } catch (err) {
+      // One plant failing must never stop the run.
       errors++;
-      console.error(`! ${latin}  — ${(err as Error).message}`);
+      console.error(`[${n}/${target}] ! ${latin} — ${(err as Error)?.message ?? String(err)}`);
     }
   }
 
+  const provLine = Object.entries(byProvider)
+    .map(([p, c]) => `${p}=${c}`)
+    .join(' ');
   console.log(
-    `\nDone. processed=${processed} updated=${updated} skipped=${skipped} ` +
-      `no-data=${noData} errors=${errors}`,
+    `\nDone. processed=${target} updated=${updated} no-data=${noData} errors=${errors}` +
+      (provLine ? `  (${provLine})` : ''),
   );
 }
 
