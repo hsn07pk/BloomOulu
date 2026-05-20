@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { supportEmail } from '../../../../lib/contact';
 
 const COPY = {
   en: {
@@ -6,8 +7,7 @@ const COPY = {
     title: 'Check your inbox.',
     lead: "If we have an account for that address you'll receive a sign-in link within a minute. The link expires in 15 minutes — open it on this device to sign in.",
     didnt: "Didn't get an email?",
-    didntBody:
-      "Check spam, then try requesting again. If it still doesn't arrive, contact garden@bloomoulu.fi.",
+    didntBody: "Check spam, then try requesting again. If it still doesn't arrive, contact {email}.",
     back: '← Back to sign in',
   },
   fi: {
@@ -15,8 +15,7 @@ const COPY = {
     title: 'Tarkista sähköpostisi.',
     lead: 'Jos meillä on tili kyseiselle osoitteelle, saat kirjautumislinkin minuutin sisällä. Linkki vanhenee 15 minuutissa — avaa se tällä laitteella.',
     didnt: 'Etkö saanut sähköpostia?',
-    didntBody:
-      'Tarkista roskaposti ja pyydä tarvittaessa uusi linkki. Jos viesti ei tule, ota yhteys garden@bloomoulu.fi.',
+    didntBody: 'Tarkista roskaposti ja pyydä tarvittaessa uusi linkki. Jos viesti ei tule, ota yhteys {email}.',
     back: '← Takaisin kirjautumiseen',
   },
   sv: {
@@ -24,8 +23,7 @@ const COPY = {
     title: 'Kolla din inkorg.',
     lead: 'Om vi har ett konto för den adressen får du en inloggningslänk inom en minut. Länken går ut om 15 minuter — öppna den på den här enheten.',
     didnt: 'Inget mejl?',
-    didntBody:
-      'Kolla skräpposten och be om en ny länk. Hör annars av dig till garden@bloomoulu.fi.',
+    didntBody: 'Kolla skräpposten och be om en ny länk. Hör annars av dig till {email}.',
     back: '← Tillbaka till inloggning',
   },
 } as const;
@@ -69,7 +67,7 @@ export default async function SentPage({ params }: { params: Promise<{ locale: s
           {t.didnt}
         </h2>
         <p className="small" style={{ color: 'var(--ink-soft)', lineHeight: 1.55 }}>
-          {t.didntBody}
+          {t.didntBody.replace('{email}', supportEmail())}
         </p>
       </div>
 

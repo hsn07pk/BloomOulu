@@ -90,6 +90,7 @@ const DEFAULT_ADOPT_SETTINGS: AdoptSettings = {
   dedicationMaxChars: 240,
   coAdopterMax: 10,
   fundsFlowUrl: '/about#funds-flow',
+  intervalsEnabled: ['monthly', 'one_time'],
 };
 
 export default async function AdoptPage({

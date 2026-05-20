@@ -13,6 +13,7 @@ import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import Link from 'next/link';
 import { getSession } from '../../../lib/session';
+import { curatorEmail } from '../../../lib/contact';
 
 export const dynamic = 'force-dynamic';
 
@@ -119,6 +120,28 @@ async function fetchSaved(jwt: string): Promise<SavedRow[]> {
   }
 }
 
+interface AskHistoryRow {
+  id: string;
+  prompt: string;
+  createdAt: string;
+  sessionId?: string | null;
+  answer?: { text: string | null } | null;
+}
+async function fetchAskHistory(userId: string): Promise<AskHistoryRow[]> {
+  const apiUrl =
+    process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+  try {
+    const res = await fetch(`${apiUrl}/v1/ask/history?userId=${encodeURIComponent(userId)}&limit=5`, {
+      cache: 'no-store',
+    });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { items?: AskHistoryRow[] };
+    return data.items ?? [];
+  } catch {
+    return [];
+  }
+}
+
 function localisedPlantName(p: GardenView['adoptions'][number]['plant'], locale: string) {
   if (locale === 'fi') return p.nameFi || p.nameEn;
   if (locale === 'sv') return p.nameSv || p.nameEn;
@@ -136,7 +159,7 @@ export default async function GardenPage({
   searchParams,
 }: {
   params: Promise<{ locale: string }>;
-  searchParams: Promise<{ just?: string }>;
+  searchParams: Promise<{ just?: string; gdpr?: string }>;
 }) {
   const { locale } = await params;
   const sp = await searchParams;
@@ -147,9 +170,10 @@ export default async function GardenPage({
   const { cookies } = await import('next/headers');
   const jar = await cookies();
   const sessionJwt = jar.get('bloomoulu.session')?.value ?? '';
-  const [garden, saved] = await Promise.all([
+  const [garden, saved, askHistory] = await Promise.all([
     fetchGarden(session.user.id, sessionJwt),
     sessionJwt ? fetchSaved(sessionJwt) : Promise.resolve([] as SavedRow[]),
+    fetchAskHistory(session.user.id),
   ]);
 
   if (!garden) {
@@ -537,6 +561,79 @@ export default async function GardenPage({
           )}
         </section>
 
+        {/* Recent AskTheGarden conversations */}
+        <section aria-labelledby="conversations-h" style={{ marginBottom: 56 }}>
+          <div className="eyebrow">
+            {locale === 'fi' ? 'Keskustelut' : locale === 'sv' ? 'Konversationer' : 'Conversations'}
+          </div>
+          <h2 id="conversations-h" style={{ fontSize: 28, marginTop: 8, marginBottom: 16 }}>
+            {askHistory.length}{' '}
+            {askHistory.length === 1
+              ? locale === 'fi'
+                ? 'kysymys puutarhasta'
+                : locale === 'sv'
+                  ? 'fråga till trädgården'
+                  : 'recent question'
+              : locale === 'fi'
+                ? 'kysymystä puutarhasta'
+                : locale === 'sv'
+                  ? 'frågor till trädgården'
+                  : 'recent questions'}
+          </h2>
+          {askHistory.length === 0 ? (
+            <div className="card card-pad" style={{ textAlign: 'center' }}>
+              <p className="muted small" style={{ marginBottom: 12 }}>
+                {locale === 'fi'
+                  ? 'Et ole vielä kysynyt puutarhalta. AskTheGarden tuntee kokoelman ja vastaa lainauksin.'
+                  : locale === 'sv'
+                    ? 'Du har inte frågat trädgården än. AskTheGarden känner samlingen och svarar med citat.'
+                    : "You haven't asked the garden anything yet. AskTheGarden knows the collection and answers with citations."}
+              </p>
+              <Link href={`/${locale}/ask`} className="btn btn-secondary">
+                {locale === 'fi' ? 'Avaa AskTheGarden' : locale === 'sv' ? 'Öppna AskTheGarden' : 'Open AskTheGarden'}
+              </Link>
+            </div>
+          ) : (
+            <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {askHistory.map((q) => (
+                <li key={q.id}>
+                  <Link
+                    href={(`/${locale}/ask${q.sessionId ? `?session=${encodeURIComponent(q.sessionId)}` : ''}`) as Parameters<typeof Link>[0]['href']}
+                    className="card card-pad"
+                    style={{
+                      display: 'block',
+                      textDecoration: 'none',
+                      color: 'var(--ink)',
+                      transition: 'border-color 0.12s',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 18, color: 'var(--forest-deep)', fontFamily: 'var(--f-display)', flex: 1, minWidth: 240 }}>
+                        {q.prompt.slice(0, 140)}{q.prompt.length > 140 ? '…' : ''}
+                      </span>
+                      <span className="small muted">
+                        {new Date(q.createdAt).toLocaleDateString(locale)}
+                      </span>
+                    </div>
+                    {q.answer?.text && (
+                      <p className="small muted" style={{ marginTop: 8, lineHeight: 1.5 }}>
+                        {q.answer.text.slice(0, 220)}{q.answer.text.length > 220 ? '…' : ''}
+                      </p>
+                    )}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+          {askHistory.length > 0 && (
+            <p style={{ marginTop: 14 }}>
+              <Link href={`/${locale}/ask`} className="small muted">
+                {locale === 'fi' ? 'Näytä kaikki keskustelut →' : locale === 'sv' ? 'Visa alla konversationer →' : 'See all conversations →'}
+              </Link>
+            </p>
+          )}
+        </section>
+
         {/* Saved plants (bookmarks) */}
         <section aria-labelledby="saved-h" style={{ marginBottom: 56 }}>
           <div className="eyebrow">
@@ -685,7 +782,7 @@ export default async function GardenPage({
                         </span>
                         {r.pdfUrl && (
                           <a
-                            href={r.pdfUrl}
+                            href={`/api/receipts/${encodeURIComponent(r.number)}/pdf`}
                             target="_blank"
                             rel="noopener"
                             className="btn btn-ghost"
@@ -775,6 +872,49 @@ export default async function GardenPage({
               </button>
             </form>
           </div>
+          {sp.gdpr && (
+            <div
+              role="status"
+              style={{
+                marginTop: 14,
+                padding: '10px 14px',
+                borderRadius: 10,
+                background:
+                  sp.gdpr === 'export_failed' || sp.gdpr === 'erase_failed'
+                    ? '#FFF3EE'
+                    : '#E8EEDE',
+                color:
+                  sp.gdpr === 'export_failed' || sp.gdpr === 'erase_failed'
+                    ? '#B8513A'
+                    : '#2D5440',
+                border: '1px solid',
+                borderColor:
+                  sp.gdpr === 'export_failed' || sp.gdpr === 'erase_failed'
+                    ? '#B8513A'
+                    : '#A8C060',
+                fontSize: 14,
+                lineHeight: 1.5,
+              }}
+            >
+              {sp.gdpr === 'export_queued'
+                ? (locale === 'fi'
+                    ? 'Tietopyyntö lähetetty. Lähetämme sinulle latauslinkin sähköpostiin pian.'
+                    : locale === 'sv'
+                      ? 'Begäran skickad. Vi mejlar en nedladdningslänk inom kort.'
+                      : 'Export queued. We’ll email you a download link shortly.')
+                : sp.gdpr === 'erase_pending'
+                  ? (locale === 'fi'
+                      ? 'Poistopyyntö vastaanotettu. Puutarhan vastuuhenkilö käsittelee sen 30 päivässä (GDPR Art. 12).'
+                      : locale === 'sv'
+                        ? 'Begäran mottagen. En trädgårdsansvarig granskar inom 30 dagar (GDPR Art. 12).'
+                        : 'Erasure request received. A garden admin will review within 30 days (GDPR Art. 12).')
+                  : (locale === 'fi'
+                      ? `Pyyntö epäonnistui. Yritä uudelleen tai ota yhteys ${curatorEmail()}.`
+                      : locale === 'sv'
+                        ? `Begäran misslyckades. Försök igen eller mejla ${curatorEmail()}.`
+                        : `Request failed. Please retry or email ${curatorEmail()}.`)}
+            </div>
+          )}
         </section>
       </div>
     </article>

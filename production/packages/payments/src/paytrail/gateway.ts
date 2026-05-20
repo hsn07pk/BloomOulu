@@ -47,6 +47,18 @@ export interface PaytrailConfig {
   apiBaseUrl?: string;
   /** Webhook secret if Paytrail issues a separate one; usually same as `secret` */
   webhookSecret?: string;
+  /**
+   * When true, `createCheckout` skips Paytrail's real /payments API
+   * (which mandates HTTPS callback URLs and so can't be tested from
+   * localhost) and returns a redirect to our local mock checkout. The
+   * mock then signs a return URL with the REAL merchant secret and
+   * lands the donor on `successUrl?checkout-status=ok&signature=...`,
+   * so the verification + activation path is exercised exactly as in
+   * production — only the "pick your bank" UI is mocked.
+   */
+  mockMode?: boolean;
+  /** Public-facing web URL — used to compose the mock checkout link. */
+  webBaseUrl?: string;
 }
 
 const DEFAULT_BASE = 'https://services.paytrail.com';
@@ -83,8 +95,39 @@ export class PaytrailGateway implements PaymentGateway {
     this.base = cfg.apiBaseUrl ?? DEFAULT_BASE;
   }
 
+  /**
+   * Compute the signature for an arbitrary set of `checkout-*` params
+   * (and empty body). Exposed so the api can mint return-URL signatures
+   * in mock mode without re-deriving the canonicalisation.
+   */
+  signReturnParams(params: Record<string, string>): string {
+    const headers: Record<string, string> = {};
+    for (const [k, v] of Object.entries(params)) {
+      headers[k.toLowerCase()] = v;
+    }
+    return paytrailSignature(this.cfg.secret, headers, '');
+  }
+
   /** Initiate a Paytrail payment (one-off). */
   async createCheckout(input: CreateCheckoutInput): Promise<CheckoutHandoff> {
+    if (this.cfg.mockMode) {
+      // Mock the hosted-checkout step. The mock page in /donate/paytrail-test
+      // renders a Paytrail-styled UI; on "Pay" it hits an api endpoint that
+      // signs the return URL with this.cfg.secret and 302s to successUrl.
+      const amount = input.lineItems.reduce((s, li) => s + li.amountCents, 0);
+      const base = (this.cfg.webBaseUrl ?? 'http://localhost:3000').replace(/\/$/, '');
+      const url = new URL(`${base}/${input.donor.locale}/donate/paytrail-test`);
+      url.searchParams.set('orderId', input.orderId);
+      url.searchParams.set('amount', String(amount));
+      url.searchParams.set('description', input.lineItems[0]?.description ?? 'Adoption');
+      url.searchParams.set('success', input.successUrl);
+      url.searchParams.set('cancel', input.cancelUrl);
+      return {
+        provider: this.id as any,
+        redirectUrl: url.toString(),
+        providerSessionId: input.orderId,
+      };
+    }
     // Body shape per https://docs.paytrail.com/#/?id=create
     const body = {
       stamp: input.orderId,

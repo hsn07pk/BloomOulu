@@ -92,6 +92,9 @@ importers:
       '@bloomoulu/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@bloomoulu/rag':
+        specifier: workspace:*
+        version: link:../../packages/rag
       '@fastify/cookie':
         specifier: ^9.4.0
         version: 9.4.0

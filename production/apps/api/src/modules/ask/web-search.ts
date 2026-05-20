@@ -25,9 +25,11 @@ const log = new Logger('WebSearch');
 
 // Wikipedia requires a descriptive User-Agent identifying the operator
 // and a contact channel; default Node / undici UAs get a 403. Format
-// per https://www.mediawiki.org/wiki/API:Etiquette.
-const UA =
-  'BloomOulu-Chatbot/1.0 (AskTheGarden; https://bloomoulu.fi; conservation@bloomoulu.fi) bge-m3+gemma3:4b';
+// per https://www.mediawiki.org/wiki/API:Etiquette. Contact email is
+// env-driven so deployments can route abuse reports to the right inbox.
+const UA_CONTACT_EMAIL = process.env.WEBAPP_USER_AGENT_EMAIL ?? 'conservation@bloomoulu.fi';
+const UA_PUBLIC_URL = (process.env.NEXT_PUBLIC_WEB_URL ?? 'https://bloomoulu.fi').replace(/\/$/, '');
+const UA = `BloomOulu-Chatbot/1.0 (AskTheGarden; ${UA_PUBLIC_URL}; ${UA_CONTACT_EMAIL}) bge-m3+gemma3:4b`;
 const HEADERS = { 'user-agent': UA, accept: 'application/json' };
 
 /** Sources we trust. The allowlist makes sure we never present a

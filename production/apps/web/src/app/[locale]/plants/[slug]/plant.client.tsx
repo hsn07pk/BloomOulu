@@ -16,10 +16,19 @@ import { useTranslations } from 'next-intl';
 import qrcode from 'qrcode-generator';
 import { useCart } from '../../../../lib/cart.client';
 
-/** Add-to-cart CTA on the plant detail page. Toggles between "Add to
- *  cart" and "✓ In cart" with a "Go to cart" link, so the visitor can
- *  keep browsing without losing the selection. */
-function AddToCartButton({ slug, locale }: { slug: string; locale: string }) {
+/** Add-to-cart CTA on the plant detail page. Carries the donor's
+ *  selected tier (defaulting to the Red-List-suggested one). Toggles
+ *  between "Add to cart" and "✓ In cart" with a "Go to cart" link so
+ *  the visitor can keep browsing without losing the selection. */
+function AddToCartButton({
+  slug,
+  tierId,
+  locale,
+}: {
+  slug: string;
+  tierId: 'seedling' | 'rooted' | 'vulnerable' | 'endangered' | 'corporate';
+  locale: string;
+}) {
   const { add, has, hydrated } = useCart();
   if (!hydrated) {
     return (
@@ -64,7 +73,7 @@ function AddToCartButton({ slug, locale }: { slug: string; locale: string }) {
   return (
     <button
       type="button"
-      onClick={() => add(slug, 'seedling')}
+      onClick={() => add(slug, tierId)}
       className="btn btn-primary btn-block btn-lg"
       style={{ marginTop: 16 }}
     >
@@ -142,12 +151,38 @@ interface SimilarPlant {
   taxon?: { latinName: string } | null;
 }
 
+interface Tier {
+  id: 'seedling' | 'rooted' | 'vulnerable' | 'endangered' | 'corporate';
+  name: string;
+  nameFi: string;
+  nameSv: string;
+  annualPriceCents: number;
+  monthlyPriceCents?: number | null;
+  sortOrder?: number;
+}
+
 interface PlantPageClientProps {
   plant: Plant;
   similarPlants: SimilarPlant[];
+  tiers: Tier[];
+  /** Whitelist of billing intervals the donor sees. Set in /admin →
+   *  SystemSetting → adoption.intervalsEnabled. Defaults to
+   *  monthly + one_time; annual hidden until enabled. */
+  intervalsEnabled: Array<'monthly' | 'annual' | 'one_time'>;
   locale: Locale;
   apiUrl: string;
   signedIn?: boolean;
+}
+
+type BillingInterval = 'monthly' | 'annual' | 'one_time';
+
+/** Map a plant's Red-List status to the suggested tier id. The mapping
+ *  is intentionally simple: rarer plants → higher tier. The pricing
+ *  itself lives in /v1/tiers; this only chooses which row to surface. */
+function suggestedTierId(redListStatus: string | undefined): Tier['id'] {
+  if (redListStatus === 'CR' || redListStatus === 'EN') return 'endangered';
+  if (redListStatus === 'VU') return 'vulnerable';
+  return 'rooted';
 }
 
 function localisedName(p: { nameEn: string; nameFi: string; nameSv: string }, locale: string): string {
@@ -184,7 +219,7 @@ function makeQrDataUrl(text: string, size = 280): string {
 const SAVED_KEY = 'bloom_saved_plants';
 const CAPTIONS_KEY = 'bloom_captions';
 
-export function PlantPageClient({ plant, similarPlants, locale, apiUrl: _apiUrl, signedIn = false }: PlantPageClientProps) {
+export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled, locale, apiUrl: _apiUrl, signedIn = false }: PlantPageClientProps) {
   const t = useTranslations('Plant');
   const tc = useTranslations('Common');
   const [mode, setMode] = useState<Mode>('adult');
@@ -208,42 +243,33 @@ export function PlantPageClient({ plant, similarPlants, locale, apiUrl: _apiUrl,
   const audioProgress = audioDuration > 0 ? (audioCurrent / audioDuration) * 100 : 0;
   const altText = localisedAlt(plant.primaryImage, locale, name);
 
-  const tierLabel: { label: string; price: number; perks: string } = (() => {
-    if (plant.redListStatus === 'CR' || plant.redListStatus === 'EN') {
-      return {
-        label: locale === 'fi' ? 'Erittäin uhanalainen' : locale === 'sv' ? 'Starkt hotad' : 'Endangered tier',
-        price: 750,
-        perks:
-          locale === 'fi'
-            ? 'Laatta kasvisi viereen · vuosittainen siemenpussi'
-            : locale === 'sv'
-              ? 'Plakett bredvid din växt · årlig fröförpackning'
-              : 'Plaque next to YOUR plant · annual seed packet',
-      };
-    }
-    if (plant.redListStatus === 'VU') {
-      return {
-        label: locale === 'fi' ? 'Vaarantunut' : locale === 'sv' ? 'Sårbar' : 'Vulnerable tier',
-        price: 250,
-        perks:
-          locale === 'fi'
-            ? 'Allekirjoitettu kasvitaide · Adoptoijien avoimet ovet + vieras'
-            : locale === 'sv'
-              ? 'Signerat botanisk konst · Adoptanters öppet hus + gäst'
-              : "Signed botanical art · Adopters' Open Day + guest",
-      };
-    }
-    return {
-      label: locale === 'fi' ? 'Juurtunut' : locale === 'sv' ? 'Rotad' : 'Rooted tier',
-      price: 75,
-      perks:
-        locale === 'fi'
-          ? 'Tulostettu sertifikaatti · kausikuvat'
-          : locale === 'sv'
-            ? 'Tryckt certifikat · säsongsbilder'
-            : 'Printed certificate · seasonal photos',
-    };
-  })();
+  // ── Tier + interval state, driven by the tiers prop (single source
+  //    of truth = /v1/tiers, edited from /admin → Tier). The default
+  //    tier is suggested from the plant's Red-List status; the donor
+  //    can override before adding to cart.
+  const suggestedId = suggestedTierId(plant.redListStatus);
+  const sortedTiers = [...tiers].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+  const [selectedTierId, setSelectedTierId] = useState<Tier['id']>(suggestedId);
+  // Default to the first enabled interval (admin-controlled). If
+  // annual is disabled production-wide, donors land on monthly.
+  const [billingInterval, setBillingInterval] = useState<BillingInterval>(
+    (intervalsEnabled[0] ?? 'monthly') as BillingInterval,
+  );
+  const selectedTier = sortedTiers.find((t) => t.id === selectedTierId)
+    ?? sortedTiers.find((t) => t.id === suggestedId)
+    ?? sortedTiers[0];
+  const tierName = (t: Tier) => (locale === 'fi' ? t.nameFi : locale === 'sv' ? t.nameSv : t.name);
+  const intervalCents = (t: Tier | undefined): number => {
+    if (!t) return 0;
+    if (billingInterval === 'monthly' && t.monthlyPriceCents) return t.monthlyPriceCents;
+    return t.annualPriceCents;
+  };
+  const intervalSuffix =
+    billingInterval === 'monthly' && selectedTier?.monthlyPriceCents
+      ? (locale === 'fi' ? '/kk' : locale === 'sv' ? '/mån' : '/mo')
+    : billingInterval === 'one_time'
+      ? ''
+    : (locale === 'fi' ? '/vuosi' : locale === 'sv' ? '/år' : '/yr');
 
   // Initial bookmark + captions state from localStorage. If signed in,
   // also sync the localStorage shadow into the user's server-side
@@ -1065,28 +1091,113 @@ export function PlantPageClient({ plant, similarPlants, locale, apiUrl: _apiUrl,
                   padding: 16,
                   background: 'var(--paper)',
                   borderRadius: 12,
+                  border: '1px solid var(--line)',
                 }}
               >
-                <div className="tiny">
-                  {locale === 'fi'
-                    ? 'Suositeltu taso tälle kasville'
-                    : locale === 'sv'
-                      ? 'Rekommenderad nivå för denna växt'
-                      : 'Suggested tier for this plant'}
+                <div className="tiny" style={{ textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--ink-mute)' }}>
+                  {locale === 'fi' ? 'Adoptiotaso' : locale === 'sv' ? 'Adoptionsnivå' : 'Adoption tier'}
                 </div>
-                <div style={{ marginTop: 8, display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                  <div className="serif" style={{ fontSize: 40 }}>
-                    €{tierLabel.price}
-                    <span style={{ fontSize: 14, color: 'var(--ink-mute)' }}>/yr</span>
+                <div style={{ marginTop: 10, display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                  <div className="serif" style={{ fontSize: 40, lineHeight: 1, color: 'var(--forest-deep)' }}>
+                    €{(intervalCents(selectedTier) / 100).toFixed(0)}
+                    <span style={{ fontSize: 14, color: 'var(--ink-mute)' }}>{intervalSuffix}</span>
                   </div>
-                  <div className="small muted">{tierLabel.label}</div>
+                  {selectedTier && (
+                    <div className="small muted">{tierName(selectedTier)}</div>
+                  )}
                 </div>
-                <div className="small" style={{ color: 'var(--ink-2)', marginTop: 6 }}>
-                  {tierLabel.perks}
+
+                {/* Tier picker — every row from /v1/tiers shows up; the
+                    suggested tier is highlighted by Red-List status. */}
+                <div role="radiogroup" style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 14 }}>
+                  {sortedTiers.map((t) => {
+                    const active = t.id === selectedTierId;
+                    const cents = intervalCents(t);
+                    const isSuggested = t.id === suggestedId;
+                    return (
+                      <button
+                        type="button"
+                        key={t.id}
+                        role="radio"
+                        aria-checked={active}
+                        onClick={() => setSelectedTierId(t.id)}
+                        style={{
+                          textAlign: 'left',
+                          padding: '10px 12px',
+                          borderRadius: 10,
+                          border: active ? '2px solid var(--forest)' : '1px solid var(--line)',
+                          background: active ? 'var(--sage-pale)' : 'transparent',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: 8,
+                          fontSize: 14,
+                        }}
+                      >
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontWeight: active ? 600 : 500, color: 'var(--forest-deep)' }}>
+                            {tierName(t)}
+                          </span>
+                          {isSuggested && !active && (
+                            <span
+                              className="tiny"
+                              style={{
+                                padding: '2px 8px',
+                                borderRadius: 999,
+                                background: 'var(--sage-pale)',
+                                color: 'var(--forest)',
+                                border: '1px solid var(--forest-mid)',
+                              }}
+                            >
+                              {locale === 'fi' ? 'Suositus' : locale === 'sv' ? 'Förslag' : 'Suggested'}
+                            </span>
+                          )}
+                        </span>
+                        <span className="small" style={{ color: 'var(--ink-mute)', fontFamily: 'ui-monospace, monospace' }}>
+                          €{(cents / 100).toFixed(0)}{intervalSuffix}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Billing-interval pills (monthly / annual / one-time).
+                    Matches /cart/checkout exactly. */}
+                <div role="radiogroup" style={{ display: 'flex', gap: 6, marginTop: 12 }}>
+                  {(intervalsEnabled as BillingInterval[]).map((iv) => {
+                    const active = billingInterval === iv;
+                    const label =
+                      iv === 'monthly' ? (locale === 'fi' ? 'Kuukausi' : locale === 'sv' ? 'Månad' : 'Monthly')
+                      : iv === 'annual' ? (locale === 'fi' ? 'Vuosi' : locale === 'sv' ? 'År' : 'Annual')
+                      : (locale === 'fi' ? 'Kerran' : locale === 'sv' ? 'Engång' : 'One-time');
+                    return (
+                      <button
+                        type="button"
+                        key={iv}
+                        role="radio"
+                        aria-checked={active}
+                        onClick={() => setBillingInterval(iv)}
+                        style={{
+                          flex: 1,
+                          padding: '8px 10px',
+                          borderRadius: 8,
+                          border: active ? '2px solid var(--forest)' : '1px solid var(--line)',
+                          background: active ? 'var(--sage-pale)' : 'transparent',
+                          color: active ? 'var(--forest-deep)' : 'var(--ink)',
+                          fontSize: 13,
+                          fontWeight: active ? 600 : 400,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
-              <AddToCartButton slug={plant.slug} locale={locale} />
+              <AddToCartButton slug={plant.slug} tierId={selectedTierId} locale={locale} />
               <Link
                 href={`/${locale}/adopt?plant=${plant.slug}&intent=gift`}
                 className="btn btn-secondary btn-block"

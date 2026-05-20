@@ -15,6 +15,11 @@ const VerifyAndSetupBody = z.object({
   password: z.string().min(8).max(200),
   name: z.string().min(1).max(120).optional(),
 });
+const ResetPasswordBody = z.object({
+  email: z.string().email(),
+  token: z.string().min(1),
+  password: z.string().min(8).max(200),
+});
 
 @Controller('auth')
 export class AuthController {
@@ -70,13 +75,13 @@ export class AuthController {
         <p style="font-size: 12px; color: #88897C; margin: 0;">BloomOulu · University of Oulu Botanical Garden</p>
       </body></html>
     `;
-    try {
-      await sendEmail({ to: body.email, subject, html });
-    } catch (err) {
-      // Don't reveal the failure to the caller (OWASP user-enumeration guidance)
-      // — but log it so the operator can diagnose SMTP/transport problems.
-      this.logger.error(`magic-link email send failed for ${body.email}: ${(err as Error).message}`);
-    }
+    // Fire-and-forget the SMTP send so the user's "Continue" tap returns
+    // in <200ms instead of waiting 1-3s on the Gmail handshake. We still
+    // log SMTP failures for the operator. If a send fails the user can
+    // re-request another link from the same form.
+    sendEmail({ to: body.email, subject, html }).catch((err: Error) => {
+      this.logger.error(`magic-link email send failed for ${body.email}: ${err.message}`);
+    });
     return { ok: true, expiresAt: link.expiresAt };
   }
 
@@ -182,6 +187,81 @@ export class AuthController {
     body: { email: string; token: string; password: string; name?: string },
   ) {
     const r = await this.svc.verifyAndSetup(body);
+    if (!r.ok) return { ok: false as const, reason: r.reason };
+    return {
+      ok: true as const,
+      user: {
+        id: r.user.id,
+        email: r.user.email,
+        name: r.user.name ?? null,
+        role: r.user.role,
+        locale: r.user.locale,
+      },
+    };
+  }
+
+  /** Step 1 of forgot-password: donor pastes their email, we issue a
+   *  single-use token and email a link to /auth/reset. Returns 200
+   *  whether or not the email exists (anti user-enumeration). */
+  @Post('forgot-password')
+  async forgotPassword(@Body(new ZodValidationPipe(EmailBody)) body: { email: string; locale?: 'en' | 'fi' | 'sv' }) {
+    const user = await this.svc.lookup(body.email);
+    if (!user.exists) {
+      // Don't reveal that the email isn't registered.
+      return { ok: true, sent: false };
+    }
+    const link = await this.svc.issueMagicLink(body.email);
+    const locale = body.locale ?? 'en';
+    const webUrl = process.env.NEXT_PUBLIC_WEB_URL ?? 'http://localhost:3000';
+    const resetUrl = `${webUrl}/${locale}/auth/reset?email=${encodeURIComponent(body.email)}&token=${encodeURIComponent(link.token)}`;
+    const subject =
+      locale === 'fi' ? 'Vaihda BloomOulu-salasanasi'
+      : locale === 'sv' ? 'Återställ ditt BloomOulu-lösenord'
+      : 'Reset your BloomOulu password';
+    const greeting =
+      locale === 'fi' ? 'Hei' : locale === 'sv' ? 'Hej' : 'Hello';
+    const intro =
+      locale === 'fi'
+        ? 'Sait tämän viestin, koska pyysit salasanan vaihtoa. Aseta uusi salasana napsauttamalla alla olevaa linkkiä — se vanhenee 15 minuutissa.'
+        : locale === 'sv'
+          ? 'Du får detta meddelande för att du begärt en lösenordsåterställning. Klicka på länken nedan för att sätta ett nytt lösenord — länken upphör om 15 minuter.'
+          : "You're receiving this because you asked to reset your password. Click the link below to set a new password — it expires in 15 minutes.";
+    const cta =
+      locale === 'fi' ? 'Vaihda salasana' : locale === 'sv' ? 'Återställ lösenord' : 'Reset password';
+    const footer =
+      locale === 'fi'
+        ? 'Et pyytänyt vaihtoa? Voit jättää viestin huomiotta — salasanasi pysyy ennallaan.'
+        : locale === 'sv'
+          ? 'Bad du inte om återställning? Du kan ignorera meddelandet — lösenordet ändras inte.'
+          : "Didn't request this? You can safely ignore this — your password stays the same.";
+    const html = `
+      <!doctype html>
+      <html><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 24px auto; padding: 24px; color: #1F3C2D;">
+        <h1 style="font-family: Fraunces, Georgia, serif; font-size: 28px; font-weight: 400; margin: 0 0 8px;">${greeting}.</h1>
+        <p style="font-size: 15px; line-height: 1.55; color: #2D5440;">${intro}</p>
+        <p style="margin: 28px 0;">
+          <a href="${resetUrl}" style="display: inline-block; padding: 14px 28px; background: #2D5440; color: #FAF7EE; text-decoration: none; border-radius: 999px; font-weight: 500;">${cta} →</a>
+        </p>
+        <p style="font-size: 13px; color: #6B7560;">${footer}</p>
+        <hr style="border: none; border-top: 1px solid #E5E2D8; margin: 32px 0;" />
+        <p style="font-size: 12px; color: #88897C; margin: 0;">BloomOulu · University of Oulu Botanical Garden</p>
+      </body></html>
+    `;
+    sendEmail({ to: body.email, subject, html }).catch((err: Error) => {
+      this.logger.error(`forgot-password email failed for ${body.email}: ${err.message}`);
+    });
+    return { ok: true, sent: true, expiresAt: link.expiresAt };
+  }
+
+  /** Step 2 of forgot-password: consume the token + set the new password.
+   *  Returns the user row so the web layer can mint a session JWT and
+   *  land the donor in /garden. */
+  @Post('reset-password')
+  async resetPassword(
+    @Body(new ZodValidationPipe(ResetPasswordBody))
+    body: { email: string; token: string; password: string },
+  ) {
+    const r = await this.svc.resetPassword(body);
     if (!r.ok) return { ok: false as const, reason: r.reason };
     return {
       ok: true as const,

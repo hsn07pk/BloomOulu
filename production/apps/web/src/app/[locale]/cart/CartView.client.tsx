@@ -249,21 +249,12 @@ export default function CartView({
           >
             {locale === 'fi' ? 'Tyhjennä kori' : locale === 'sv' ? 'Töm korg' : 'Empty cart'}
           </button>
-          {/* For the first MVP we hand the donor off to /adopt with
-              the first cart item pre-selected. After they complete
-              that adoption, the cart's other items remain visible
-              when they return to /cart. A future iteration will
-              bundle them into a single payment via a multi-item
-              adoptions API endpoint. */}
-          <a
-            href={`/${locale}/adopt?plant=${cart.items[0]!.plantSlug}&tier=${cart.items[0]!.tierId}&from=cart`}
-            className="btn btn-primary btn-lg"
-          >
+          <a href={`/${locale}/cart/checkout`} className="btn btn-primary btn-lg">
             {locale === 'fi'
-              ? `Adoptoi ${cart.items[0]!.plantSlug} →`
+              ? `Kassalle (€${(totalCents / 100).toFixed(0)}) →`
               : locale === 'sv'
-                ? `Adoptera ${cart.items[0]!.plantSlug} →`
-                : `Check out ${plants[cart.items[0]!.plantSlug]?.nameEn ?? cart.items[0]!.plantSlug} →`}
+                ? `Till kassan (€${(totalCents / 100).toFixed(0)}) →`
+                : `Check out €${(totalCents / 100).toFixed(0)} →`}
           </a>
         </div>
       </div>

@@ -28,10 +28,13 @@ import {
   Param,
   NotFoundException,
   ForbiddenException,
+  Res,
 } from '@nestjs/common';
+import type { FastifyReply } from 'fastify';
 import { Roles } from '../../common/roles.decorator.js';
 import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.decorator.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { presign } from '../../infra/storage.js';
 
 const STAFF_ROLES = new Set(['finance', 'admin']);
 
@@ -61,6 +64,46 @@ class ReceiptsController {
       });
     }
     return r;
+  }
+
+  /**
+   * Stream the receipt PDF by 302-redirecting the browser to a short-
+   * lived pre-signed S3/MinIO URL. The donor's browser never sees the
+   * underlying bucket URL or credentials; the signed URL is valid for
+   * 5 minutes so even a copy-paste leak expires fast.
+   *
+   * Auth: the donor whose Payment generated this Receipt, or
+   * finance/admin staff. The bare s3:// shape in `Receipt.pdfUrl`
+   * forces the request through this gate.
+   */
+  @Get(':number/pdf')
+  async pdf(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param('number') number: string,
+    @Res() reply: FastifyReply,
+  ) {
+    const r = await this.prisma.receipt.findUnique({
+      where: { number },
+      include: { donor: { select: { id: true } } },
+    });
+    if (!r) throw new NotFoundException();
+    if (r.donor.id !== actor.sub && !STAFF_ROLES.has(actor.role)) {
+      throw new ForbiddenException();
+    }
+    if (!r.pdfUrl) {
+      throw new NotFoundException('PDF not yet generated for this receipt');
+    }
+    if (r.donor.id !== actor.sub) {
+      await this.prisma.auditLog.create({
+        data: {
+          actorUserId: actor.sub,
+          action: 'staff.receipt.pdf.download',
+          resource: `Receipt/${r.number}`,
+        },
+      });
+    }
+    const url = await presign(r.pdfUrl, 300);
+    reply.code(302).header('location', url).send();
   }
 }
 

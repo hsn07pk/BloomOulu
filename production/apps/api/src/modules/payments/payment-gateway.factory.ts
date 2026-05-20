@@ -53,11 +53,18 @@ export class PaymentGatewayFactory {
     if (!merchantId || !secret) {
       throw new Error('Paytrail enabled but PAYTRAIL_MERCHANT_ID / PAYTRAIL_SECRET not set');
     }
+    // Mock mode lets us exercise the real signing + verification flow
+    // without a public HTTPS tunnel (which Paytrail's sandbox requires
+    // for callbacks). Production unsets PAYTRAIL_MOCK and the real
+    // hosted checkout takes over with zero code change.
+    const mockMode = process.env.PAYTRAIL_MOCK === 'true';
     return new PaytrailGateway({
       merchantId,
       secret,
       apiBaseUrl: process.env.PAYTRAIL_API_URL,
       webhookSecret: process.env.PAYTRAIL_WEBHOOK_SECRET,
+      mockMode,
+      webBaseUrl: process.env.NEXT_PUBLIC_WEB_URL ?? 'http://localhost:3000',
     });
   }
 

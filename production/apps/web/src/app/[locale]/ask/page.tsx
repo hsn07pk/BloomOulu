@@ -72,7 +72,7 @@ async function loadPublicSettings(): Promise<{ ask?: AskSettings } | null> {
 }
 
 const DEFAULT_ASK_SETTINGS: AskSettings = {
-  curatorEmail: 'curator@bloomoulu.fi',
+  curatorEmail: process.env.NEXT_PUBLIC_CURATOR_EMAIL ?? 'curator@bloomoulu.fi',
   curatorName: 'Anna Liisa Ruotsalainen',
   curatorReplySlaDays: 2,
   confidenceThresholdBp: 7200,

@@ -4,11 +4,12 @@
  * parsing, then delegates to PaymentsService.handleEvent for idempotent
  * persistence.
  */
-import { Body, Controller, Headers, HttpCode, Logger, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, Headers, HttpCode, Logger, Post, Query, Req } from '@nestjs/common';
 import type { FastifyRequest } from 'fastify';
 import { Throttle } from '@nestjs/throttler';
 import { PaymentsService } from '../payments/payments.service.js';
 import { PaymentGatewayFactory } from '../payments/payment-gateway.factory.js';
+import { PrismaService } from '../prisma/prisma.service.js';
 import { WebhookSignatureError } from '@bloomoulu/payments';
 
 @Controller('webhooks')
@@ -18,6 +19,7 @@ export class WebhooksController {
   constructor(
     private readonly payments: PaymentsService,
     private readonly gateways: PaymentGatewayFactory,
+    private readonly prisma: PrismaService,
   ) {}
 
   @Post('paytrail')
@@ -26,6 +28,26 @@ export class WebhooksController {
   async paytrail(@Req() req: FastifyRequest, @Headers() headers: Record<string, string>) {
     const raw = (req as any).rawBody ?? '';
     return this.process('paytrail', raw, headers);
+  }
+
+  /**
+   * Paytrail's hosted checkout redirects the donor's browser back to our
+   * configured `successUrl` with the same `checkout-*` params it would
+   * have sent as headers on the server-to-server callback. We accept the
+   * query params here, re-shape them into the headers format the
+   * gateway's parseWebhook understands, and run the identical
+   * signature-verify + activate pipeline. The result is that one code
+   * path handles both the redirect AND the callback — whichever Paytrail
+   * delivers first wins, the other is silently deduplicated.
+   */
+  @Get('paytrail')
+  @Throttle({ short: { ttl: 1000, limit: 100 }, mid: { ttl: 60_000, limit: 5000 } })
+  async paytrailReturn(@Query() query: Record<string, string>) {
+    const headers: Record<string, string> = {};
+    for (const [k, v] of Object.entries(query)) {
+      if (typeof v === 'string') headers[k.toLowerCase()] = v;
+    }
+    return this.process('paytrail', '', headers);
   }
 
   @Post('mobilepay')
@@ -51,6 +73,28 @@ export class WebhooksController {
     try {
       const gateway = this.gateways.for(provider);
       const event = await gateway.parseWebhook({ rawBody, headers });
+      // Bank-transfer RF references are derived from the canonical
+      // orderId (uppercase + no dashes + truncated to 21 chars). The
+      // gateway can't reverse that lossy transform on its own, so we
+      // look up the matching pending Payment by RF body prefix here.
+      // This keeps the gateway stateless and the lookup auditable.
+      if (provider === 'bank_transfer' && event.kind !== 'unknown' && 'orderId' in event && event.orderId) {
+        const rfBody = event.orderId.replace(/-/g, '').toUpperCase();
+        const candidates = await this.prisma.payment.findMany({
+          where: { status: 'pending', provider: 'bank_transfer' },
+          orderBy: { createdAt: 'desc' },
+          take: 50,
+          select: { orderId: true },
+        });
+        const match = candidates.find((p) =>
+          p.orderId.replace(/-/g, '').toUpperCase().startsWith(rfBody),
+        );
+        if (match) {
+          (event as { orderId: string }).orderId = match.orderId;
+        } else {
+          this.logger.warn(`bank-transfer: no pending payment matches RF body ${rfBody}`);
+        }
+      }
       const result = await this.payments.handleEvent(event);
       return { ok: true, deduplicated: result.deduplicated };
     } catch (err) {

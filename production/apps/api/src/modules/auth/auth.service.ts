@@ -93,6 +93,32 @@ export class AuthService {
     return ok ? user : null;
   }
 
+  /** Consume a verify token AND set/replace the password. Used by the
+   *  forgot-password flow: an existing donor requests a reset, clicks
+   *  the link, lands on /auth/reset, submits a new password. The token
+   *  is single-use; once consumed the link is dead. */
+  async resetPassword(input: { email: string; token: string; password: string }) {
+    if (!input.password || input.password.length < 8) {
+      return { ok: false as const, reason: 'password_too_short' as const };
+    }
+    const tokenHash = this.hashToken(input.token);
+    const row = await this.prisma.verificationToken.findUnique({
+      where: { identifier_token: { identifier: input.email, token: tokenHash } },
+    });
+    if (!row || row.expires < new Date()) {
+      return { ok: false as const, reason: 'invalid_or_expired' as const };
+    }
+    await this.prisma.verificationToken.delete({
+      where: { identifier_token: { identifier: input.email, token: tokenHash } },
+    });
+    const passwordHash = await bcrypt.hash(input.password, 12);
+    const user = await this.prisma.user.update({
+      where: { email: input.email },
+      data: { passwordHash, emailVerified: new Date() },
+    });
+    return { ok: true as const, user };
+  }
+
   /** Consume a verify token AND set the password + name in one step.
    *  Used by the sign-up verify-and-setup endpoint, where the user
    *  clicks the verify link and is presented with a form to finish

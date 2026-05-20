@@ -220,31 +220,58 @@ export class PaymentsService {
                 donor: { select: { name: true, email: true } },
               },
             });
+            // Bundle: if the head adoption belongs to a bundle, flip every
+            // sibling Adoption to 'active' on the same paidAt timestamp.
+            // We do this BEFORE the plaque check below so each sibling
+            // gets its own plaque check too.
+            const siblings = adoption.bundleId
+              ? await tx.adoption.findMany({
+                  where: {
+                    bundleId: adoption.bundleId,
+                    id: { not: adoption.id },
+                  },
+                  include: {
+                    tier: true,
+                    donor: { select: { name: true, email: true } },
+                  },
+                })
+              : [];
+            if (siblings.length > 0) {
+              await tx.adoption.updateMany({
+                where: { bundleId: adoption.bundleId!, status: 'pending' },
+                data: { status: 'active', startedAt: event.paidAt },
+              });
+              await this.audit.log(tx, {
+                action: 'adoption.bundle.activated',
+                resource: `Bundle/${adoption.bundleId}`,
+                after: { adoptionIds: [adoption.id, ...siblings.map((s) => s.id)] },
+              });
+            }
             // Plaque eligibility comes from SystemSetting
             // (`adoption.plaqueEligibleTiers`) so admins can grow the
             // perk without a deploy. Defaults to Endangered + Corporate.
             const eligible = this.settings.get().adoption.plaqueEligibleTiers as Array<typeof adoption.tierId>;
-            if (eligible.includes(adoption.tierId)) {
-              const existing = await tx.plaque.findUnique({ where: { adoptionId: adoption.id } });
-              if (!existing) {
-                const engraved =
-                  adoption.nickname ??
-                  adoption.publicName ??
-                  adoption.donor.name ??
-                  adoption.donor.email.split('@')[0]!;
-                await tx.plaque.create({
-                  data: {
-                    adoptionId: adoption.id,
-                    engravedText: engraved,
-                    status: 'requested',
-                  },
-                });
-                await this.audit.log(tx, {
-                  action: 'plaque.requested',
-                  resource: `Plaque/adoption-${adoption.id}`,
-                  after: { engravedText: engraved, tier: adoption.tierId },
-                });
-              }
+            for (const ad of [adoption, ...siblings]) {
+              if (!eligible.includes(ad.tierId)) continue;
+              const existing = await tx.plaque.findUnique({ where: { adoptionId: ad.id } });
+              if (existing) continue;
+              const engraved =
+                ad.nickname ??
+                ad.publicName ??
+                ad.donor.name ??
+                ad.donor.email.split('@')[0]!;
+              await tx.plaque.create({
+                data: {
+                  adoptionId: ad.id,
+                  engravedText: engraved,
+                  status: 'requested',
+                },
+              });
+              await this.audit.log(tx, {
+                action: 'plaque.requested',
+                resource: `Plaque/adoption-${ad.id}`,
+                after: { engravedText: engraved, tier: ad.tierId },
+              });
             }
           }
           await this.audit.log(tx, {

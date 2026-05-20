@@ -16,6 +16,10 @@ export interface AdoptSettings {
   dedicationMaxChars: number;
   coAdopterMax: number;
   fundsFlowUrl: string;
+  /** Whitelist of billing intervals donors see. Production default is
+   *  ['monthly','one_time']; admin enables 'annual' in /admin →
+   *  SystemSetting → adoption.intervalsEnabled. */
+  intervalsEnabled: Array<'monthly' | 'annual' | 'one_time'>;
 }
 
 /** A perk entry from the admin-editable Tier.perks JSON. Either a short
@@ -261,7 +265,23 @@ export function AdoptWizard({
   );
   const corporateTier = useMemo(() => tiers.find((tt) => tt.id === 'corporate') ?? null, [tiers]);
   const [tierId, setTierId] = useState<AdoptTier['id']>(presetTier);
-  const [recurring, setRecurring] = useState(false);
+  // Single source of truth: one of three billing intervals, matching
+  // /cart/checkout exactly. `recurring` is derived for the api payload.
+  // Admin-controlled allow-list. The first enabled interval is the
+  // initial selection, so disabling annual (the production default) lands
+  // donors on monthly.
+  const enabledIntervals = adopt.intervalsEnabled ?? ['monthly', 'one_time'];
+  const [billingInterval, setBillingInterval] = useState<'monthly' | 'annual' | 'one_time'>(
+    enabledIntervals[0] ?? 'monthly',
+  );
+  const recurring = billingInterval !== 'one_time';
+  const setRecurring = (next: boolean) => {
+    if (next) {
+      setBillingInterval(enabledIntervals.includes('monthly') ? 'monthly' : (enabledIntervals[0] ?? 'monthly'));
+    } else {
+      setBillingInterval(enabledIntervals.includes('one_time') ? 'one_time' : (enabledIntervals[0] ?? 'one_time'));
+    }
+  };
 
   // Plant
   const [plantSlug, setPlantSlug] = useState<string>(
@@ -309,13 +329,18 @@ export function AdoptWizard({
   // is gift, mirroring the demo design and the server-side calc.
   const baseCents = useMemo(() => {
     if (!selectedTier) return 0;
-    if (recurring && selectedTier.monthlyPriceCents) return selectedTier.monthlyPriceCents;
+    if (billingInterval === 'monthly' && selectedTier.monthlyPriceCents) return selectedTier.monthlyPriceCents;
     return selectedTier.annualPriceCents;
-  }, [selectedTier, recurring]);
+  }, [selectedTier, billingInterval]);
   // Gift-wrap add-on price comes from admin settings (admin.adoption.giftWrapCents).
   const wrapAddOnCents = intent === 'gift' && giftWrap ? adopt.giftWrapCents : 0;
   const totalCents = baseCents + wrapAddOnCents;
-  const recurringSuffix = recurring ? (locale === 'fi' ? '/kk' : locale === 'sv' ? '/mån' : '/mo') : '';
+  const recurringSuffix =
+    billingInterval === 'monthly' && selectedTier?.monthlyPriceCents
+      ? (locale === 'fi' ? '/kk' : locale === 'sv' ? '/mån' : '/mo')
+    : billingInterval === 'one_time'
+      ? ''
+    : (locale === 'fi' ? '/vuosi' : locale === 'sv' ? '/år' : '/yr');
 
   // ─── Helpers ───────────────────────────────────────────────────────────
   const goNext = () => setStep((s) => Math.min(4, s + 1));
@@ -334,10 +359,7 @@ export function AdoptWizard({
     fd.set('tierId', selectedTier.id);
     fd.set('intent', intent);
     fd.set('recurring', String(recurring));
-    fd.set(
-      'billingInterval',
-      recurring ? 'monthly' : selectedTier.id === 'corporate' ? 'annual' : 'annual',
-    );
+    fd.set('billingInterval', billingInterval);
     fd.set('locale', locale);
     fd.set('email', donorEmail);
     if (donorName) fd.set('name', donorName);
@@ -485,6 +507,9 @@ export function AdoptWizard({
             setTierId={setTierId}
             recurring={recurring}
             setRecurring={setRecurring}
+            billingInterval={billingInterval}
+            setBillingInterval={setBillingInterval}
+            enabledIntervals={enabledIntervals}
             selectedTier={selectedTier}
             totalCents={totalCents}
             baseCents={baseCents}
@@ -591,6 +616,11 @@ interface Step1Props {
   setTierId: (id: AdoptTier['id']) => void;
   recurring: boolean;
   setRecurring: (b: boolean) => void;
+  billingInterval: 'monthly' | 'annual' | 'one_time';
+  setBillingInterval: (v: 'monthly' | 'annual' | 'one_time') => void;
+  enabledIntervals: Array<'monthly' | 'annual' | 'one_time'>;
+  // `setRecurring` is kept on the props so legacy passthroughs compile.
+  // The Step1 component itself uses `setBillingInterval`.
   selectedTier: AdoptTier;
   totalCents: number;
   baseCents: number;
@@ -604,7 +634,9 @@ function Step1ChooseTier({
   tierId,
   setTierId,
   recurring,
-  setRecurring,
+  billingInterval,
+  setBillingInterval,
+  enabledIntervals,
   selectedTier,
   totalCents,
   onNext,
@@ -622,7 +654,7 @@ function Step1ChooseTier({
       </header>
 
       <div
-        role="group"
+        role="radiogroup"
         aria-label={t('billing')}
         style={{
           display: 'inline-flex',
@@ -633,36 +665,32 @@ function Step1ChooseTier({
           border: '1px solid var(--line)',
         }}
       >
-        <button
-          type="button"
-          onClick={() => setRecurring(false)}
-          aria-pressed={!recurring}
-          className="pill"
-          style={{
-            padding: '8px 18px',
-            border: 'none',
-            cursor: 'pointer',
-            background: !recurring ? 'var(--forest)' : 'transparent',
-            color: !recurring ? 'var(--cream)' : 'var(--ink-soft)',
-          }}
-        >
-          {t('oneOff')}
-        </button>
-        <button
-          type="button"
-          onClick={() => setRecurring(true)}
-          aria-pressed={recurring}
-          className="pill"
-          style={{
-            padding: '8px 18px',
-            border: 'none',
-            cursor: 'pointer',
-            background: recurring ? 'var(--forest)' : 'transparent',
-            color: recurring ? 'var(--cream)' : 'var(--ink-soft)',
-          }}
-        >
-          {t('monthly')}
-        </button>
+        {([
+          { id: 'monthly' as const, label: locale === 'fi' ? 'Kuukausi' : locale === 'sv' ? 'Månad' : 'Monthly' },
+          { id: 'annual' as const, label: locale === 'fi' ? 'Vuosi' : locale === 'sv' ? 'År' : 'Annual' },
+          { id: 'one_time' as const, label: locale === 'fi' ? 'Kerran' : locale === 'sv' ? 'Engång' : 'One-time' },
+        ]).filter((o) => enabledIntervals.includes(o.id)).map((opt) => {
+          const active = billingInterval === opt.id;
+          return (
+            <button
+              type="button"
+              key={opt.id}
+              role="radio"
+              aria-checked={active}
+              onClick={() => setBillingInterval(opt.id)}
+              className="pill"
+              style={{
+                padding: '8px 18px',
+                border: 'none',
+                cursor: 'pointer',
+                background: active ? 'var(--forest)' : 'transparent',
+                color: active ? 'var(--cream)' : 'var(--ink-soft)',
+              }}
+            >
+              {opt.label}
+            </button>
+          );
+        })}
       </div>
 
       <div

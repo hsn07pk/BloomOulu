@@ -1,11 +1,24 @@
 import type { PrismaClient } from '@prisma/client';
 
+/**
+ * Env-driven tier price reader. Production deployments override these
+ * via docker-compose / .env. Localhost dev uses the listed cents
+ * defaults. After seeding, admins edit prices through /admin → Tier.
+ */
+const envCents = (key: string, fallback: number): number => {
+  const raw = process.env[key];
+  if (!raw) return fallback;
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) ? n : fallback;
+};
+
 export async function seedTiers(prisma: PrismaClient) {
   const tiers = [
     {
       id: 'seedling',
       name: 'Seedling', nameFi: 'Siemen', nameSv: 'Frö',
-      annualPriceCents: 2500, monthlyPriceCents: 300,
+      annualPriceCents: envCents('TIER_SEEDLING_ANNUAL_CENTS', 2500),
+      monthlyPriceCents: envCents('TIER_SEEDLING_MONTHLY_CENTS', 300),
       blurbEn: 'A starter gesture. Nickname your plant, pick one from your home region, get a digital certificate and quarterly notes.',
       blurbFi: 'Aloittelijan ele. Anna kasville lempinimi, valitse kotiseudultasi, saa digitaalinen sertifikaatti ja neljännesvuosittaiset päivitykset.',
       blurbSv: 'Ett startsteg. Ge din växt ett smeknamn, välj en från din hembygd, få ett digitalt diplom och kvartalsuppdateringar.',
@@ -21,7 +34,8 @@ export async function seedTiers(prisma: PrismaClient) {
     {
       id: 'rooted',
       name: 'Rooted', nameFi: 'Juurtunut', nameSv: 'Rotad',
-      annualPriceCents: 7500, monthlyPriceCents: 800,
+      annualPriceCents: envCents('TIER_ROOTED_ANNUAL_CENTS', 7500),
+      monthlyPriceCents: envCents('TIER_ROOTED_MONTHLY_CENTS', 800),
       blurbEn: 'Printed certificate mailed to you, I@H postcard from your plant\'s region, seasonal photos of your specific plant.',
       blurbFi: 'Painettu todistus postitettuna, I@H-postikortti kasvisi alueelta, kausittaiset valokuvat juuri sinun kasvistasi.',
       blurbSv: 'Tryckt diplom per post, I@H-vykort från växtens region, säsongsbilder av just din växt.',
@@ -37,7 +51,8 @@ export async function seedTiers(prisma: PrismaClient) {
     {
       id: 'vulnerable',
       name: 'Vulnerable', nameFi: 'Vaarantunut', nameSv: 'Sårbar',
-      annualPriceCents: 25000, monthlyPriceCents: 2500,
+      annualPriceCents: envCents('TIER_VULNERABLE_ANNUAL_CENTS', 25000),
+      monthlyPriceCents: envCents('TIER_VULNERABLE_MONTHLY_CENTS', 2500),
       blurbEn: 'Funds an actively threatened species. Signed botanical art, themed garden walk, Adopters\' Open Day + guest.',
       blurbFi: 'Rahoittaa uhanalaista lajia. Allekirjoitettu kasvitaide, opastettu teemakierros, Adoptoijien avoin päivä + vieras.',
       blurbSv: 'Finansierar en sårbar art. Signerad botanisk konst, temarundvandring, Adoptanternas dag + gäst.',
@@ -54,7 +69,8 @@ export async function seedTiers(prisma: PrismaClient) {
     {
       id: 'endangered',
       name: 'Endangered', nameFi: 'Erittäin uhanalainen', nameSv: 'Starkt hotad',
-      annualPriceCents: 75000, monthlyPriceCents: 7500,
+      annualPriceCents: envCents('TIER_ENDANGERED_ANNUAL_CENTS', 75000),
+      monthlyPriceCents: envCents('TIER_ENDANGERED_MONTHLY_CENTS', 7500),
       blurbEn: 'Limited-edition signed art, donor dinner with a seed-bank visit, an engraved plaque next to your specific plant, and an annual seed packet.',
       blurbFi: 'Rajoitettu painos allekirjoitettua taidetta, lahjoittajien illallinen siemenpankin vierailulla, kaiverrettu laatta juuri sinun kasvisi viereen ja vuosittainen siemenpaketti.',
       blurbSv: 'Limiterad utgåva av signerad konst, donatormiddag med fröbanksbesök, en graverad plakett bredvid just din växt och ett årligt fröpaket.',
@@ -71,7 +87,8 @@ export async function seedTiers(prisma: PrismaClient) {
     {
       id: 'corporate',
       name: 'Corporate', nameFi: 'Yritystaso', nameSv: 'Företag',
-      annualPriceCents: 250000, monthlyPriceCents: null,
+      annualPriceCents: envCents('TIER_CORPORATE_ANNUAL_CENTS', 250000),
+      monthlyPriceCents: null,
       blurbEn: 'CSR-ready quarterly impact reports, logo placement on greenhouse signage, private event slot for up to 20 guests. Tax-deductible under TVL §57 for Finnish corporates.',
       blurbFi: 'CSR-valmiit neljännesvuosittaiset vaikuttavuusraportit, logo kasvihuoneiden opasteissa, yksityinen tapahtuma-aika enintään 20 vieraalle. Verovähennyskelpoinen suomalaisille yrityksille TVL §57 mukaan.',
       blurbSv: 'CSR-redo kvartalsvisa effektrapporter, logoplacering på växthusskyltar, privat evenemang för upp till 20 gäster. Avdragsgill för finländska företag enligt TVL §57.',

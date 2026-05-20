@@ -68,6 +68,10 @@ export interface BloomOuluSettings {
     coAdopterMax: number;
     /** Link target shown next to the tax-disclosure box. */
     fundsFlowUrl: string;
+    /** Which billing intervals the donor sees. Production default is
+     *  ['monthly', 'one_time']; an admin can enable 'annual' later
+     *  without a deploy by editing SystemSetting `adoption.intervalsEnabled`. */
+    intervalsEnabled: Array<'monthly' | 'annual' | 'one_time'>;
   };
   /** AskTheGarden knobs surfaced via /v1/settings/public. Admins edit
    *  these in /admin/resources/SystemSetting. */
@@ -93,62 +97,127 @@ export interface BloomOuluSettings {
   };
 }
 
-const DEFAULTS: BloomOuluSettings = {
-  payments: { bank_transfer: true, paytrail: false, mobilepay: true },
-  bankTransfer: {
-    iban: 'FI00 0000 0000 0000 00',
-    bic: 'NDEAFIHH',
-    beneficiaryName: 'Oulun yliopiston kasvitieteellinen puutarha',
-    instructionsUrl: 'https://bloomoulu.fi/donate/pay',
-  },
-  vat: { donationRateBp: 0, perkRateBp: 2400 },
-  features: { rag: true, kiosk: true, corporateTier: true, payByBank: false },
-  receipts: { prefix: 'BLO', yearReset: true },
-  gdpr: { auditRetentionDays: 365 * 6, pseudonymiseAfterDays: 365 * 6 },
-  defaultAmountCents: 2500,
-  adoptionFlow: [
-    'choose_plant',
-    'choose_tier',
-    'donor_details',
-    'gift_options',
-    'payment_method',
-    'confirm',
-  ],
-  adoption: {
-    giftWrapCents: 400,
-    donationShareBp: 7200,
-    plaqueEligibleTiers: ['endangered', 'corporate'],
-    dedicationMaxChars: 240,
-    coAdopterMax: 10,
-    fundsFlowUrl: '/about#funds-flow',
-  },
-  ask: {
-    curatorEmail: 'curator@bloomoulu.fi',
-    curatorName: 'Anna Liisa Ruotsalainen',
-    curatorReplySlaDays: 2,
-    // BGE-reranker-v2-m3 emits sigmoid logits in [0, 1]. Empirically:
-    //   • Exact factual match ("When does X bloom?")     → 0.90+
-    //   • Listy/aggregate ("Show me carnivorous plants") → 0.15–0.25
-    //     (chunks are per-plant; reranker scores them as "topical, not
-    //      directly answering")
-    //   • Genuinely unrelated                            → < 0.01
-    // We trust the strengthened LLM refusal prompt + citation validator
-    // to catch the rare false positive, so a permissive 0.10 floor lets
-    // list-style and broad queries through while still blocking noise.
-    confidenceThresholdBp: 1000,
-    auditErrorTarget: 0.05,
-    outOfDomain: {
-      bgci: 'https://tools.bgci.org/plant_search.php',
-      gbif: 'https://www.gbif.org/species/search',
-      plantnet: 'https://identify.plantnet.org/',
+/**
+ * Compute the runtime defaults for `BloomOuluSettings` from environment
+ * variables. Every value here either reads `process.env.X` (set via
+ * docker-compose / your hosting platform) or falls back to a sensible
+ * localhost-friendly default. Admin edits via `/admin → SystemSetting`
+ * always win at runtime — these are only the boot fallbacks.
+ *
+ * Goal: flipping to production is `.env` only. No code edits needed.
+ */
+function envInt(key: string, fallback: number): number {
+  const raw = process.env[key];
+  if (!raw) return fallback;
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) ? n : fallback;
+}
+function envFloat(key: string, fallback: number): number {
+  const raw = process.env[key];
+  if (!raw) return fallback;
+  const n = parseFloat(raw);
+  return Number.isFinite(n) ? n : fallback;
+}
+function envBool(key: string, fallback: boolean): boolean {
+  const raw = process.env[key];
+  if (raw === undefined) return fallback;
+  return raw === 'true' || raw === '1';
+}
+function envStr(key: string, fallback: string): string {
+  return process.env[key] ?? fallback;
+}
+
+export function buildSettingsDefaults(): BloomOuluSettings {
+  return {
+    payments: {
+      bank_transfer: envBool('PAYMENTS_BANK_TRANSFER_ENABLED', true),
+      paytrail: envBool('PAYMENTS_PAYTRAIL_ENABLED', false),
+      mobilepay: envBool('PAYMENTS_MOBILEPAY_ENABLED', true),
     },
-  },
-};
+    bankTransfer: {
+      iban: envStr('GARDEN_IBAN', 'FI00 0000 0000 0000 00'),
+      bic: envStr('GARDEN_BIC', 'NDEAFIHH'),
+      beneficiaryName: envStr(
+        'GARDEN_ORG_NAME',
+        'Oulun yliopiston kasvitieteellinen puutarha',
+      ),
+      instructionsUrl: envStr(
+        'GARDEN_DONATE_URL',
+        `${envStr('NEXT_PUBLIC_WEB_URL', 'http://localhost:3000')}/en/donate/pay`,
+      ),
+    },
+    vat: {
+      donationRateBp: envInt('VAT_DONATION_RATE_BP', 0),
+      perkRateBp: envInt('VAT_PERK_RATE_BP', 2400),
+    },
+    features: {
+      rag: envBool('FEATURE_RAG', true),
+      kiosk: envBool('FEATURE_KIOSK', true),
+      corporateTier: envBool('FEATURE_CORPORATE_TIER', true),
+      payByBank: envBool('FEATURE_PAY_BY_BANK', false),
+    },
+    receipts: {
+      prefix: envStr('RECEIPT_PREFIX', 'BLO'),
+      yearReset: envBool('RECEIPT_YEAR_RESET', true),
+    },
+    gdpr: {
+      auditRetentionDays: envInt('GDPR_AUDIT_RETENTION_DAYS', 365 * 6),
+      pseudonymiseAfterDays: envInt('GDPR_PSEUDONYMISE_AFTER_DAYS', 365 * 6),
+    },
+    defaultAmountCents: envInt('KIOSK_DEFAULT_AMOUNT_CENTS', 2500),
+    adoptionFlow: [
+      'choose_plant',
+      'choose_tier',
+      'donor_details',
+      'gift_options',
+      'payment_method',
+      'confirm',
+    ],
+    adoption: {
+      giftWrapCents: envInt('ADOPTION_GIFT_WRAP_CENTS', 400),
+      donationShareBp: envInt('ADOPTION_DONATION_SHARE_BP', 7200),
+      plaqueEligibleTiers: (envStr('ADOPTION_PLAQUE_ELIGIBLE_TIERS', 'endangered,corporate')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean) as Array<'seedling' | 'rooted' | 'vulnerable' | 'endangered' | 'corporate'>),
+      dedicationMaxChars: envInt('ADOPTION_DEDICATION_MAX_CHARS', 240),
+      coAdopterMax: envInt('ADOPTION_CO_ADOPTER_MAX', 10),
+      fundsFlowUrl: envStr('ADOPTION_FUNDS_FLOW_URL', '/about#funds-flow'),
+      // Default offering: monthly + one_time. Annual is hidden until an
+      // admin explicitly re-enables it in /admin → SystemSetting.
+      intervalsEnabled: (envStr('ADOPTION_INTERVALS_ENABLED', 'monthly,one_time')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean) as Array<'monthly' | 'annual' | 'one_time'>),
+    },
+    ask: {
+      curatorEmail: envStr('ASK_CURATOR_EMAIL', 'curator@bloomoulu.fi'),
+      curatorName: envStr('ASK_CURATOR_NAME', 'Anna Liisa Ruotsalainen'),
+      curatorReplySlaDays: envInt('ASK_CURATOR_REPLY_SLA_DAYS', 2),
+      // BGE-reranker-v2-m3 emits sigmoid logits in [0, 1]. Empirically:
+      //   • Exact factual match ("When does X bloom?")     → 0.90+
+      //   • Listy/aggregate ("Show me carnivorous plants") → 0.15–0.25
+      //     (chunks are per-plant; reranker scores them as "topical, not
+      //      directly answering")
+      //   • Genuinely unrelated                            → < 0.01
+      // We trust the strengthened LLM refusal prompt + citation validator
+      // to catch the rare false positive, so a permissive 0.10 floor lets
+      // list-style and broad queries through while still blocking noise.
+      confidenceThresholdBp: envInt('ASK_CONFIDENCE_THRESHOLD_BP', 1000),
+      auditErrorTarget: envFloat('ASK_AUDIT_ERROR_TARGET', 0.05),
+      outOfDomain: {
+        bgci: envStr('ASK_OUT_OF_DOMAIN_BGCI', 'https://tools.bgci.org/plant_search.php'),
+        gbif: envStr('ASK_OUT_OF_DOMAIN_GBIF', 'https://www.gbif.org/species/search'),
+        plantnet: envStr('ASK_OUT_OF_DOMAIN_PLANTNET', 'https://identify.plantnet.org/'),
+      },
+    },
+  };
+}
 
 @Injectable()
 export class SettingsService implements OnModuleInit {
   private readonly logger = new Logger(SettingsService.name);
-  private cache: BloomOuluSettings = DEFAULTS;
+  private cache: BloomOuluSettings = buildSettingsDefaults();
   private cacheLoadedAt = 0;
 
   // Late-injected so the SettingsModule itself doesn't have to import
@@ -191,7 +260,8 @@ export class SettingsService implements OnModuleInit {
       const rows = await this.prisma.$queryRaw<
         Array<{ key: string; value: unknown }>
       >`SELECT key, value FROM "SystemSetting"`;
-      const merged: any = JSON.parse(JSON.stringify(DEFAULTS));
+      const defaults = buildSettingsDefaults();
+      const merged: any = JSON.parse(JSON.stringify(defaults));
       for (const { key, value } of rows) {
         setByPath(merged, key, value);
       }
@@ -203,7 +273,7 @@ export class SettingsService implements OnModuleInit {
       this.logger.warn(
         `Settings table not available; using defaults (${(err as Error).message})`,
       );
-      return DEFAULTS;
+      return buildSettingsDefaults();
     }
   }
 

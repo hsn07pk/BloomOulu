@@ -54,6 +54,18 @@ services:
         NEXT_PUBLIC_WEB_URL: ${NEXT_PUBLIC_WEB_URL:-http://localhost:3000}
         NEXT_PUBLIC_ADMIN_URL: ${NEXT_PUBLIC_ADMIN_URL:-http://localhost:4100}
         NEXT_PUBLIC_KIOSK_URL: ${NEXT_PUBLIC_KIOSK_URL:-http://localhost:3100}
+        # Donor-facing contact details. Single source of truth: change in
+        # one env var and every web page (donate/complete error, GDPR
+        # banners, ask-the-garden curator name, etc.) reflects it.
+        NEXT_PUBLIC_CURATOR_EMAIL: ${NEXT_PUBLIC_CURATOR_EMAIL:-curator@bloomoulu.fi}
+        NEXT_PUBLIC_SUPPORT_EMAIL: ${NEXT_PUBLIC_SUPPORT_EMAIL:-donate@bloomoulu.fi}
+        NEXT_PUBLIC_GARDEN_NAME_EN: ${NEXT_PUBLIC_GARDEN_NAME_EN:-BloomOulu — University of Oulu Botanical Garden}
+        NEXT_PUBLIC_GARDEN_NAME_FI: ${NEXT_PUBLIC_GARDEN_NAME_FI:-Oulun yliopiston kasvitieteellinen puutarha}
+        NEXT_PUBLIC_GARDEN_NAME_SV: ${NEXT_PUBLIC_GARDEN_NAME_SV:-Uleåborgs universitets botaniska trädgård}
+        # Browser-reachable MinIO endpoint (api uses INTERNAL_API_URL to
+        # presign with hostname `minio:9000`; web rewrites the host so
+        # the donor's browser can actually fetch the bytes).
+        NEXT_PUBLIC_S3_ENDPOINT: ${NEXT_PUBLIC_S3_ENDPOINT:-http://localhost:9000}
     <<: *restart
     environment:
       NODE_ENV: production
@@ -61,6 +73,12 @@ services:
       NEXT_PUBLIC_WEB_URL: ${NEXT_PUBLIC_WEB_URL:-http://localhost:3000}
       NEXT_PUBLIC_ADMIN_URL: ${NEXT_PUBLIC_ADMIN_URL:-http://localhost:4100}
       NEXT_PUBLIC_KIOSK_URL: ${NEXT_PUBLIC_KIOSK_URL:-http://localhost:3100}
+      NEXT_PUBLIC_CURATOR_EMAIL: ${NEXT_PUBLIC_CURATOR_EMAIL:-curator@bloomoulu.fi}
+      NEXT_PUBLIC_SUPPORT_EMAIL: ${NEXT_PUBLIC_SUPPORT_EMAIL:-donate@bloomoulu.fi}
+      NEXT_PUBLIC_GARDEN_NAME_EN: ${NEXT_PUBLIC_GARDEN_NAME_EN:-BloomOulu — University of Oulu Botanical Garden}
+      NEXT_PUBLIC_GARDEN_NAME_FI: ${NEXT_PUBLIC_GARDEN_NAME_FI:-Oulun yliopiston kasvitieteellinen puutarha}
+      NEXT_PUBLIC_GARDEN_NAME_SV: ${NEXT_PUBLIC_GARDEN_NAME_SV:-Uleåborgs universitets botaniska trädgård}
+      NEXT_PUBLIC_S3_ENDPOINT: ${NEXT_PUBLIC_S3_ENDPOINT:-http://localhost:9000}
       INTERNAL_API_URL: http://api:4000
       AUTH_URL: ${NEXT_PUBLIC_WEB_URL:-http://localhost:3000}
       AUTH_SECRET: ${AUTH_SECRET}
@@ -102,13 +120,16 @@ services:
       NEXT_PUBLIC_WEB_URL: ${NEXT_PUBLIC_WEB_URL:-http://localhost:3000}
       ALLOWED_ORIGINS: "${NEXT_PUBLIC_WEB_URL:-http://localhost:3000},${NEXT_PUBLIC_KIOSK_URL:-http://localhost:3100},${NEXT_PUBLIC_ADMIN_URL:-http://localhost:4100}"
       WEB_ORIGIN: ${NEXT_PUBLIC_WEB_URL:-http://localhost:3000}
-      # Ollama runs natively on host for Metal GPU; bridge from container
-      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
-      OLLAMA_BASE_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
-      OLLAMA_LLM_MODEL: ${OLLAMA_LLM_MODEL:-gemma3:4b}
-      OLLAMA_EMBED_MODEL: ${OLLAMA_EMBED_MODEL:-bge-m3}
-      EMBED_MODEL: ${OLLAMA_EMBED_MODEL:-bge-m3}
-      LLM_MODEL: ${OLLAMA_LLM_MODEL:-gemma3:4b}
+      # Ollama runs natively on host for Metal GPU; bridge from container.
+      # We hardcode host.docker.internal here (instead of inheriting from
+      # the host .env) because the host .env uses localhost — fine for
+      # scripts run on the host, broken for processes inside a container.
+      OLLAMA_URL: http://host.docker.internal:11434
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      OLLAMA_LLM_MODEL: gemma3:4b
+      OLLAMA_EMBED_MODEL: bge-m3
+      EMBED_MODEL: bge-m3
+      LLM_MODEL: gemma3:4b
       RERANKER_URL: http://reranker:8080
       # SMTP — defaults to MailHog. Set SMTP_HOST=smtp.gmail.com in .env
       # (plus SMTP_USER/PASS) to send via real Gmail instead.
@@ -126,9 +147,80 @@ services:
       PAYTRAIL_WEBHOOK_SECRET: ${PAYTRAIL_WEBHOOK_SECRET:-SAIPPUAKAUPPIAS}
       PAYTRAIL_CALLBACK_URL: ${PAYTRAIL_CALLBACK_URL:-http://localhost:4000/webhooks/paytrail}
       PAYTRAIL_RETURN_URL: ${PAYTRAIL_RETURN_URL:-http://localhost:3000/en/donate/complete}
+      # Localhost runs Paytrail's signing pipeline against a locally-
+      # hosted mock checkout (Paytrail itself rejects http:// callbacks).
+      # In real deployment, unset / set to false and the live hosted
+      # checkout at services.paytrail.com takes over with no code change.
+      PAYTRAIL_MOCK: ${PAYTRAIL_MOCK:-true}
       MOBILEPAY_API_URL: ${MOBILEPAY_API_URL:-https://apitest.vipps.no}
       MOBILEPAY_CLIENT_ID: ${MOBILEPAY_CLIENT_ID:-}
       MOBILEPAY_CLIENT_SECRET: ${MOBILEPAY_CLIENT_SECRET:-}
+      MOBILEPAY_SUBSCRIPTION_KEY: ${MOBILEPAY_SUBSCRIPTION_KEY:-}
+      MOBILEPAY_MERCHANT_SERIAL_NUMBER: ${MOBILEPAY_MERCHANT_SERIAL_NUMBER:-}
+      MOBILEPAY_WEBHOOK_SECRET: ${MOBILEPAY_WEBHOOK_SECRET:-}
+      MOBILEPAY_RETURN_URL: ${MOBILEPAY_RETURN_URL:-${NEXT_PUBLIC_WEB_URL:-http://localhost:3000}/en/donate/complete}
+      MOBILEPAY_CALLBACK_URL: ${MOBILEPAY_CALLBACK_URL:-${NEXT_PUBLIC_API_URL:-http://localhost:4000}/webhooks/mobilepay}
+      # ── BloomOulu garden identity (env-driven, .env-flip-to-prod) ─────
+      # These are the runtime fallbacks for SystemSetting rows. Admin
+      # edits in /admin → SystemSetting always win. Setting these here
+      # means a brand-new deployment with NO admin writes still has the
+      # right IBAN, contact emails, etc. The 21 Category-A values from
+      # the hardcoded-audit live here.
+      GARDEN_IBAN: ${GARDEN_IBAN:-FI00 0000 0000 0000 00}
+      GARDEN_BIC: ${GARDEN_BIC:-NDEAFIHH}
+      GARDEN_ORG_NAME: ${GARDEN_ORG_NAME:-Oulun yliopiston kasvitieteellinen puutarha}
+      GARDEN_ORG_NAME_EN: ${GARDEN_ORG_NAME_EN:-BloomOulu — University of Oulu Botanical Garden}
+      GARDEN_ORG_NAME_FI: ${GARDEN_ORG_NAME_FI:-Oulun yliopiston kasvitieteellinen puutarha}
+      GARDEN_ORG_NAME_SV: ${GARDEN_ORG_NAME_SV:-Uleåborgs universitets botaniska trädgård}
+      GARDEN_ORG_VAT_ID: ${GARDEN_ORG_VAT_ID:-FI02452579}
+      GARDEN_ADDRESS: ${GARDEN_ADDRESS:-Linnanmaa, 90014 Oulun yliopisto}
+      GARDEN_DONATE_URL: ${GARDEN_DONATE_URL:-${NEXT_PUBLIC_WEB_URL:-http://localhost:3000}/en/donate/pay}
+      # Contact details — used in receipts, error banners, ask-the-garden curator card.
+      ASK_CURATOR_EMAIL: ${ASK_CURATOR_EMAIL:-curator@bloomoulu.fi}
+      ASK_CURATOR_NAME: ${ASK_CURATOR_NAME:-Anna Liisa Ruotsalainen}
+      ASK_CURATOR_REPLY_SLA_DAYS: ${ASK_CURATOR_REPLY_SLA_DAYS:-2}
+      ASK_CONFIDENCE_THRESHOLD_BP: ${ASK_CONFIDENCE_THRESHOLD_BP:-1000}
+      ASK_AUDIT_ERROR_TARGET: ${ASK_AUDIT_ERROR_TARGET:-0.05}
+      ASK_OUT_OF_DOMAIN_BGCI: ${ASK_OUT_OF_DOMAIN_BGCI:-https://tools.bgci.org/plant_search.php}
+      ASK_OUT_OF_DOMAIN_GBIF: ${ASK_OUT_OF_DOMAIN_GBIF:-https://www.gbif.org/species/search}
+      ASK_OUT_OF_DOMAIN_PLANTNET: ${ASK_OUT_OF_DOMAIN_PLANTNET:-https://identify.plantnet.org/}
+      WEBAPP_USER_AGENT_EMAIL: ${WEBAPP_USER_AGENT_EMAIL:-conservation@bloomoulu.fi}
+      # Payment-provider feature flags (admin can also toggle).
+      PAYMENTS_BANK_TRANSFER_ENABLED: ${PAYMENTS_BANK_TRANSFER_ENABLED:-true}
+      PAYMENTS_PAYTRAIL_ENABLED: ${PAYMENTS_PAYTRAIL_ENABLED:-true}
+      PAYMENTS_MOBILEPAY_ENABLED: ${PAYMENTS_MOBILEPAY_ENABLED:-false}
+      # Adoption flow knobs.
+      ADOPTION_GIFT_WRAP_CENTS: ${ADOPTION_GIFT_WRAP_CENTS:-400}
+      ADOPTION_DONATION_SHARE_BP: ${ADOPTION_DONATION_SHARE_BP:-7200}
+      ADOPTION_PLAQUE_ELIGIBLE_TIERS: ${ADOPTION_PLAQUE_ELIGIBLE_TIERS:-endangered,corporate}
+      ADOPTION_DEDICATION_MAX_CHARS: ${ADOPTION_DEDICATION_MAX_CHARS:-240}
+      ADOPTION_CO_ADOPTER_MAX: ${ADOPTION_CO_ADOPTER_MAX:-10}
+      ADOPTION_FUNDS_FLOW_URL: ${ADOPTION_FUNDS_FLOW_URL:-/about#funds-flow}
+      # Production default: monthly + one_time only. Annual is hidden
+      # until the admin enables it in /admin → SystemSetting →
+      # adoption.intervalsEnabled (no deploy needed).
+      ADOPTION_INTERVALS_ENABLED: ${ADOPTION_INTERVALS_ENABLED:-monthly,one_time}
+      # VAT, receipts, GDPR retention.
+      VAT_DONATION_RATE_BP: ${VAT_DONATION_RATE_BP:-0}
+      VAT_PERK_RATE_BP: ${VAT_PERK_RATE_BP:-2400}
+      RECEIPT_PREFIX: ${RECEIPT_PREFIX:-BLO}
+      RECEIPT_YEAR_RESET: ${RECEIPT_YEAR_RESET:-true}
+      GDPR_AUDIT_RETENTION_DAYS: ${GDPR_AUDIT_RETENTION_DAYS:-2190}
+      GDPR_PSEUDONYMISE_AFTER_DAYS: ${GDPR_PSEUDONYMISE_AFTER_DAYS:-2190}
+      KIOSK_DEFAULT_AMOUNT_CENTS: ${KIOSK_DEFAULT_AMOUNT_CENTS:-2500}
+      # Tier pricing — seed reads these so admin starts with sensible
+      # defaults; further edits are made in /admin → Tier.
+      TIER_SEEDLING_ANNUAL_CENTS: ${TIER_SEEDLING_ANNUAL_CENTS:-2500}
+      TIER_SEEDLING_MONTHLY_CENTS: ${TIER_SEEDLING_MONTHLY_CENTS:-300}
+      TIER_ROOTED_ANNUAL_CENTS: ${TIER_ROOTED_ANNUAL_CENTS:-7500}
+      TIER_ROOTED_MONTHLY_CENTS: ${TIER_ROOTED_MONTHLY_CENTS:-800}
+      TIER_VULNERABLE_ANNUAL_CENTS: ${TIER_VULNERABLE_ANNUAL_CENTS:-25000}
+      TIER_VULNERABLE_MONTHLY_CENTS: ${TIER_VULNERABLE_MONTHLY_CENTS:-2500}
+      TIER_ENDANGERED_ANNUAL_CENTS: ${TIER_ENDANGERED_ANNUAL_CENTS:-75000}
+      TIER_ENDANGERED_MONTHLY_CENTS: ${TIER_ENDANGERED_MONTHLY_CENTS:-7500}
+      TIER_CORPORATE_ANNUAL_CENTS: ${TIER_CORPORATE_ANNUAL_CENTS:-250000}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "${API_PORT:-4000}:4000"
     healthcheck:
@@ -161,6 +253,14 @@ services:
       SMTP_SECURE: ${SMTP_SECURE:-false}
       SMTP_FROM: ${SMTP_FROM:-BloomOulu <noreply@bloomoulu.localhost>}
       EMAIL_FROM: ${EMAIL_FROM:-BloomOulu <noreply@bloomoulu.localhost>}
+      OLLAMA_URL: http://host.docker.internal:11434
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      OLLAMA_LLM_MODEL: gemma3:4b
+      OLLAMA_EMBED_MODEL: bge-m3
+      EMBED_MODEL: bge-m3
+      LLM_MODEL: gemma3:4b
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     healthcheck:
       <<: *healthcheck
       test: ["CMD", "node", "-e", "require('net').createConnection({host:'redis',port:6379}).on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))"]
@@ -184,6 +284,15 @@ services:
       AUTH_SECRET: ${AUTH_SECRET}
       ADMIN_BOOTSTRAP_EMAIL: ${ADMIN_BOOTSTRAP_EMAIL:-admin@admin.com}
       ADMIN_BOOTSTRAP_PASSWORD_HASH: ${ADMIN_BOOTSTRAP_PASSWORD_HASH}
+      # Ollama for the admin RAG-doc ingest form. Hardcoded host bridge —
+      # the host .env uses localhost (for host scripts), but inside a
+      # container that resolves to the container itself.
+      OLLAMA_URL: ${ADMIN_OLLAMA_URL:-http://host.docker.internal:11434}
+      OLLAMA_BASE_URL: ${ADMIN_OLLAMA_URL:-http://host.docker.internal:11434}
+      OLLAMA_EMBED_MODEL: bge-m3
+      EMBED_MODEL: bge-m3
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "${ADMIN_PORT:-4100}:4100"
     healthcheck:

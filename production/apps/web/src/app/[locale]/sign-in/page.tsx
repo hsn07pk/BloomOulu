@@ -1,4 +1,4 @@
-import { lookupEmailAction, passwordSignInAction, signInAction } from './actions';
+import { lookupEmailAction, passwordSignInAction, signInAction, forgotPasswordAction } from './actions';
 
 const COPY = {
   en: {
@@ -64,6 +64,7 @@ export default async function SignInPage({
   const { locale } = await params;
   const { reason, step, email: prefillEmail } = await searchParams;
   const passwordStep = step === 'password' && prefillEmail;
+  const forgotStep = reason === 'forgot';
   const t = COPY[(locale as keyof typeof COPY) in COPY ? (locale as keyof typeof COPY) : 'en'];
 
   // SSO is enabled only when the University of Oulu IdP credentials are
@@ -161,7 +162,58 @@ export default async function SignInPage({
         </div>
       )}
 
-      {passwordStep ? (
+      {forgotStep ? (
+        // ── Step 2b: donor asked for a password-reset link ────────────
+        <form
+          action={forgotPasswordAction}
+          className="card card-pad"
+          style={{ display: 'flex', flexDirection: 'column', gap: 18, background: 'var(--paper)' }}
+        >
+          <input type="hidden" name="locale" value={locale} />
+          <h2 className="serif" style={{ fontSize: 22, margin: 0, color: 'var(--forest-deep)' }}>
+            {locale === 'fi' ? 'Lähetä uusi salasanalinkki' : locale === 'sv' ? 'Skicka en återställningslänk' : 'Send a reset link'}
+          </h2>
+          <p className="small muted" style={{ marginTop: -8, lineHeight: 1.55 }}>
+            {locale === 'fi'
+              ? 'Saat sähköpostiisi linkin, jolla voit asettaa uuden salasanan. Linkki vanhenee 15 minuutissa.'
+              : locale === 'sv'
+                ? 'Du får en länk på mejlen för att sätta ett nytt lösenord. Länken upphör om 15 minuter.'
+                : "We'll email a link to set a new password. The link expires in 15 minutes."}
+          </p>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <span className="label">
+              {locale === 'fi' ? 'Sähköposti' : locale === 'sv' ? 'E-post' : 'Email'}
+            </span>
+            <input
+              type="email"
+              name="email"
+              required
+              autoFocus
+              autoComplete="email"
+              defaultValue={prefillEmail ?? ''}
+              placeholder="name@example.com"
+              style={{
+                padding: '14px 16px',
+                border: '1px solid var(--line)',
+                borderRadius: 12,
+                background: 'var(--cream)',
+                fontSize: 16,
+                fontFamily: 'var(--f-body)',
+                minHeight: 48,
+                color: 'var(--ink)',
+              }}
+            />
+          </label>
+          <button type="submit" className="btn btn-primary btn-lg btn-block" style={{ marginTop: 4 }}>
+            {locale === 'fi' ? 'Lähetä linkki →' : locale === 'sv' ? 'Skicka länk →' : 'Send the link →'}
+          </button>
+          <p className="small muted" style={{ marginTop: 4, lineHeight: 1.55, textAlign: 'center' }}>
+            <a href={`/${locale}/sign-in`}>
+              {locale === 'fi' ? '← Takaisin kirjautumiseen' : locale === 'sv' ? '← Tillbaka till inloggning' : '← Back to sign in'}
+            </a>
+          </p>
+        </form>
+      ) : passwordStep ? (
         // ── Step 2a: returning donor with a password ──────────────────
         <form
           action={passwordSignInAction}

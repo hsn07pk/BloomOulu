@@ -163,6 +163,11 @@ const TranslationsPage = componentLoader.add('Translations', path.join(here, 'pa
 const BackupsPage = componentLoader.add('Backups', path.join(here, 'pages/Backups'));
 const ReconciliationPage = componentLoader.add('Reconciliation', path.join(here, 'pages/Reconciliation'));
 const DashboardPage = componentLoader.add('Dashboard', path.join(here, 'pages/Dashboard'));
+const IngestDocPage = componentLoader.add('IngestDoc', path.join(here, 'pages/IngestDoc'));
+const GardenIdentityPage = componentLoader.add('GardenIdentity', path.join(here, 'pages/GardenIdentity'));
+const PaymentProvidersPage = componentLoader.add('PaymentProviders', path.join(here, 'pages/PaymentProviders'));
+const CuratorConfigPage = componentLoader.add('CuratorConfig', path.join(here, 'pages/CuratorConfig'));
+const AdoptionConfigPage = componentLoader.add('AdoptionConfig', path.join(here, 'pages/AdoptionConfig'));
 
 // AdminJS 7's exported types are looser than its runtime accepts (page `label`,
 // `branding.softwareBrothers`, the static `AdminJS.bundle` helper, action
@@ -273,7 +278,25 @@ const adminConfig = new AdminJS({
       resource: { model: getModelByName('Adoption'), client: prisma },
       options: {
         navigation: { name: 'Donors', icon: 'Heart' },
-        listProperties: ['createdAt', 'donorId', 'plantId', 'tierId', 'status', 'amountCents'],
+        listProperties: ['createdAt', 'donorId', 'plantId', 'tierId', 'status', 'intent', 'amountCents'],
+        filterProperties: ['status', 'intent', 'tierId', 'recurring', 'billingInterval', 'createdAt', 'donorId', 'bundleId'],
+        sort: { sortBy: 'createdAt', direction: 'desc' as const },
+        properties: {
+          status: { description: 'pending · active · paused · cancelled · ended. Cancel via the "Cancel adoption" record action; never edit by hand.' },
+          intent: { description: 'for_self · gift · memorial · class · corporate. Gift adoptions have a recipient User row; memorial adoptions have a memorialOf string.' },
+          tierId: { description: 'Tier snapshot at the time of the adoption. Price changes don\'t back-rewrite this — the donor keeps the price they agreed to.' },
+          amountCents: { description: 'Per-period amount in cents (€25 = 2500). Stable across price changes for the lifetime of this adoption.' },
+          recurring: { description: 'Whether the adoption auto-renews. one_time intervals have recurring=false.' },
+          billingInterval: { description: 'monthly · annual · one_time. Allowed values controlled by adoption.intervalsEnabled.' },
+          bundleId: { description: 'Set when the donor checked out multiple plants together; siblings share this id and activate as a group.' },
+          giftRecipientId: { description: 'Recipient User row for gift adoptions. Donor still pays; recipient sees the plant in My Garden.' },
+          giftCodeId: { description: 'Single-use redemption code if the gift hasn\'t been claimed yet.' },
+          memorialOf: { description: 'Name of the person being honoured. Shown on the plant page and the donor wall.' },
+          coAdopters: { description: 'JSON array of {name?, email?} co-adopter entries — the split-the-gift feature.' },
+          marketingOptIn: { description: 'Did the donor agree to seasonal newsletter emails at checkout?' },
+          showOnDonorWall: { description: 'When true, the donor\'s name appears on the plant\'s donor wall. False = anonymous.' },
+          dedication: { description: 'Optional public message (≤240 chars) the donor wrote for this adoption.' },
+        },
         actions: {
           ...restrictTo(...FINANCE_OR_ADMIN),
           cancel: {
@@ -305,11 +328,39 @@ const adminConfig = new AdminJS({
       // Finance can find a donor via the Payment list; curator never
       // needs the User table directly.
       resource: { model: getModelByName('User'), client: prisma },
-      options: { navigation: { name: 'Donors' }, actions: restrictTo(...ADMIN_ONLY) },
+      options: {
+        navigation: { name: 'Donors', icon: 'User' },
+        listProperties: ['email', 'name', 'role', 'locale', 'emailVerified', 'createdAt'],
+        filterProperties: ['email', 'name', 'role', 'locale', 'createdAt', 'emailVerified', 'deactivatedAt'],
+        sort: { sortBy: 'createdAt', direction: 'desc' as const },
+        properties: {
+          email: { description: 'Donor email — also the unique sign-in identifier. Type to search.' },
+          name: { description: 'Display name shown on receipts and the donor wall.' },
+          role: { description: 'donor / curator / finance / admin. Changing a role takes effect on the next session refresh.' },
+          locale: { description: 'Preferred language for emails and receipts (en / fi / sv).' },
+          emailVerified: { description: 'Timestamp of email confirmation. Blank = the donor has never clicked a verify link.' },
+          deactivatedAt: { description: 'Set when an admin deactivates the account; the user can no longer sign in.' },
+          passwordHash: { isVisible: false },
+          ouluUid: { description: 'University of Oulu SSO subject. Populated only when the donor signed in via OIDC.' },
+        },
+        actions: restrictTo(...ADMIN_ONLY),
+      },
     },
     {
       resource: { model: getModelByName('GiftCode'), client: prisma },
-      options: { navigation: { name: 'Donors' }, actions: restrictTo(...FINANCE_OR_ADMIN) },
+      options: {
+        navigation: { name: 'Donors', icon: 'Gift' },
+        listProperties: ['code', 'amountCents', 'expiresAt', 'redeemedAt', 'createdAt'],
+        filterProperties: ['code', 'expiresAt', 'redeemedAt', 'createdAt'],
+        sort: { sortBy: 'createdAt', direction: 'desc' as const },
+        properties: {
+          code: { description: 'Short alphanumeric code donors type at checkout. Treat as a secret — never log.' },
+          amountCents: { description: 'Face value of the gift card in cents (€25 = 2500).' },
+          expiresAt: { description: 'After this date the code is rejected at checkout.' },
+          redeemedAt: { description: 'Filled when the code is first applied; subsequent uses are rejected.' },
+        },
+        actions: restrictTo(...FINANCE_OR_ADMIN),
+      },
     },
     {
       resource: { model: getModelByName('Plaque'), client: prisma },
@@ -364,21 +415,63 @@ const adminConfig = new AdminJS({
       resource: { model: getModelByName('Payment'), client: prisma },
       options: {
         navigation: { name: 'Finance', icon: 'Dollar' },
-        listProperties: ['createdAt', 'provider', 'amountCents', 'status', 'donorId'],
+        listProperties: ['createdAt', 'provider', 'amountCents', 'status', 'donorId', 'orderId'],
+        filterProperties: ['provider', 'status', 'createdAt', 'amountCents', 'donorId', 'orderId'],
+        sort: { sortBy: 'createdAt', direction: 'desc' as const },
+        properties: {
+          orderId: { description: 'Our idempotency key sent to the payment provider. Search by full or partial id.' },
+          providerPaymentRef: { description: 'Provider-side reference (Paytrail transactionId / MobilePay agreement id).' },
+          provider: { description: 'paytrail · mobilepay · bank_transfer.' },
+          status: { description: 'pending · succeeded · failed · refunded · cancelled.' },
+          amountCents: { description: 'Gross amount in cents (€25 = 2500).' },
+        },
         actions: restrictTo(...FINANCE_OR_ADMIN),
       },
     },
     {
       resource: { model: getModelByName('Receipt'), client: prisma },
-      options: { navigation: { name: 'Finance' }, actions: restrictTo(...FINANCE_OR_ADMIN) },
+      options: {
+        navigation: { name: 'Finance', icon: 'FileText' },
+        listProperties: ['receiptNumber', 'issuedAt', 'donorEmail', 'totalCents', 'pdfUrl'],
+        filterProperties: ['receiptNumber', 'donorEmail', 'issuedAt'],
+        sort: { sortBy: 'issuedAt', direction: 'desc' as const },
+        properties: {
+          receiptNumber: { description: 'Sequential id (BLO-YYYY-000001). Resets each year if "Receipt yearReset" is enabled.' },
+          donorEmail: { description: 'Snapshot of the donor email at receipt time (still good if the donor renames later).' },
+          totalCents: { description: 'Receipt total in cents.' },
+          pdfUrl: { description: 'Pre-signed S3/MinIO URL — 7-day TTL. Donors download the PDF from /garden.' },
+        },
+        actions: restrictTo(...FINANCE_OR_ADMIN),
+      },
     },
     {
       resource: { model: getModelByName('TaxCertificate'), client: prisma },
-      options: { navigation: { name: 'Finance' }, actions: restrictTo(...FINANCE_OR_ADMIN) },
+      options: {
+        navigation: { name: 'Finance', icon: 'Award' },
+        listProperties: ['year', 'donorId', 'totalCents', 'issuedAt', 'pdfUrl'],
+        filterProperties: ['year', 'donorId', 'issuedAt'],
+        sort: { sortBy: 'year', direction: 'desc' as const },
+        properties: {
+          year: { description: 'Tax year covered (e.g. 2026 = donations from 1 Jan 2026 to 31 Dec 2026).' },
+          totalCents: { description: 'Sum of deductible donations for that year, in cents.' },
+          pdfUrl: { description: 'Pre-signed S3/MinIO URL — 7-day TTL.' },
+        },
+        actions: restrictTo(...FINANCE_OR_ADMIN),
+      },
     },
     {
       resource: { model: getModelByName('ProcessedEvent'), client: prisma },
-      options: { navigation: { name: 'Finance' }, actions: restrictTo(...FINANCE_OR_ADMIN) },
+      options: {
+        navigation: { name: 'Finance', icon: 'GitBranch' },
+        listProperties: ['provider', 'providerEventId', 'paymentId', 'createdAt'],
+        filterProperties: ['provider', 'createdAt'],
+        sort: { sortBy: 'createdAt', direction: 'desc' as const },
+        properties: {
+          provider: { description: 'Source provider of the webhook event.' },
+          providerEventId: { description: 'Idempotency key — a duplicate delivery is silently swallowed.' },
+        },
+        actions: restrictTo(...FINANCE_OR_ADMIN),
+      },
     },
     // ── RAG (curator-owned, ADR-0007) ─────────────────────────────────
     {
@@ -618,6 +711,39 @@ const adminConfig = new AdminJS({
       handler: async () => ({}),
       component: ReconciliationPage,
     },
+    ingest: {
+      label: 'Ingest RAG doc',
+      icon: 'Plus',
+      handler: async () => ({}),
+      component: IngestDocPage,
+    },
+    // ── Configure: end-user-friendly pages grouped by domain.
+    //    Each renders apps/admin/src/pages/ConfigForm via a small
+    //    schema-only wrapper. Saves go through /admin/settings/batch.
+    gardenIdentity: {
+      label: 'Garden Identity',
+      icon: 'Tag',
+      handler: async () => ({}),
+      component: GardenIdentityPage,
+    },
+    paymentProviders: {
+      label: 'Payment Providers',
+      icon: 'CreditCard',
+      handler: async () => ({}),
+      component: PaymentProvidersPage,
+    },
+    curatorConfig: {
+      label: 'Curator & Ask',
+      icon: 'MessageCircle',
+      handler: async () => ({}),
+      component: CuratorConfigPage,
+    },
+    adoptionConfig: {
+      label: 'Adoption Knobs',
+      icon: 'Heart',
+      handler: async () => ({}),
+      component: AdoptionConfigPage,
+    },
   },
 } as any);
 
@@ -637,6 +763,187 @@ async function bootstrap() {
       req.url === '/favicon.ico'
     ) {
       reply.header('cache-control', 'public, max-age=86400').code(204).send();
+      return;
+    }
+    // ── Manual RAG doc ingest ────────────────────────────────────────
+    if (req.url === '/admin/manual-docs' && req.method === 'GET') {
+      try {
+        const rows = await prisma.ragDocument.findMany({
+          where: { title: { startsWith: '__manual__:' } },
+          orderBy: { createdAt: 'desc' },
+          take: 50,
+          select: {
+            id: true, title: true, locale: true, body: true, createdAt: true,
+            _count: { select: { chunks: true } },
+          },
+        });
+        reply.header('content-type', 'application/json').send({
+          items: rows.map((r) => ({
+            id: r.id,
+            title: r.title,
+            locale: r.locale,
+            bodyPreview: r.body.slice(0, 220),
+            chunks: r._count.chunks,
+            createdAt: r.createdAt.toISOString(),
+          })),
+        });
+      } catch (err) {
+        reply.code(500).send({ error: (err as Error).message });
+      }
+      return;
+    }
+    if (req.url?.startsWith('/admin/manual-docs/') && req.method === 'DELETE') {
+      const id = req.url.split('/').pop()!;
+      try {
+        const row = await prisma.ragDocument.findUnique({
+          where: { id },
+          select: { title: true },
+        });
+        if (!row || !row.title.startsWith('__manual__:')) {
+          reply.code(404).send({ error: 'manual doc not found' });
+          return;
+        }
+        await prisma.ragDocument.delete({ where: { id } });
+        reply.send({ ok: true });
+      } catch (err) {
+        reply.code(500).send({ error: (err as Error).message });
+      }
+      return;
+    }
+    if (req.url === '/admin/ingest-doc' && req.method === 'POST') {
+      try {
+        // onRequest fires BEFORE Fastify's body parser, so req.body is
+        // undefined. Read the raw IncomingMessage stream ourselves.
+        const rawChunks: Buffer[] = [];
+        for await (const chunk of req.raw) {
+          rawChunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : (chunk as Buffer));
+        }
+        const rawBody = Buffer.concat(rawChunks).toString('utf8');
+        let body: { title?: string; body?: string; locale?: 'en' | 'fi' | 'sv' };
+        try {
+          body = rawBody ? JSON.parse(rawBody) : {};
+        } catch {
+          reply.code(400).send({ error: 'invalid JSON body' });
+          return;
+        }
+        if (!body?.title || !body?.body) {
+          reply.code(400).send({ error: 'title and body required' });
+          return;
+        }
+        const bodyText: string = body.body;
+        const locale = body.locale ?? 'en';
+        const fullTitle = `__manual__:${body.title.trim().toLowerCase().replace(/\s+/g, '-').slice(0, 80)}`;
+        // Use the rag package's chunker + Ollama embeddings, same pipeline
+        // as the scripts. Inline here to avoid pulling the worker.
+        const { chunkText } = await import('@bloomoulu/rag');
+        const chunks = chunkText(bodyText, { size: 500, overlap: 50 });
+        const ollamaUrl =
+          (process.env.OLLAMA_BASE_URL ?? process.env.OLLAMA_URL ?? 'http://localhost:11434').replace(/\/$/, '');
+        const embedModel = process.env.OLLAMA_EMBED_MODEL ?? process.env.EMBED_MODEL ?? 'bge-m3';
+        const embeddings = await Promise.all(
+          chunks.map(async (c) => {
+            const res = await fetch(`${ollamaUrl}/api/embeddings`, {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ model: embedModel, prompt: c }),
+            });
+            if (!res.ok) throw new Error(`Ollama ${res.status}`);
+            const j = (await res.json()) as { embedding: number[] };
+            return j.embedding;
+          }),
+        );
+        const { createHash } = await import('node:crypto');
+        const bodyHash = createHash('sha256').update(bodyText).digest('hex');
+        const docId = await prisma.$transaction(async (tx) => {
+          const existing = await tx.ragDocument.findFirst({
+            where: { title: fullTitle, locale },
+            select: { id: true },
+          });
+          let doc;
+          if (existing) {
+            await tx.ragChunk.deleteMany({ where: { documentId: existing.id } });
+            doc = await tx.ragDocument.update({
+              where: { id: existing.id },
+              data: { body: bodyText, bodyHash, isPublished: true },
+            });
+          } else {
+            doc = await tx.ragDocument.create({
+              data: { title: fullTitle, locale, body: bodyText, bodyHash, isPublished: true },
+            });
+          }
+          for (let i = 0; i < chunks.length; i++) {
+            const vec = `[${embeddings[i]!.join(',')}]`;
+            await tx.$executeRawUnsafe(
+              `INSERT INTO "RagChunk" (id, "documentId", "chunkIndex", text, "tokenStart", "tokenEnd", locale, embedding)
+               VALUES (gen_random_uuid(), $1::uuid, $2::int, $3, $4::int, $5::int, $6::"Locale", $7::vector)`,
+              doc.id, i, chunks[i], 0, chunks[i]!.length, locale, vec,
+            );
+          }
+          return doc.id;
+        });
+        reply.send({ ok: true, id: docId, chunks: chunks.length });
+      } catch (err) {
+        reply.code(500).send({ error: (err as Error).message });
+      }
+      return;
+    }
+    // ── Batch settings endpoints used by /admin/pages/Config* ───────
+    //   GET /admin/settings/batch?keys=a,b,c → { values: { a:..., b:... } }
+    //   POST /admin/settings/batch  body { values: { a:..., b:... } } → upserts each
+    if (req.url?.startsWith('/admin/settings/batch') && req.method === 'GET') {
+      try {
+        const url = new URL(req.url, 'http://localhost');
+        const keysParam = url.searchParams.get('keys') ?? '';
+        const keys = keysParam.split(',').map((k) => k.trim()).filter(Boolean);
+        if (keys.length === 0) {
+          reply.send({ values: {} });
+          return;
+        }
+        const rows = await prisma.systemSetting.findMany({
+          where: { key: { in: keys } },
+          select: { key: true, value: true },
+        });
+        const values: Record<string, unknown> = {};
+        for (const r of rows) values[r.key] = r.value;
+        reply.send({ values });
+      } catch (err) {
+        reply.code(500).send({ error: (err as Error).message });
+      }
+      return;
+    }
+    if (req.url === '/admin/settings/batch' && req.method === 'POST') {
+      try {
+        const rawChunks: Buffer[] = [];
+        for await (const chunk of req.raw) {
+          rawChunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : (chunk as Buffer));
+        }
+        const rawBody = Buffer.concat(rawChunks).toString('utf8');
+        const body = rawBody ? JSON.parse(rawBody) : {};
+        const values = (body?.values ?? {}) as Record<string, unknown>;
+        if (typeof values !== 'object' || Array.isArray(values)) {
+          reply.code(400).send({ error: 'body.values must be a key/value object' });
+          return;
+        }
+        // Upsert each setting in a single transaction; broadcast once at the end
+        await prisma.$transaction(
+          Object.entries(values).map(([key, value]) =>
+            prisma.systemSetting.upsert({
+              where: { key },
+              create: { key, value: value as any, description: null },
+              update: { value: value as any },
+            }),
+          ),
+        );
+        // Reuse the existing pubsub channel so the api refreshes its cache.
+        try {
+          await broadcastChange('SystemSetting', 'edit');
+        } catch {
+          /* best-effort */
+        }
+        reply.send({ ok: true, updated: Object.keys(values).length });
+      } catch (err) {
+        reply.code(500).send({ error: (err as Error).message });
+      }
       return;
     }
     if (req.url === '/admin/rebuild-summaries' && req.method === 'POST') {

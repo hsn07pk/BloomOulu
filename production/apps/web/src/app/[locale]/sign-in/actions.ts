@@ -20,6 +20,20 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { SignJWT } from 'jose';
 
+/** Next.js `redirect()` throws a special NEXT_REDIRECT error. A bare
+ *  `catch {}` would silently swallow it and the user would land on an
+ *  error page even on success. This helper lets the catch rethrow only
+ *  the redirect, treating real exceptions normally. */
+function isNextRedirect(err: unknown): boolean {
+  return (
+    typeof err === 'object' &&
+    err !== null &&
+    'digest' in err &&
+    typeof (err as { digest: unknown }).digest === 'string' &&
+    (err as { digest: string }).digest.startsWith('NEXT_REDIRECT')
+  );
+}
+
 function apiUrl(): string {
   return (
     process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
@@ -107,6 +121,12 @@ export async function passwordSignInAction(formData: FormData) {
   if (!email || !password) {
     redirect(`/${locale}/sign-in?step=password&email=${encodeURIComponent(email)}&reason=invalid`);
   }
+  // Compute the next URL inside try, then redirect exactly once after.
+  // Doing it any other way (calling redirect from inside try) makes the
+  // bare catch swallow the NEXT_REDIRECT and land the donor on
+  // ?reason=wrong_password even when the password was correct.
+  let nextUrl = `/${locale}/sign-in?step=password&email=${encodeURIComponent(email)}&reason=wrong_password`;
+  let jwtToSet: string | null = null;
   try {
     const res = await fetch(`${apiUrl()}/v1/auth/sign-in`, {
       method: 'POST',
@@ -120,13 +140,36 @@ export async function passwordSignInAction(formData: FormData) {
         user: { id: string; email: string; name: string | null; role: string; locale: string } | null;
       };
       if (data.ok && data.user) {
-        const jwt = await mintSession(data.user, locale);
-        await setSessionCookie(jwt);
-        redirect(`/${locale}/garden`);
+        jwtToSet = await mintSession(data.user, locale);
+        nextUrl = `/${locale}/garden`;
       }
     }
-  } catch {/* fall through */}
-  redirect(`/${locale}/sign-in?step=password&email=${encodeURIComponent(email)}&reason=wrong_password`);
+  } catch (err) {
+    if (isNextRedirect(err)) throw err;
+  }
+  if (jwtToSet) {
+    await setSessionCookie(jwtToSet);
+  }
+  redirect(nextUrl as Parameters<typeof redirect>[0]);
+}
+
+/** Forgot-password: emails a reset link. Returns 200 either way so we
+ *  don't leak whether the email is registered. */
+export async function forgotPasswordAction(formData: FormData) {
+  const email = ((formData.get('email') as string) ?? '').trim().toLowerCase();
+  const locale = ((formData.get('locale') as string) ?? 'en');
+  if (!email || !email.includes('@')) {
+    redirect(`/${locale}/sign-in?reason=forgot&error=invalid_email`);
+  }
+  try {
+    await fetch(`${apiUrl()}/v1/auth/forgot-password`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email, locale }),
+      cache: 'no-store',
+    });
+  } catch {/* anti user-enumeration: never leak failure */}
+  redirect(`/${locale}/sign-in/sent?email=${encodeURIComponent(email)}&kind=reset` as Parameters<typeof redirect>[0]);
 }
 
 /** Legacy magic-link sender. Used as the "forgot password" fallback. */

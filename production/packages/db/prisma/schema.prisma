@@ -439,6 +439,11 @@ model Adoption {
 
   payments        Payment[]
 
+  // Bundle-checkout grouping: when a donor adopts multiple plants at
+  // once from the cart, every Adoption in the cart shares the same
+  // bundleId. The webhook activates all siblings on a single payment.
+  bundleId        String?  @db.Uuid
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -454,6 +459,7 @@ model Adoption {
   @@index([status, recurring, endsAt])
   @@index([status, showOnDonorWall, startedAt(sort: Desc)])
   @@index([tierId])
+  @@index([bundleId])
 }
 
 model GiftCode {
