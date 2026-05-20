@@ -13,9 +13,10 @@
  *   1. Wikimedia Commons — the species' designated image on Wikidata (P18),
  *      resolved through the Commons API for the real licence + author. Both
  *      lookups are BATCHED: one SPARQL query resolves up to 200 species'
- *      images, and the Commons API takes 50 files per request — so the
- *      whole collection costs ~120 requests instead of two per plant. This
- *      is what keeps the run under Wikidata's rate limit at scale.
+ *      images, and the Commons API takes 50 files per request — ~120
+ *      requests for the whole collection instead of two per plant.
+ *      Wikidata's query service still throttles sustained load, so the run
+ *      honours its Retry-After header and paces the batches well apart.
  *   2. iNaturalist — the taxon's default photo, looked up per-plant for the
  *      plants Commons has no usable image for (iNaturalist has no
  *      batch-by-name API, so this is the slower tail of the run).
@@ -131,6 +132,20 @@ interface FetchOpts {
   retries?: number;
 }
 
+/**
+ * Parse a 429/503 `Retry-After` header — delay-seconds or an HTTP date —
+ * into milliseconds, capped at 2 min. Null when absent or unparseable.
+ */
+function retryAfterMs(res: Response): number | null {
+  const raw = res.headers.get('retry-after');
+  if (!raw) return null;
+  const secs = Number(raw);
+  if (Number.isFinite(secs)) return Math.min(Math.max(secs, 0) * 1000, 120_000);
+  const when = Date.parse(raw);
+  if (Number.isFinite(when)) return Math.min(Math.max(when - Date.now(), 0), 120_000);
+  return null;
+}
+
 /** Fetch JSON with a timeout + generous retry. Returns null on 404 / give-up; never throws. */
 async function fetchJson(url: string, opts: FetchOpts = {}): Promise<any | null> {
   const { method = 'GET', body, headers = {}, timeoutMs = REQUEST_TIMEOUT_MS, retries = 4 } = opts;
@@ -145,7 +160,8 @@ async function fetchJson(url: string, opts: FetchOpts = {}): Promise<any | null>
       if (res.status === 404) return null;
       if (res.status === 429 || res.status >= 500) {
         if (attempt < retries) {
-          await sleep(2000 * (attempt + 1));
+          // Honour the server's Retry-After when it sends one (WDQS does).
+          await sleep(retryAfterMs(res) ?? 2000 * (attempt + 1));
           continue;
         }
         console.warn(`    request failed (HTTP ${res.status}): ${url.slice(0, 80)}`);
@@ -279,7 +295,7 @@ async function resolveWikimedia(
     console.log(
       `  Wikidata batch ${i + 1}/${nameBatches.length}: +${got.size} images (total ${nameToFile.size})`,
     );
-    if (i < nameBatches.length - 1) await sleep(1200); // gentle on WDQS
+    if (i < nameBatches.length - 1) await sleep(3000); // WDQS throttles sustained load
   }
 
   // Pass 2 — Commons imageinfo, batched by file.
@@ -294,7 +310,7 @@ async function resolveWikimedia(
         `  Commons batch ${i + 1}/${fileBatches.length}: ${fileToImage.size} openly-licensed photos`,
       );
     }
-    if (i < fileBatches.length - 1) await sleep(600); // gentle on Commons
+    if (i < fileBatches.length - 1) await sleep(1000); // gentle on Commons
   }
 
   // Join — plant -> image.
