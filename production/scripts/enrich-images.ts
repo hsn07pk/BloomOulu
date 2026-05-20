@@ -1,6 +1,7 @@
 #!/usr/bin/env tsx
 /**
- * Auto-populate plant photos from open data.
+ * Auto-populate plant photos from open data — batched for the whole
+ * collection.
  *
  *   pnpm tsx scripts/enrich-images.ts [--limit N] [--slug <slug>] [--dry-run] [--force]
  *
@@ -8,19 +9,25 @@
  * photo, stores it as a PlantImage row, and sets it as the plant's
  * primaryImage — which is what the plant page renders.
  *
- * Image sources, tried in order:
+ * Image sources:
  *   1. Wikimedia Commons — the species' designated image on Wikidata (P18),
- *      resolved through the Commons API for the real licence + author.
- *   2. iNaturalist — the taxon's default photo, used when Commons has none.
+ *      resolved through the Commons API for the real licence + author. Both
+ *      lookups are BATCHED: one SPARQL query resolves up to 200 species'
+ *      images, and the Commons API takes 50 files per request — so the
+ *      whole collection costs ~120 requests instead of two per plant. This
+ *      is what keeps the run under Wikidata's rate limit at scale.
+ *   2. iNaturalist — the taxon's default photo, looked up per-plant for the
+ *      plants Commons has no usable image for (iNaturalist has no
+ *      batch-by-name API, so this is the slower tail of the run).
  * Only openly-licensed photos are kept (CC0 / CC-BY / CC-BY-SA / public
  * domain); non-commercial and no-derivatives photos are skipped, since this
  * is a donation-funded site. The real licence + photographer credit is
  * stored per image.
  *
- * Robustness mirrors enrich-stories.ts: every request has a timeout and is
- * retried; a failure on one plant is logged and skipped — the run does not
- * crash. Idempotent and resumable: re-running skips plants that already
- * have an image.
+ * Robustness: every request has a timeout and is retried; a failure on one
+ * batch or one plant is logged and skipped — the run does not crash.
+ * Idempotent and resumable: re-running skips plants that already have an
+ * image.
  *
  * Behaviour:
  *   * Default  — only fills plants WITHOUT a primary image.
@@ -41,7 +48,10 @@ const WIKIDATA_SPARQL = 'https://query.wikidata.org/sparql';
 const COMMONS_API = 'https://commons.wikimedia.org/w/api.php';
 const INAT_API = 'https://api.inaturalist.org/v1';
 const REQUEST_TIMEOUT_MS = 20_000;
+const SPARQL_TIMEOUT_MS = 45_000; // a batched SPARQL query takes longer
 const IMAGE_WIDTH = 1280; // px — the scaled width we store for the hero image
+const WIKIDATA_BATCH = 200; // species names per SPARQL query
+const COMMONS_BATCH = 50; // file titles per Commons API request (the API maximum)
 
 interface CliArgs {
   limit: number;
@@ -60,6 +70,13 @@ function parseArgs(): CliArgs {
     else if (v === '--force') out.force = true;
   }
   if (Number.isNaN(out.limit)) out.limit = Infinity;
+  return out;
+}
+
+/** Split an array into fixed-size chunks. */
+function chunk<T>(arr: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
   return out;
 }
 
@@ -106,13 +123,24 @@ function normalizeLicense(raw: string): string {
   return raw.toUpperCase();
 }
 
-/** GET JSON with a timeout + generous retry. Returns null on 404 / give-up; never throws. */
-async function fetchJson(url: string, retries = 4): Promise<any | null> {
+interface FetchOpts {
+  method?: string;
+  body?: string;
+  headers?: Record<string, string>;
+  timeoutMs?: number;
+  retries?: number;
+}
+
+/** Fetch JSON with a timeout + generous retry. Returns null on 404 / give-up; never throws. */
+async function fetchJson(url: string, opts: FetchOpts = {}): Promise<any | null> {
+  const { method = 'GET', body, headers = {}, timeoutMs = REQUEST_TIMEOUT_MS, retries = 4 } = opts;
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const res = await fetch(url, {
-        headers: { 'user-agent': UA, accept: 'application/json' },
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        method,
+        body,
+        headers: { 'user-agent': UA, accept: 'application/json', ...headers },
+        signal: AbortSignal.timeout(timeoutMs),
       });
       if (res.status === 404) return null;
       if (res.status === 429 || res.status >= 500) {
@@ -148,49 +176,139 @@ interface FoundImage {
   height?: number;
 }
 
-// ── Source 1: Wikimedia Commons (via the Wikidata P18 image) ────────────────
+// ── Source 1: Wikimedia Commons (via the Wikidata P18 image), batched ───────
 
-async function wikimediaImage(latin: string): Promise<FoundImage | null> {
-  const safe = latin.replace(/\\/g, '').replace(/"/g, '\\"');
-  const sparql = `SELECT ?image WHERE { ?item wdt:P225 "${safe}" . ?item wdt:P18 ?image . } LIMIT 1`;
-  const wd = await fetchJson(`${WIKIDATA_SPARQL}?query=${encodeURIComponent(sparql)}&format=json`);
-  const fileUrl = wd?.results?.bindings?.[0]?.image?.value as string | undefined;
-  if (!fileUrl) return null;
-  const filename = decodeURIComponent(fileUrl.split('Special:FilePath/')[1] ?? '');
-  if (!filename) return null;
+/**
+ * Resolve the Wikidata P18 image for a batch of scientific names in one
+ * SPARQL query. Returns a lower-cased-name -> Commons filename map.
+ */
+async function wikidataImagesBatch(names: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (names.length === 0) return out;
+  const values = names
+    .map((n) => `"${n.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`)
+    .join(' ');
+  const query =
+    `SELECT ?name ?image WHERE { VALUES ?name { ${values} } ` +
+    `?taxon wdt:P225 ?name ; wdt:P18 ?image . }`;
+  const json = await fetchJson(WIKIDATA_SPARQL, {
+    method: 'POST',
+    body: new URLSearchParams({ query, format: 'json' }).toString(),
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    timeoutMs: SPARQL_TIMEOUT_MS,
+  });
+  const bindings: any[] = json?.results?.bindings ?? [];
+  for (const b of bindings) {
+    const name = String(b?.name?.value ?? '').toLowerCase();
+    const fileUrl = String(b?.image?.value ?? '');
+    if (!name || !fileUrl) continue;
+    let filename = '';
+    try {
+      filename = decodeURIComponent(fileUrl.split('Special:FilePath/')[1] ?? '');
+    } catch {
+      filename = ''; // malformed percent-encoding — skip this one
+    }
+    if (filename && !out.has(name)) out.set(name, filename);
+  }
+  return out;
+}
 
+/** Canonicalise a Commons filename for matching (case + underscores ↔ spaces). */
+function normalizeFileKey(name: string): string {
+  const s = name.replace(/_/g, ' ').trim().replace(/\s+/g, ' ');
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/**
+ * Fetch imageinfo (URL, size, licence, author) for a batch of Commons files
+ * in one API request. Returns a normalised-filename -> FoundImage map,
+ * including only photos with a clearly open licence.
+ */
+async function commonsImageInfoBatch(filenames: string[]): Promise<Map<string, FoundImage>> {
+  const out = new Map<string, FoundImage>();
+  if (filenames.length === 0) return out;
   const params = new URLSearchParams({
     action: 'query',
     format: 'json',
     formatversion: '2',
-    titles: `File:${filename}`,
+    titles: filenames.map((f) => `File:${f}`).join('|'),
     prop: 'imageinfo',
     iiprop: 'url|size|extmetadata',
     iiurlwidth: String(IMAGE_WIDTH),
     iiextmetadatafilter: 'License|LicenseShortName|Artist|Credit',
   });
-  const info = await fetchJson(`${COMMONS_API}?${params.toString()}`);
-  const ii = info?.query?.pages?.[0]?.imageinfo?.[0];
-  if (!ii) return null;
-
-  const ext = ii.extmetadata ?? {};
-  const licenseCode = String(ext.License?.value ?? '');
-  const shortName = String(ext.LicenseShortName?.value ?? licenseCode);
-  // A photo is usable only if its licence is clearly open (commercial OK).
-  if (!licenseOk(licenseCode) && !licenseOk(shortName)) return null;
-
-  const artist =
-    stripHtml(String(ext.Artist?.value ?? '')).slice(0, 160) || 'Unknown photographer';
-  return {
-    url: ii.thumburl ?? ii.url,
-    width: ii.thumbwidth ?? ii.width,
-    height: ii.thumbheight ?? ii.height,
-    licenseSpdx: normalizeLicense(licenseCode || shortName),
-    attribution: `${artist} / Wikimedia Commons (${shortName || 'CC'})`,
-  };
+  const json = await fetchJson(`${COMMONS_API}?${params.toString()}`);
+  const pages: any[] = json?.query?.pages ?? [];
+  for (const page of pages) {
+    const ii = page?.imageinfo?.[0];
+    const title = String(page?.title ?? '').replace(/^File:/i, '');
+    if (!ii || !title) continue;
+    const ext = ii.extmetadata ?? {};
+    const licenseCode = String(ext.License?.value ?? '');
+    const shortName = String(ext.LicenseShortName?.value ?? licenseCode);
+    // A photo is usable only if its licence is clearly open (commercial OK).
+    if (!licenseOk(licenseCode) && !licenseOk(shortName)) continue;
+    const artist =
+      stripHtml(String(ext.Artist?.value ?? '')).slice(0, 160) || 'Unknown photographer';
+    out.set(normalizeFileKey(title), {
+      url: ii.thumburl ?? ii.url,
+      width: ii.thumbwidth ?? ii.width,
+      height: ii.thumbheight ?? ii.height,
+      licenseSpdx: normalizeLicense(licenseCode || shortName),
+      attribution: `${artist} / Wikimedia Commons (${shortName || 'CC'})`,
+    });
+  }
+  return out;
 }
 
-// ── Source 2: iNaturalist (the taxon's default photo) ───────────────────────
+/**
+ * Batch-resolve Wikimedia Commons photos for many plants. Two batched
+ * passes — Wikidata for the P18 image, then Commons for licence + URL —
+ * keep the whole thing to ~120 requests for a collection of thousands.
+ */
+async function resolveWikimedia(
+  plants: { id: string; latin: string }[],
+): Promise<Map<string, FoundImage>> {
+  // Pass 1 — Wikidata P18, batched by name.
+  const uniqueNames = [...new Set(plants.map((p) => p.latin))];
+  const nameToFile = new Map<string, string>(); // lower-name -> filename
+  const nameBatches = chunk(uniqueNames, WIKIDATA_BATCH);
+  for (let i = 0; i < nameBatches.length; i++) {
+    const got = await wikidataImagesBatch(nameBatches[i]!);
+    for (const [k, v] of got) nameToFile.set(k, v);
+    console.log(
+      `  Wikidata batch ${i + 1}/${nameBatches.length}: +${got.size} images (total ${nameToFile.size})`,
+    );
+    if (i < nameBatches.length - 1) await sleep(1200); // gentle on WDQS
+  }
+
+  // Pass 2 — Commons imageinfo, batched by file.
+  const uniqueFiles = [...new Set(nameToFile.values())];
+  const fileToImage = new Map<string, FoundImage>(); // normalised filename -> image
+  const fileBatches = chunk(uniqueFiles, COMMONS_BATCH);
+  for (let i = 0; i < fileBatches.length; i++) {
+    const got = await commonsImageInfoBatch(fileBatches[i]!);
+    for (const [k, v] of got) fileToImage.set(k, v);
+    if ((i + 1) % 10 === 0 || i === fileBatches.length - 1) {
+      console.log(
+        `  Commons batch ${i + 1}/${fileBatches.length}: ${fileToImage.size} openly-licensed photos`,
+      );
+    }
+    if (i < fileBatches.length - 1) await sleep(600); // gentle on Commons
+  }
+
+  // Join — plant -> image.
+  const resolved = new Map<string, FoundImage>();
+  for (const p of plants) {
+    const file = nameToFile.get(p.latin.toLowerCase());
+    if (!file) continue;
+    const img = fileToImage.get(normalizeFileKey(file));
+    if (img) resolved.set(p.id, img);
+  }
+  return resolved;
+}
+
+// ── Source 2: iNaturalist (the taxon's default photo), per-plant ────────────
 
 async function inaturalistImage(latin: string): Promise<FoundImage | null> {
   const data = await fetchJson(
@@ -241,34 +359,46 @@ async function main() {
   });
 
   const work = args.force ? plants : plants.filter((p) => !p.primaryImageId);
-  const target = Math.min(work.length, args.limit);
+  const target = work.slice(0, args.limit);
   console.log(
     `${plants.length} loaded · ${plants.length - work.length} already have an image · ` +
-      `processing ${target}.\n`,
+      `processing ${target.length}.\n`,
   );
+  if (target.length === 0) {
+    console.log('Nothing to do.');
+    return;
+  }
 
+  // ── Phase 1 — Wikimedia Commons, batched ──────────────────────────────
+  console.log('Phase 1 — Wikimedia Commons (batched) …');
+  const wikimedia = await resolveWikimedia(
+    target.map((p) => ({ id: p.id, latin: p.taxon.latinName })),
+  );
+  console.log(`Wikimedia resolved ${wikimedia.size}/${target.length} plants.\n`);
+
+  // ── Phase 2 — per-plant: iNaturalist fallback, then write ─────────────
+  console.log('Phase 2 — iNaturalist fallback + write …');
   let updated = 0;
   let noData = 0;
   let errors = 0;
   const byProvider: Record<string, number> = {};
 
-  for (let i = 0; i < target; i++) {
-    const plant = work[i]!;
+  for (let i = 0; i < target.length; i++) {
+    const plant = target[i]!;
     const n = i + 1;
     const latin = plant.taxon.latinName;
     try {
-      let img = await wikimediaImage(latin);
-      await sleep(250); // gentle on Wikidata / Commons
+      let img = wikimedia.get(plant.id) ?? null;
       let provider = 'Wikimedia Commons';
       if (!img) {
         img = await inaturalistImage(latin);
-        await sleep(150); // gentle on iNaturalist
+        await sleep(700); // gentle on iNaturalist
         provider = 'iNaturalist';
       }
 
       if (!img) {
         noData++;
-        console.log(`[${n}/${target}] · ${latin} — no openly-licensed photo found`);
+        console.log(`[${n}/${target.length}] · ${latin} — no openly-licensed photo found`);
         continue;
       }
 
@@ -276,7 +406,7 @@ async function main() {
 
       if (args.dryRun) {
         console.log(
-          `[${n}/${target}] DRY ${latin} — via ${provider} — ${img.licenseSpdx}\n` +
+          `[${n}/${target.length}] DRY ${latin} — via ${provider} — ${img.licenseSpdx}\n` +
             `        ${img.url}`,
         );
       } else {
@@ -308,12 +438,12 @@ async function main() {
           });
         });
         updated++;
-        console.log(`[${n}/${target}] + ${latin} — via ${provider} (${img.licenseSpdx})`);
+        console.log(`[${n}/${target.length}] + ${latin} — via ${provider} (${img.licenseSpdx})`);
       }
     } catch (err) {
       // One plant failing must never stop the run.
       errors++;
-      console.error(`[${n}/${target}] ! ${latin} — ${(err as Error)?.message ?? String(err)}`);
+      console.error(`[${n}/${target.length}] ! ${latin} — ${(err as Error)?.message ?? String(err)}`);
     }
   }
 
@@ -321,7 +451,7 @@ async function main() {
     .map(([p, c]) => `${p}=${c}`)
     .join(' ');
   console.log(
-    `\nDone. processed=${target} updated=${updated} no-photo=${noData} errors=${errors}` +
+    `\nDone. processed=${target.length} updated=${updated} no-photo=${noData} errors=${errors}` +
       (provLine ? `  (${provLine})` : ''),
   );
 }
