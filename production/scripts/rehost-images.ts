@@ -57,7 +57,7 @@ const KEY_PREFIX = 'plant-images';
 const MIN_IMAGE_BYTES = 1024; // smaller than this is almost certainly an error page
 const MAX_IMAGE_BYTES = 25 * 1024 * 1024; // 25 MB — skip anything absurd
 const DEFAULT_BUCKET = 'bloomoulu-public';
-const DEFAULT_CONCURRENCY = 6;
+const DEFAULT_CONCURRENCY = 4;
 
 // S3-compatible store — the same env vars apps/api/src/infra/storage.ts uses.
 const S3_ENDPOINT = (process.env.S3_ENDPOINT ?? 'http://localhost:9000').replace(/\/+$/, '');
@@ -117,6 +117,37 @@ function extensionFor(contentType: string, url: string): string {
   return 'jpg'; // last-ditch default
 }
 
+/**
+ * Honour a 429/503 Retry-After header (delay-seconds or an HTTP date),
+ * capped at 2 min. Null when the header is absent or unparseable.
+ */
+function retryAfterMs(res: Response): number | null {
+  const raw = res.headers.get('retry-after');
+  if (!raw) return null;
+  const secs = Number(raw);
+  if (Number.isFinite(secs)) return Math.min(Math.max(secs, 0) * 1000, 120_000);
+  const when = Date.parse(raw);
+  if (Number.isFinite(when)) return Math.min(Math.max(when - Date.now(), 0), 120_000);
+  return null;
+}
+
+/**
+ * Wikimedia rejects original-file and non-standard-size requests on
+ * upload.wikimedia.org — only a fixed set of thumbnail widths is served
+ * (…250, 330, 500, 960, 1280, 1920, 3840). Rewrite an original Commons URL
+ * to the 1280px standard thumbnail; /thumb/ URLs (already 1280px, as
+ * enrich-images.ts requests that width) and non-Wikimedia URLs pass
+ * through unchanged.
+ */
+function toFetchableUrl(url: string): string {
+  const m = url.match(
+    /^(https?:\/\/upload\.wikimedia\.org\/wikipedia\/[^/]+)\/([0-9a-fA-F])\/([0-9a-fA-F]{2})\/([^/]+)$/,
+  );
+  if (!m) return url; // already a thumbnail, or not a Wikimedia original
+  const [, base, h1, h2, file] = m;
+  return `${base}/thumb/${h1}/${h2}/${file}/1280px-${file}`;
+}
+
 interface DownloadedImage {
   body: Buffer;
   contentType: string;
@@ -134,7 +165,7 @@ async function downloadImage(url: string, retries = 3): Promise<DownloadedImage 
       if (res.status === 404 || res.status === 410) return null; // gone for good
       if (res.status === 429 || res.status >= 500) {
         if (attempt < retries) {
-          await sleep(1500 * (attempt + 1));
+          await sleep(retryAfterMs(res) ?? 1500 * (attempt + 1));
           continue;
         }
         return null;
@@ -267,7 +298,7 @@ async function main() {
   await mapPool(target, args.concurrency, async (img) => {
     const label = img.plant?.slug ?? img.id;
     try {
-      const dl = await downloadImage(img.url);
+      const dl = await downloadImage(toFetchableUrl(img.url));
       if (!dl) {
         failed++;
         console.warn(
