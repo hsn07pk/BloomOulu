@@ -41,6 +41,8 @@ const nextConfig = {
       { protocol: 'https', hostname: 'upload.wikimedia.org' },
       { protocol: 'https', hostname: 'commons.wikimedia.org' },
       { protocol: 'https', hostname: 'files.bloomoulu.fi' },
+      // Local MinIO object store — serves re-hosted plant images in dev.
+      { protocol: 'http', hostname: 'localhost', port: '9000' },
     ],
   },
   async headers() {
