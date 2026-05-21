@@ -32,6 +32,7 @@ import { fileURLToPath } from 'node:url';
 const queueConn = { connection: { url: process.env.REDIS_URL ?? 'redis://localhost:6379' } };
 const emailQueue = new Queue('email', queueConn);
 const eraseQueue = new Queue('gdpr-erase', queueConn);
+const enrichQueue = new Queue('plant-enrich', queueConn);
 
 // Redis publisher for real-time propagation. Every CRUD action in the
 // admin panel publishes to `admin.changed`, which the API SettingsService
@@ -153,6 +154,47 @@ const CURATOR_OR_ADMIN = ['curator', 'admin'] as const;
 const FINANCE_OR_ADMIN = ['finance', 'admin'] as const;
 const ADMIN_ONLY = ['admin'] as const;
 
+/**
+ * Builds the handler for the Plant "Enrich" record actions. Enqueues a
+ * plant-enrich job — the API worker fetches story / origin / conservation
+ * status / photo from open data and writes them to the plant — and
+ * audit-logs who triggered it. `overwrite` false = fill empty fields only,
+ * so a curator's own edits are never clobbered.
+ */
+function enrichHandler(overwrite: boolean) {
+  return async (_req: any, _res: any, ctx: any) => {
+    const plantId = ctx.record!.params['id'];
+    await enrichQueue.add(
+      'enrich',
+      { plantId, overwrite, requestedBy: ctx.currentAdmin?.id ?? null },
+      {
+        attempts: 5,
+        backoff: { type: 'exponential', delay: 5_000 },
+        // One in-flight enrichment per plant; the id frees on completion.
+        jobId: `enrich-${plantId}`,
+        removeOnComplete: true,
+        removeOnFail: true,
+      },
+    );
+    await prisma.auditLog.create({
+      data: {
+        actorUserId: ctx.currentAdmin?.id ?? null,
+        action: overwrite ? 'admin.plant.enrich.overwrite' : 'admin.plant.enrich',
+        resource: `Plant/${plantId}`,
+      },
+    });
+    return {
+      record: ctx.record!.toJSON(ctx.currentAdmin),
+      notice: {
+        message:
+          'Enrichment queued — it runs in the background (~30 s). Refresh this page to see the ' +
+          'filled fields, or check Operations → Job Runs.',
+        type: 'success',
+      },
+    };
+  };
+}
+
 // AdminJS 7 replaced the static `AdminJS.bundle()` helper with an instance-
 // based ComponentLoader. Custom React panels register with the loader; the
 // returned token is passed as `component` to page/action definitions.
@@ -219,7 +261,30 @@ const adminConfig = new AdminJS({
           story: { type: 'mixed', isArray: false, components: {} },
         },
         sort: { sortBy: 'adopterCount', direction: 'desc' as const },
-        actions: restrictTo(...CURATOR_OR_ADMIN),
+        actions: {
+          ...restrictTo(...CURATOR_OR_ADMIN),
+          // Fetch story / origin / conservation status / photo from open
+          // data (Wikipedia, GBIF, laji.fi, Wikimedia) via a background job.
+          enrich: {
+            actionType: 'record',
+            label: 'Enrich from open data',
+            icon: 'Download',
+            isAccessible: ({ currentAdmin }: { currentAdmin?: { role?: string } }) =>
+              ['admin', 'curator'].includes(currentAdmin?.role as string),
+            handler: enrichHandler(false),
+          },
+          enrichOverwrite: {
+            actionType: 'record',
+            label: 'Re-enrich (overwrite)',
+            icon: 'RefreshCw',
+            guard:
+              'Re-fetch story, origin, conservation status and photo from open data, ' +
+              'replacing the current values. Continue?',
+            isAccessible: ({ currentAdmin }: { currentAdmin?: { role?: string } }) =>
+              ['admin', 'curator'].includes(currentAdmin?.role as string),
+            handler: enrichHandler(true),
+          },
+        },
       },
     },
     { resource: { model: getModelByName('Taxon'), client: prisma }, options: { navigation: { name: 'Catalogue' }, actions: restrictTo(...CURATOR_OR_ADMIN) } },

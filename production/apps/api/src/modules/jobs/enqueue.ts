@@ -10,6 +10,7 @@ import {
   QUEUE_GDPR_EXPORT,
   QUEUE_GDPR_ERASE,
   QUEUE_PAYMENT_RETRY,
+  QUEUE_PLANT_ENRICH,
   defaultJobOpts,
 } from './queues.js';
 import type { EmailJob } from './processors/email.processor.js';
@@ -18,6 +19,7 @@ import type { RagIngestJob } from './processors/rag-ingest.processor.js';
 import type { GdprExportJob } from './processors/gdpr-export.processor.js';
 import type { GdprEraseJob } from './processors/gdpr-erase.processor.js';
 import type { PaymentRetryJob } from './processors/payment-retry.processor.js';
+import type { PlantEnrichJob } from './processors/plant-enrich.processor.js';
 
 const connection = { url: process.env.REDIS_URL ?? 'redis://localhost:6379' };
 const cache = new Map<string, Queue>();
@@ -56,4 +58,14 @@ export const enqueuePaymentRetry = (data: PaymentRetryJob, opts?: JobsOptions) =
     // reconciliation sweep against a still-failed payment.
     jobId: `dunning-${data.adoptionId}-${data.attempt}`,
     ...opts,
+  });
+
+export const enqueuePlantEnrich = (data: PlantEnrichJob) =>
+  q(QUEUE_PLANT_ENRICH).add('enrich', data, {
+    ...defaultJobOpts,
+    // Dedup an accidental double-click while a job is in flight; the id is
+    // freed the moment the job finishes, so a deliberate re-enrich works.
+    jobId: `enrich-${data.plantId}`,
+    removeOnComplete: true,
+    removeOnFail: true,
   });

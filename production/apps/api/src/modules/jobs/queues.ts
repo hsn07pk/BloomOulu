@@ -19,6 +19,7 @@ export const QUEUE_RENEWAL = 'renewal';
 export const QUEUE_TAX_CERT_ANNUAL = 'tax-cert-annual';
 export const QUEUE_RAG_EVAL = 'rag-eval';
 export const QUEUE_AUDIT_GAP = 'audit-gap';
+export const QUEUE_PLANT_ENRICH = 'plant-enrich';
 
 export const defaultJobOpts: JobsOptions = {
   attempts: 5,
