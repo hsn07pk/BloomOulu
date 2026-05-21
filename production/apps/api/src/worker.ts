@@ -28,6 +28,7 @@ import {
   QUEUE_TAX_CERT_ANNUAL,
   QUEUE_RAG_EVAL,
   QUEUE_AUDIT_GAP,
+  QUEUE_PLANT_ENRICH,
 } from './modules/jobs/queues.js';
 import { registerCronJobs } from './modules/jobs/cron.js';
 import { processReceipt } from './modules/jobs/processors/receipt.processor.js';
@@ -42,6 +43,7 @@ import { processRenewal } from './modules/jobs/processors/renewal.processor.js';
 import { processTaxCertAnnual } from './modules/jobs/processors/tax-cert-annual.processor.js';
 import { processRagEval } from './modules/jobs/processors/rag-eval.processor.js';
 import { processAuditGap } from './modules/jobs/processors/audit-gap.processor.js';
+import { processPlantEnrich } from './modules/jobs/processors/plant-enrich.processor.js';
 
 const logger = new Logger('Worker');
 const connection: ConnectionOptions = {
@@ -67,6 +69,7 @@ const QUEUES: ReadonlyArray<QueueDef> = [
   { name: QUEUE_TAX_CERT_ANNUAL, concurrency: 1, handler: processTaxCertAnnual },
   { name: QUEUE_RAG_EVAL,       concurrency: 1,  handler: processRagEval },
   { name: QUEUE_AUDIT_GAP,      concurrency: 1,  handler: processAuditGap },
+  { name: QUEUE_PLANT_ENRICH,   concurrency: 2,  handler: processPlantEnrich },
 ];
 
 const workers: Worker[] = [];
