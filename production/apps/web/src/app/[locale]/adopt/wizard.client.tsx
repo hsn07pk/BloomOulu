@@ -3,12 +3,23 @@
 import { useEffect, useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
+import {
+  BILLING_INTERVAL_DISPLAY_ORDER,
+  HOME_REGIONS,
+  PUBLIC_TIER_ORDER,
+  getBrowserApiUrl,
+  pickInitialInterval,
+  type BillingInterval,
+  type DonorFacingProvider,
+  type PublicIntent,
+  type TierId,
+} from '@bloomoulu/constants';
 import { adoptAction, adoptBundleAction } from './actions';
 import { useCart, type CartItem } from '../../../lib/cart.client';
 
 // ─── Types ────────────────────────────────────────────────────────────────
-export type AdoptIntent = 'for_self' | 'gift' | 'memorial' | 'class';
-export type AdoptProvider = 'paytrail' | 'mobilepay';
+export type AdoptIntent = PublicIntent;
+export type AdoptProvider = DonorFacingProvider;
 
 /** Admin-editable adopt-wizard knobs, fetched from /v1/settings/public. */
 export interface AdoptSettings {
@@ -79,7 +90,7 @@ interface CoAdopter {
 }
 
 const ACCENT_PALETTE = ['#E8EEDE', '#F1E6CB', '#F0DCD0', '#D6EBE3'];
-const TIER_ORDER: AdoptTier['id'][] = ['seedling', 'rooted', 'vulnerable', 'endangered'];
+const TIER_ORDER = PUBLIC_TIER_ORDER;
 
 const PERK_LABELS_EN: Record<string, string> = {
   nickname_your_plant: 'Nickname your plant',
@@ -207,23 +218,9 @@ function euros(cents: number, locale: string): string {
   });
 }
 
-const HOME_REGIONS = [
-  'FI-LL', // Lapland
-  'FI-HA', // Häme
-  'FI-PP', // Bothnian coast
-  'SE',
-  'NO',
-  'EE',
-  'RU',
-  'GB-SCT',
-  'DE',
-  'NORDIC',
-  'EUR',
-  'OTHER',
-] as const;
-
-// HOME_REGIONS map to i18n keys "region<CODE>" — see packages/i18n/messages/*.json.
-// Step 3's I@H select consumes them via t(`region${code}`).
+// HOME_REGIONS is imported from @bloomoulu/constants — codes map to i18n
+// keys "region<CODE>" in packages/i18n/messages/*.json. Step 3's I@H
+// select consumes them via t(`region${code}`).
 
 // ─── Component ────────────────────────────────────────────────────────────
 interface AdoptWizardProps {
@@ -336,18 +333,12 @@ export function AdoptWizard({
   // initial selection, so disabling annual (the production default) lands
   // donors on monthly.
   const enabledIntervals = adopt.intervalsEnabled ?? ['monthly', 'one_time'];
-  // Honour presetInterval (forwarded from the plant-detail page) when it's
-  // in the admin allow-list. Otherwise prefer one-time as the default so
-  // first-time donors aren't quietly enrolled into a recurring charge —
-  // they can opt in to monthly via the toggle. Falls back to the first
-  // enabled interval if one-time has been disabled in admin.
-  const initialInterval: 'monthly' | 'annual' | 'one_time' =
-    presetInterval && enabledIntervals.includes(presetInterval)
-      ? presetInterval
-      : enabledIntervals.includes('one_time')
-        ? 'one_time'
-        : (enabledIntervals[0] ?? 'monthly');
-  const [billingInterval, setBillingInterval] = useState<'monthly' | 'annual' | 'one_time'>(initialInterval);
+  // Initial-interval policy lives in @bloomoulu/constants/billing — every
+  // surface (wizard, plant page, cart checkout) defers to pickInitialInterval
+  // so changing the default is a one-place edit.
+  const [billingInterval, setBillingInterval] = useState<BillingInterval>(
+    pickInitialInterval(presetInterval ?? null, enabledIntervals),
+  );
   const recurring = billingInterval !== 'one_time';
   const setRecurring = (next: boolean) => {
     if (next) {
@@ -908,11 +899,16 @@ function Step1ChooseTier({
           border: '1px solid var(--line)',
         }}
       >
-        {([
-          { id: 'one_time' as const, label: locale === 'fi' ? 'Kerran' : locale === 'sv' ? 'Engång' : 'One-time' },
-          { id: 'annual' as const, label: locale === 'fi' ? 'Vuosi' : locale === 'sv' ? 'År' : 'Annual' },
-          { id: 'monthly' as const, label: locale === 'fi' ? 'Kuukausi' : locale === 'sv' ? 'Månad' : 'Monthly' },
-        ]).filter((o) => enabledIntervals.includes(o.id)).map((opt) => {
+        {BILLING_INTERVAL_DISPLAY_ORDER
+          .filter((id) => enabledIntervals.includes(id))
+          .map((id) => {
+            const label =
+              id === 'monthly'
+                ? locale === 'fi' ? 'Kuukausi' : locale === 'sv' ? 'Månad' : 'Monthly'
+                : id === 'annual'
+                  ? locale === 'fi' ? 'Vuosi' : locale === 'sv' ? 'År' : 'Annual'
+                  : locale === 'fi' ? 'Kerran' : locale === 'sv' ? 'Engång' : 'One-time';
+            const opt = { id, label };
           const active = billingInterval === opt.id;
           return (
             <button
@@ -1178,9 +1174,7 @@ function Step2PickPlant({
         const params = new URLSearchParams({ limit: '40' });
         if (query) params.set('q', query);
         if (redListFilter) params.set('redList', redListFilter);
-        const apiBase =
-          (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000').replace(/\/$/, '');
-        const res = await fetch(`${apiBase}/v1/plants?${params}`);
+        const res = await fetch(`${getBrowserApiUrl().replace(/\/$/, '')}/v1/plants?${params}`);
         if (res.ok) {
           const data = (await res.json()) as { items: AdoptPlant[] };
           setResults(data.items ?? []);

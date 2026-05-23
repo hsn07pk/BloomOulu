@@ -13,6 +13,7 @@
  *      the user gets a clear "request a new link" UI.
  */
 import { NextResponse, type NextRequest } from 'next/server';
+import { getInternalApiUrl } from '@bloomoulu/constants';
 import { SignJWT } from 'jose';
 
 export const dynamic = 'force-dynamic';
@@ -29,7 +30,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ locale: str
   }
 
   const apiUrl =
-    process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+    getInternalApiUrl();
   interface VerifiedUser {
     id: string;
     email: string;

@@ -27,7 +27,8 @@
     "react-dom": "^18.3.1",
     "zod": "^3.23.8",
     "@bloomoulu/db": "workspace:*",
-    "@bloomoulu/rag": "workspace:*"
+    "@bloomoulu/rag": "workspace:*",
+    "@bloomoulu/constants": "workspace:*"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

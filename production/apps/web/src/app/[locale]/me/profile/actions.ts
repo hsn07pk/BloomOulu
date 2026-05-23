@@ -1,14 +1,11 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { getInternalApiUrl } from '@bloomoulu/constants';
 import { cookies } from 'next/headers';
 
 function apiUrl(): string {
-  return (
-    process.env.INTERNAL_API_URL ??
-    process.env.NEXT_PUBLIC_API_URL ??
-    'http://localhost:4000'
-  );
+  return getInternalApiUrl();
 }
 
 async function bearer(): Promise<string | null> {

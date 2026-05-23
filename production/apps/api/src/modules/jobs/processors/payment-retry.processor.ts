@@ -23,6 +23,7 @@
  * become no-ops on next fire.
  */
 import type { Job } from 'bullmq';
+import { getWebUrl } from '@bloomoulu/constants';
 import { Logger } from '@nestjs/common';
 import { v7 as uuidv7 } from 'uuid';
 import { prisma } from '@bloomoulu/db';
@@ -78,7 +79,7 @@ export async function processPaymentRetry(job: Job<PaymentRetryJob>): Promise<vo
     return;
   }
 
-  const webUrl = process.env.NEXT_PUBLIC_WEB_URL ?? 'http://localhost:3000';
+  const webUrl = getWebUrl();
   const managePaymentUrl = `${webUrl}/${adoption.donor.locale}/garden`;
   const adoptUrl = `${webUrl}/${adoption.donor.locale}/adopt?plant=${adoption.plantId}`;
   const amount = (adoption.amountCents / 100).toFixed(2);

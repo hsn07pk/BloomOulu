@@ -23,7 +23,8 @@
     "@bloomoulu/i18n": "workspace:*",
     "@bloomoulu/ui": "workspace:*",
     "@bloomoulu/db": "workspace:*",
-    "jose": "^5.10.0"
+    "jose": "^5.10.0",
+    "@bloomoulu/constants": "workspace:*"
   },
   "devDependencies": {
     "@types/leaflet": "^1.9.14",

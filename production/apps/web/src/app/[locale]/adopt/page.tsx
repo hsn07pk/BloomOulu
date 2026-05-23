@@ -1,7 +1,16 @@
 import { getTranslations } from 'next-intl/server';
 import {
+  BILLING_INTERVALS,
+  DEFAULT_INTERVALS_ENABLED,
+  DEFAULT_PLAQUE_ELIGIBLE_TIERS,
+  DONOR_FACING_PROVIDERS,
+  TIER_IDS,
+  getInternalApiUrl,
+  normaliseIntent,
+  type BillingInterval,
+} from '@bloomoulu/constants';
+import {
   AdoptWizard,
-  type AdoptIntent,
   type AdoptTier,
   type AdoptPlant,
   type AdoptSettings,
@@ -9,21 +18,9 @@ import {
 
 export const dynamic = 'force-dynamic';
 
-// SSR / RSC fetches run inside the web container — when Docker is the
-// runtime, NEXT_PUBLIC_API_URL points at the host and is unreachable from
-// within the bridge network. INTERNAL_API_URL overrides it for server-side
-// calls so we still hit api:4000 inside the cluster.
-function internalApiUrl(): string {
-  return (
-    process.env.INTERNAL_API_URL ??
-    process.env.NEXT_PUBLIC_API_URL ??
-    'http://localhost:4000'
-  );
-}
-
 async function fetchTiers(): Promise<AdoptTier[]> {
   try {
-    const res = await fetch(`${internalApiUrl()}/v1/tiers`, { cache: 'no-store' });
+    const res = await fetch(`${getInternalApiUrl()}/v1/tiers`, { cache: 'no-store' });
     return res.ok ? res.json() : [];
   } catch {
     return [];
@@ -32,7 +29,7 @@ async function fetchTiers(): Promise<AdoptTier[]> {
 
 async function fetchPlants(limit: number): Promise<AdoptPlant[]> {
   try {
-    const res = await fetch(`${internalApiUrl()}/v1/plants?limit=${limit}`, {
+    const res = await fetch(`${getInternalApiUrl()}/v1/plants?limit=${limit}`, {
       cache: 'no-store',
     });
     if (!res.ok) return [];
@@ -46,7 +43,7 @@ async function fetchPlants(limit: number): Promise<AdoptPlant[]> {
 async function fetchPlant(slug: string | undefined): Promise<AdoptPlant | null> {
   if (!slug) return null;
   try {
-    const res = await fetch(`${internalApiUrl()}/v1/plants/${slug}`, { cache: 'no-store' });
+    const res = await fetch(`${getInternalApiUrl()}/v1/plants/${slug}`, { cache: 'no-store' });
     return res.ok ? res.json() : null;
   } catch {
     return null;
@@ -65,7 +62,7 @@ interface PublicSettingsResponse {
 
 async function fetchPublicSettings(): Promise<PublicSettingsResponse> {
   try {
-    const res = await fetch(`${internalApiUrl()}/v1/settings/public`, {
+    const res = await fetch(`${getInternalApiUrl()}/v1/settings/public`, {
       cache: 'no-store',
     });
     return res.ok ? res.json() : {};
@@ -74,34 +71,32 @@ async function fetchPublicSettings(): Promise<PublicSettingsResponse> {
   }
 }
 
-const VALID_INTENTS: AdoptIntent[] = ['for_self', 'gift', 'memorial', 'class'];
-const VALID_TIERS = ['seedling', 'rooted', 'vulnerable', 'endangered', 'corporate'] as const;
-const VALID_INTERVALS = ['monthly', 'annual', 'one_time'] as const;
-type Interval = (typeof VALID_INTERVALS)[number];
-
-function normaliseIntent(raw?: string): AdoptIntent {
-  if (!raw) return 'for_self';
-  if (raw === 'self' || raw === 'for_self') return 'for_self';
-  return (VALID_INTENTS.includes(raw as AdoptIntent) ? raw : 'for_self') as AdoptIntent;
-}
-
-function normaliseInterval(raw: string | undefined, enabled: readonly Interval[]): Interval | null {
+function normaliseInterval(
+  raw: string | undefined,
+  enabled: readonly BillingInterval[],
+): BillingInterval | null {
   if (!raw) return null;
   const candidate = raw === 'one-time' ? 'one_time' : raw;
-  if ((VALID_INTERVALS as readonly string[]).includes(candidate) && enabled.includes(candidate as Interval)) {
-    return candidate as Interval;
+  if ((BILLING_INTERVALS as readonly string[]).includes(candidate) && enabled.includes(candidate as BillingInterval)) {
+    return candidate as BillingInterval;
   }
   return null;
 }
 
+/**
+ * Fallback used when the /v1/settings/public fetch fails. The runtime SSOT
+ * is `buildSettingsDefaults` in apps/api/src/modules/settings/settings.service.ts;
+ * mirror values from packages/constants for the type-safe subset we
+ * defaulting here. Editing one of these defaults should update both.
+ */
 const DEFAULT_ADOPT_SETTINGS: AdoptSettings = {
   giftWrapCents: 400,
   donationShareBp: 7200,
-  plaqueEligibleTiers: ['endangered', 'corporate'],
+  plaqueEligibleTiers: [...DEFAULT_PLAQUE_ELIGIBLE_TIERS],
   dedicationMaxChars: 240,
   coAdopterMax: 10,
   fundsFlowUrl: '/about#funds-flow',
-  intervalsEnabled: ['monthly', 'one_time'],
+  intervalsEnabled: [...DEFAULT_INTERVALS_ENABLED],
 };
 
 export default async function AdoptPage({
@@ -123,7 +118,7 @@ export default async function AdoptPage({
   ]);
 
   const presetTier =
-    sp.tier && (VALID_TIERS as readonly string[]).includes(sp.tier) ? sp.tier : 'vulnerable';
+    sp.tier && (TIER_IDS as readonly string[]).includes(sp.tier) ? sp.tier : 'vulnerable';
   const presetIntent = normaliseIntent(sp.intent);
 
   // Make sure the preset plant is present in the picker list so step 2
@@ -139,11 +134,11 @@ export default async function AdoptPage({
   const showCorporate = publicSettings.features?.corporateTier ?? true;
   const filteredTiers = showCorporate ? tiers : tiers.filter((tt) => tt.id !== 'corporate');
 
-  // Map enabled providers; bank-transfer is omitted from the UI per
-  // current product direction (Paytrail + MobilePay only). The DTO still
-  // accepts it for compatibility with the admin reconciliation flow.
+  // Map enabled providers; bank-transfer is omitted from the donor-facing
+  // UI per current product direction (Paytrail + MobilePay only). The DTO
+  // still accepts it for compatibility with the admin reconciliation flow.
   const adminPayments = publicSettings.payments ?? {};
-  const enabledProviders = (['paytrail', 'mobilepay'] as const).filter(
+  const enabledProviders = DONOR_FACING_PROVIDERS.filter(
     (p) => adminPayments[p] !== false,
   );
 
@@ -169,7 +164,7 @@ export default async function AdoptPage({
         presetIntent={presetIntent}
         presetInterval={presetInterval}
         title={t('title')}
-        enabledProviders={enabledProviders.length > 0 ? Array.from(enabledProviders) : ['paytrail', 'mobilepay']}
+        enabledProviders={enabledProviders.length > 0 ? Array.from(enabledProviders) : [...DONOR_FACING_PROVIDERS]}
         adopt={adopt}
       />
     </article>

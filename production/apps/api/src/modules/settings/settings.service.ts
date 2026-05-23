@@ -1,4 +1,12 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import {
+  BILLING_INTERVALS,
+  DEFAULT_INTERVALS_ENABLED,
+  DEFAULT_PLAQUE_ELIGIBLE_TIERS,
+  TIER_IDS,
+  type BillingInterval,
+  type TierId,
+} from '@bloomoulu/constants';
 import { PrismaService } from '../prisma/prisma.service.js';
 
 /**
@@ -61,7 +69,7 @@ export interface BloomOuluSettings {
      *  computation still uses vat.donationRateBp / vat.perkRateBp. */
     donationShareBp: number;
     /** Tiers that earn an individually engraved plaque. */
-    plaqueEligibleTiers: Array<'seedling' | 'rooted' | 'vulnerable' | 'endangered' | 'corporate'>;
+    plaqueEligibleTiers: readonly TierId[];
     /** Max length of the donor-facing dedication string. */
     dedicationMaxChars: number;
     /** Max co-adopters per adoption. */
@@ -71,7 +79,7 @@ export interface BloomOuluSettings {
     /** Which billing intervals the donor sees. Production default is
      *  ['monthly', 'one_time']; an admin can enable 'annual' later
      *  without a deploy by editing SystemSetting `adoption.intervalsEnabled`. */
-    intervalsEnabled: Array<'monthly' | 'annual' | 'one_time'>;
+    intervalsEnabled: readonly BillingInterval[];
   };
   /** AskTheGarden knobs surfaced via /v1/settings/public. Admins edit
    *  these in /admin/resources/SystemSetting. */
@@ -176,19 +184,27 @@ export function buildSettingsDefaults(): BloomOuluSettings {
     adoption: {
       giftWrapCents: envInt('ADOPTION_GIFT_WRAP_CENTS', 400),
       donationShareBp: envInt('ADOPTION_DONATION_SHARE_BP', 7200),
-      plaqueEligibleTiers: (envStr('ADOPTION_PLAQUE_ELIGIBLE_TIERS', 'endangered,corporate')
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean) as Array<'seedling' | 'rooted' | 'vulnerable' | 'endangered' | 'corporate'>),
+      plaqueEligibleTiers: (() => {
+        const raw = process.env.ADOPTION_PLAQUE_ELIGIBLE_TIERS;
+        if (!raw) return DEFAULT_PLAQUE_ELIGIBLE_TIERS;
+        return raw
+          .split(',')
+          .map((s) => s.trim())
+          .filter((s): s is TierId => (TIER_IDS as readonly string[]).includes(s));
+      })(),
       dedicationMaxChars: envInt('ADOPTION_DEDICATION_MAX_CHARS', 240),
       coAdopterMax: envInt('ADOPTION_CO_ADOPTER_MAX', 10),
       fundsFlowUrl: envStr('ADOPTION_FUNDS_FLOW_URL', '/about#funds-flow'),
       // Default offering: monthly + one_time. Annual is hidden until an
       // admin explicitly re-enables it in /admin → SystemSetting.
-      intervalsEnabled: (envStr('ADOPTION_INTERVALS_ENABLED', 'monthly,one_time')
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean) as Array<'monthly' | 'annual' | 'one_time'>),
+      intervalsEnabled: (() => {
+        const raw = process.env.ADOPTION_INTERVALS_ENABLED;
+        if (!raw) return DEFAULT_INTERVALS_ENABLED;
+        return raw
+          .split(',')
+          .map((s) => s.trim())
+          .filter((s): s is BillingInterval => (BILLING_INTERVALS as readonly string[]).includes(s));
+      })(),
     },
     ask: {
       curatorEmail: envStr('ASK_CURATOR_EMAIL', 'curator@bloomoulu.fi'),

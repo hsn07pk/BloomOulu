@@ -1,4 +1,5 @@
 import { getTranslations } from 'next-intl/server';
+import { getInternalApiUrl, getBrowserApiUrl } from '@bloomoulu/constants';
 import { PlantIndex, type PlantIndexItem } from '../../../components/PlantIndex.client';
 
 export const revalidate = 60;
@@ -8,7 +9,7 @@ async function fetchInitialPlants(): Promise<{ items: PlantIndexItem[]; nextCurs
   // in-cluster api:4000; the public NEXT_PUBLIC_API_URL would resolve
   // to the container itself and return an empty list.
   const apiUrl =
-    process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+    getInternalApiUrl();
   try {
     const res = await fetch(`${apiUrl}/v1/plants?limit=24`, {
       cache: 'no-store',
@@ -27,7 +28,7 @@ export default async function PlantsIndexPage({ params }: { params: Promise<{ lo
   const tp = await getTranslations({ locale, namespace: 'Plants' });
   const { items: plants, nextCursor } = await fetchInitialPlants();
   // Browser-side URL (the client picker re-fetches as the user paginates / searches).
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+  const apiUrl = getBrowserApiUrl();
 
   return (
     <div className="fade-in">

@@ -5,13 +5,12 @@
  * bloomoulu.session cookie before redirecting to /garden.
  */
 import { cookies } from 'next/headers';
+import { getInternalApiUrl } from '@bloomoulu/constants';
 import { redirect } from 'next/navigation';
 import { SignJWT } from 'jose';
 
 function apiUrl(): string {
-  return (
-    process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
-  );
+  return getInternalApiUrl();
 }
 
 const COOKIE_NAME = 'bloomoulu.session';

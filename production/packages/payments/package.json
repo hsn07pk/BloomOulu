@@ -20,7 +20,8 @@
   "dependencies": {
     "zod": "^3.23.8",
     "undici": "^7.1.1",
-    "@bloomoulu/db": "workspace:*"
+    "@bloomoulu/db": "workspace:*",
+    "@bloomoulu/constants": "workspace:*"
   },
   "devDependencies": {
     "vitest": "^2.1.5",

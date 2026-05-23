@@ -14,6 +14,13 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import qrcode from 'qrcode-generator';
+import {
+  pickInitialInterval,
+  suggestedTierId as sharedSuggestedTierId,
+  type BillingInterval,
+  type Locale as SharedLocale,
+  type TierId,
+} from '@bloomoulu/constants';
 import { useCart } from '../../../../lib/cart.client';
 
 /** Secondary "Add to cart" CTA so visitors can queue multiple plants
@@ -27,7 +34,7 @@ function AddToCartButton({
   locale,
 }: {
   slug: string;
-  tierId: 'seedling' | 'rooted' | 'vulnerable' | 'endangered' | 'corporate';
+  tierId: TierId;
   locale: string;
 }) {
   const { add, has, hydrated } = useCart();
@@ -117,7 +124,7 @@ const PlantMap = dynamic(() => import('../../../../components/PlantMap.client').
 
 type Mode = 'adult' | 'kid' | 'school';
 type Tab = 'story' | 'data' | 'citations';
-type Locale = 'en' | 'fi' | 'sv';
+type Locale = SharedLocale;
 
 interface Plant {
   id: string;
@@ -159,7 +166,7 @@ interface SimilarPlant {
 }
 
 interface Tier {
-  id: 'seedling' | 'rooted' | 'vulnerable' | 'endangered' | 'corporate';
+  id: TierId;
   name: string;
   nameFi: string;
   nameSv: string;
@@ -175,22 +182,16 @@ interface PlantPageClientProps {
   /** Whitelist of billing intervals the donor sees. Set in /admin →
    *  SystemSetting → adoption.intervalsEnabled. Defaults to
    *  monthly + one_time; annual hidden until enabled. */
-  intervalsEnabled: Array<'monthly' | 'annual' | 'one_time'>;
+  intervalsEnabled: readonly BillingInterval[];
   locale: Locale;
   apiUrl: string;
   signedIn?: boolean;
 }
 
-type BillingInterval = 'monthly' | 'annual' | 'one_time';
-
-/** Map a plant's Red-List status to the suggested tier id. The mapping
- *  is intentionally simple: rarer plants → higher tier. The pricing
- *  itself lives in /v1/tiers; this only chooses which row to surface. */
-function suggestedTierId(redListStatus: string | undefined): Tier['id'] {
-  if (redListStatus === 'CR' || redListStatus === 'EN') return 'endangered';
-  if (redListStatus === 'VU') return 'vulnerable';
-  return 'rooted';
-}
+// Red-list → suggested tier mapping lives in @bloomoulu/constants/redlist;
+// alias here so the local code reads naturally without exposing the
+// "shared" naming everywhere.
+const suggestedTierId = sharedSuggestedTierId;
 
 function localisedName(p: { nameEn: string; nameFi: string; nameSv: string }, locale: string): string {
   if (locale === 'fi') return p.nameFi || p.nameEn;
@@ -257,14 +258,10 @@ export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled,
   const suggestedId = suggestedTierId(plant.redListStatus);
   const sortedTiers = [...tiers].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
   const [selectedTierId, setSelectedTierId] = useState<Tier['id']>(suggestedId);
-  // Prefer one-time as the default — first-time donors shouldn't be
-  // quietly enrolled into a recurring charge; they can opt in to monthly
-  // via the toggle. Falls back to the first enabled interval if admin
-  // has disabled one-time.
+  // Initial-interval policy lives in @bloomoulu/constants/billing — see
+  // pickInitialInterval. The plant page has no preset, so we pass null.
   const [billingInterval, setBillingInterval] = useState<BillingInterval>(
-    (intervalsEnabled.includes('one_time')
-      ? 'one_time'
-      : intervalsEnabled[0] ?? 'monthly') as BillingInterval,
+    pickInitialInterval(null, intervalsEnabled),
   );
   const selectedTier = sortedTiers.find((t) => t.id === selectedTierId)
     ?? sortedTiers.find((t) => t.id === suggestedId)

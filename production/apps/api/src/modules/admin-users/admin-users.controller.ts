@@ -15,6 +15,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { z } from 'zod';
+import { LocaleEnum } from '@bloomoulu/constants';
 import { ZodValidationPipe } from '../../common/zod.pipe.js';
 import { Roles } from '../../common/roles.decorator.js';
 import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.decorator.js';
@@ -23,7 +24,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 const PatchUser = z.object({
   role: z.enum(['donor', 'curator', 'finance', 'admin']).optional(),
   name: z.string().nullable().optional(),
-  locale: z.enum(['en', 'fi', 'sv']).optional(),
+  locale: LocaleEnum.optional(),
   status: z.enum(['active', 'deactivated']).optional(),
 });
 

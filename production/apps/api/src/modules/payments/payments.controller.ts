@@ -1,4 +1,5 @@
 import { Body, Controller, ForbiddenException, NotFoundException, Post } from '@nestjs/common';
+import { getWebUrl } from '@bloomoulu/constants';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { z } from 'zod';
 import { ZodValidationPipe } from '../../common/zod.pipe.js';
@@ -78,7 +79,7 @@ export class PaymentsController {
     const gateway = this.gateways.for('paytrail') as PaytrailGateway;
     const signature = gateway.signReturnParams(params);
 
-    const webBase = (process.env.NEXT_PUBLIC_WEB_URL ?? 'http://localhost:3000').replace(/\/$/, '');
+    const webBase = (getWebUrl()).replace(/\/$/, '');
     const url = new URL(`${webBase}/${locale}/donate/complete`);
     for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
     url.searchParams.set('signature', signature);

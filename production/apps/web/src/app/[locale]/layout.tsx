@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { getBrowserApiUrl } from '@bloomoulu/constants';
 import type { ReactNode } from 'react';
 import { NextIntlClientProvider } from 'next-intl';
 import { getMessages, getTranslations } from 'next-intl/server';
@@ -86,7 +87,7 @@ export default async function RootLayout({
               connection to /v1/events and triggers router.refresh()
               on any admin-side write so every open tab stays current
               without a hard reload. */}
-          <LiveSync apiUrl={process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'} />
+          <LiveSync apiUrl={getBrowserApiUrl()} />
           <Topbar locale={locale} />
           <main id="main">{children}</main>
           <footer

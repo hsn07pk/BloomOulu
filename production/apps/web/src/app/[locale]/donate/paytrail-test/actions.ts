@@ -7,11 +7,10 @@
  * param — same as a real Paytrail return.
  */
 import { redirect } from 'next/navigation';
+import { getInternalApiUrl } from '@bloomoulu/constants';
 
 function apiUrl(): string {
-  return (
-    process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
-  );
+  return getInternalApiUrl();
 }
 
 function isNextRedirect(err: unknown): boolean {

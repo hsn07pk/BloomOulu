@@ -89,6 +89,9 @@ importers:
       '@babel/plugin-syntax-import-assertions':
         specifier: ^7.27.1
         version: 7.28.6(@babel/core@7.29.0)
+      '@bloomoulu/constants':
+        specifier: workspace:*
+        version: link:../../packages/constants
       '@bloomoulu/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -156,6 +159,9 @@ importers:
       '@bloomoulu/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@bloomoulu/constants':
+        specifier: workspace:*
+        version: link:../../packages/constants
       '@bloomoulu/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -267,7 +273,7 @@ importers:
     devDependencies:
       '@nestjs/cli':
         specifier: ^10.4.8
-        version: 10.4.9(postcss@8.5.14)
+        version: 10.4.9
       '@nestjs/testing':
         specifier: ^10.4.7
         version: 10.4.22(@nestjs/common@10.4.22(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@10.4.22(@nestjs/common@10.4.22(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)(rxjs@7.8.2))
@@ -295,6 +301,9 @@ importers:
 
   apps/kiosk:
     dependencies:
+      '@bloomoulu/constants':
+        specifier: workspace:*
+        version: link:../../packages/constants
       next:
         specifier: ^15.1.0
         version: 15.5.18(@opentelemetry/api@1.9.1)(@playwright/test@1.60.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -323,6 +332,9 @@ importers:
       '@auth/prisma-adapter':
         specifier: ^2.7.4
         version: 2.11.2(@prisma/client@5.22.0(prisma@5.22.0))(nodemailer@7.0.13)
+      '@bloomoulu/constants':
+        specifier: workspace:*
+        version: link:../../packages/constants
       '@bloomoulu/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -406,6 +418,12 @@ importers:
         specifier: ^8.16.0
         version: 8.59.3(eslint@9.39.4)(typescript@5.9.3)
 
+  packages/constants:
+    dependencies:
+      zod:
+        specifier: ^3.23.8
+        version: 3.25.76
+
   packages/db:
     dependencies:
       '@bloomoulu/emails':
@@ -457,6 +475,9 @@ importers:
 
   packages/payments:
     dependencies:
+      '@bloomoulu/constants':
+        specifier: workspace:*
+        version: link:../constants
       '@bloomoulu/db':
         specifier: workspace:*
         version: link:../db
@@ -10246,7 +10267,7 @@ snapshots:
       bullmq: 5.76.8
       tslib: 2.8.1
 
-  '@nestjs/cli@10.4.9(postcss@8.5.14)':
+  '@nestjs/cli@10.4.9':
     dependencies:
       '@angular-devkit/core': 17.3.11(chokidar@3.6.0)
       '@angular-devkit/schematics': 17.3.11(chokidar@3.6.0)
@@ -10256,7 +10277,7 @@ snapshots:
       chokidar: 3.6.0
       cli-table3: 0.6.5
       commander: 4.1.1
-      fork-ts-checker-webpack-plugin: 9.0.2(typescript@5.7.2)(webpack@5.97.1(postcss@8.5.14))
+      fork-ts-checker-webpack-plugin: 9.0.2(typescript@5.7.2)(webpack@5.97.1)
       glob: 10.4.5
       inquirer: 8.2.6
       node-emoji: 1.11.0
@@ -10265,7 +10286,7 @@ snapshots:
       tsconfig-paths: 4.2.0
       tsconfig-paths-webpack-plugin: 4.2.0
       typescript: 5.7.2
-      webpack: 5.97.1(postcss@8.5.14)
+      webpack: 5.97.1
       webpack-node-externals: 3.0.0
     transitivePeerDependencies:
       - '@minify-html/node'
@@ -13897,7 +13918,7 @@ snapshots:
       cross-spawn: 7.0.6
       signal-exit: 4.1.0
 
-  fork-ts-checker-webpack-plugin@9.0.2(typescript@5.7.2)(webpack@5.97.1(postcss@8.5.14)):
+  fork-ts-checker-webpack-plugin@9.0.2(typescript@5.7.2)(webpack@5.97.1):
     dependencies:
       '@babel/code-frame': 7.29.0
       chalk: 4.1.2
@@ -13912,7 +13933,7 @@ snapshots:
       semver: 7.8.0
       tapable: 2.3.3
       typescript: 5.7.2
-      webpack: 5.97.1(postcss@8.5.14)
+      webpack: 5.97.1
 
   form-data@4.0.5:
     dependencies:
@@ -16607,15 +16628,13 @@ snapshots:
     dependencies:
       bintrees: 1.0.2
 
-  terser-webpack-plugin@5.6.0(postcss@8.5.14)(webpack@5.97.1(postcss@8.5.14)):
+  terser-webpack-plugin@5.6.0(webpack@5.97.1):
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
       jest-worker: 27.5.1
       schema-utils: 4.3.3
       terser: 5.47.1
-      webpack: 5.97.1(postcss@8.5.14)
-    optionalDependencies:
-      postcss: 8.5.14
+      webpack: 5.97.1
 
   terser@5.47.1:
     dependencies:
@@ -17016,7 +17035,7 @@ snapshots:
 
   webpack-sources@3.4.1: {}
 
-  webpack@5.97.1(postcss@8.5.14):
+  webpack@5.97.1:
     dependencies:
       '@types/eslint-scope': 3.7.7
       '@types/estree': 1.0.9
@@ -17038,7 +17057,7 @@ snapshots:
       neo-async: 2.6.2
       schema-utils: 3.3.0
       tapable: 2.3.3
-      terser-webpack-plugin: 5.6.0(postcss@8.5.14)(webpack@5.97.1(postcss@8.5.14))
+      terser-webpack-plugin: 5.6.0(webpack@5.97.1)
       watchpack: 2.5.1
       webpack-sources: 3.4.1
     transitivePeerDependencies:

@@ -1,0 +1,24 @@
+{
+  "name": "@bloomoulu/constants",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./billing": "./src/billing.ts",
+    "./tiers": "./src/tiers.ts",
+    "./intents": "./src/intents.ts",
+    "./providers": "./src/providers.ts",
+    "./locales": "./src/locales.ts",
+    "./redlist": "./src/redlist.ts",
+    "./regions": "./src/regions.ts",
+    "./urls": "./src/urls.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^3.23.8"
+  }
+}

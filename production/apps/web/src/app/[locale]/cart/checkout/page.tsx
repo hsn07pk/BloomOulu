@@ -6,6 +6,13 @@
  */
 import { getTranslations } from 'next-intl/server';
 import {
+  DEFAULT_INTERVALS_ENABLED,
+  DEFAULT_PLAQUE_ELIGIBLE_TIERS,
+  DONOR_FACING_PROVIDERS,
+  getBrowserApiUrl,
+  getInternalApiUrl,
+} from '@bloomoulu/constants';
+import {
   AdoptWizard,
   type AdoptIntent,
   type AdoptTier,
@@ -15,15 +22,9 @@ import {
 
 export const dynamic = 'force-dynamic';
 
-function internalApiUrl(): string {
-  return (
-    process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
-  );
-}
-
 async function fetchTiers(): Promise<AdoptTier[]> {
   try {
-    const res = await fetch(`${internalApiUrl()}/v1/tiers`, { cache: 'no-store' });
+    const res = await fetch(`${getInternalApiUrl()}/v1/tiers`, { cache: 'no-store' });
     return res.ok ? res.json() : [];
   } catch {
     return [];
@@ -32,7 +33,7 @@ async function fetchTiers(): Promise<AdoptTier[]> {
 
 async function fetchPlants(limit: number): Promise<AdoptPlant[]> {
   try {
-    const res = await fetch(`${internalApiUrl()}/v1/plants?limit=${limit}`, { cache: 'no-store' });
+    const res = await fetch(`${getInternalApiUrl()}/v1/plants?limit=${limit}`, { cache: 'no-store' });
     if (!res.ok) return [];
     const data = await res.json();
     return data.items ?? [];
@@ -49,7 +50,7 @@ interface PublicSettingsResponse {
 
 async function fetchPublicSettings(): Promise<PublicSettingsResponse> {
   try {
-    const res = await fetch(`${internalApiUrl()}/v1/settings/public`, { cache: 'no-store' });
+    const res = await fetch(`${getInternalApiUrl()}/v1/settings/public`, { cache: 'no-store' });
     return res.ok ? res.json() : {};
   } catch {
     return {};
@@ -59,11 +60,11 @@ async function fetchPublicSettings(): Promise<PublicSettingsResponse> {
 const DEFAULT_ADOPT_SETTINGS: AdoptSettings = {
   giftWrapCents: 400,
   donationShareBp: 7200,
-  plaqueEligibleTiers: ['endangered', 'corporate'],
+  plaqueEligibleTiers: [...DEFAULT_PLAQUE_ELIGIBLE_TIERS],
   dedicationMaxChars: 240,
   coAdopterMax: 10,
   fundsFlowUrl: '/about#funds-flow',
-  intervalsEnabled: ['monthly', 'one_time'],
+  intervalsEnabled: [...DEFAULT_INTERVALS_ENABLED],
 };
 
 export default async function CartCheckoutPage({
@@ -83,7 +84,7 @@ export default async function CartCheckoutPage({
   const filteredTiers = showCorporate ? tiers : tiers.filter((tt) => tt.id !== 'corporate');
 
   const adminPayments = publicSettings.payments ?? {};
-  const enabledProviders = (['paytrail', 'mobilepay'] as const).filter(
+  const enabledProviders = DONOR_FACING_PROVIDERS.filter(
     (p) => adminPayments[p] !== false,
   );
 
@@ -92,7 +93,6 @@ export default async function CartCheckoutPage({
     ...(publicSettings.adoption ?? {}),
   } satisfies AdoptSettings;
 
-  const browserApi = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
   const presetIntent: AdoptIntent = 'for_self';
 
   return (
@@ -105,9 +105,9 @@ export default async function CartCheckoutPage({
         presetTier={'vulnerable' as AdoptTier['id']}
         presetIntent={presetIntent}
         cartMode
-        apiUrl={browserApi}
+        apiUrl={getBrowserApiUrl()}
         title={t('title')}
-        enabledProviders={enabledProviders.length > 0 ? Array.from(enabledProviders) : ['paytrail', 'mobilepay']}
+        enabledProviders={enabledProviders.length > 0 ? Array.from(enabledProviders) : [...DONOR_FACING_PROVIDERS]}
         adopt={adopt}
       />
     </article>

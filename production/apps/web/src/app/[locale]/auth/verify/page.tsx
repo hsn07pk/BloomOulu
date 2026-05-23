@@ -14,12 +14,11 @@
  * session cookie before redirecting.
  */
 import { redirect } from 'next/navigation';
+import { getInternalApiUrl } from '@bloomoulu/constants';
 import { verifyAndSetupAction } from './setup-actions';
 
 function apiUrl(): string {
-  return (
-    process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
-  );
+  return getInternalApiUrl();
 }
 
 const COPY = {

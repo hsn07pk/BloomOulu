@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import { getInternalApiUrl, getBrowserApiUrl } from '@bloomoulu/constants';
 import { PlantPageClient } from './plant.client';
 import { getSession } from '../../../../lib/session';
 
@@ -45,7 +46,7 @@ interface SimilarPlant {
 
 export async function generateStaticParams() {
   const api =
-    process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+    getInternalApiUrl();
   try {
     const res = await fetch(`${api}/v1/plants?limit=200`);
     if (!res.ok) return [];
@@ -86,8 +87,8 @@ export default async function PlantPage({
   // running under Docker. Client-side: pass the public URL so the
   // browser's fetch calls can hit it.
   const serverApi =
-    process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
-  const browserApi = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+    getInternalApiUrl();
+  const browserApi = getBrowserApiUrl();
   // Fetch plant + tiers + settings in parallel. /v1/tiers and
   // /v1/settings/public are the single source of truth for adoption
   // pricing and which billing intervals donors see. Any admin edit

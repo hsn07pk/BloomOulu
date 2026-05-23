@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-floating-promises */
 import './env.js'; // <- must be FIRST; loads .env into process.env before module init
+import { getWebUrl } from '@bloomoulu/constants';
 import './telemetry.js'; // <- second; sets up OTEL before any other import
 
 import { NestFactory } from '@nestjs/core';
@@ -52,7 +53,7 @@ async function bootstrap() {
   );
 
   app.enableCors({
-    origin: [process.env.NEXT_PUBLIC_WEB_URL ?? 'http://localhost:3000'],
+    origin: [getWebUrl()],
     credentials: true,
   });
 

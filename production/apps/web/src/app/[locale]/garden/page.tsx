@@ -10,6 +10,7 @@
  *   - GDPR self-service (export / erase)
  */
 import { redirect } from 'next/navigation';
+import { getInternalApiUrl } from '@bloomoulu/constants';
 import { getTranslations } from 'next-intl/server';
 import Link from 'next/link';
 import { getSession } from '../../../lib/session';
@@ -77,7 +78,7 @@ async function fetchGarden(userId: string, jwt: string): Promise<GardenView | nu
   // under Docker (the public NEXT_PUBLIC_API_URL is host-relative and
   // doesn't resolve from inside the bridge network).
   const apiUrl =
-    process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+    getInternalApiUrl();
   try {
     const res = await fetch(`${apiUrl}/v1/users/${userId}/garden`, {
       headers: { Authorization: `Bearer ${jwt}` },
@@ -106,7 +107,7 @@ interface SavedRow {
 
 async function fetchSaved(jwt: string): Promise<SavedRow[]> {
   const apiUrl =
-    process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+    getInternalApiUrl();
   try {
     const res = await fetch(`${apiUrl}/v1/me/saved`, {
       headers: { Authorization: `Bearer ${jwt}` },
@@ -129,7 +130,7 @@ interface AskHistoryRow {
 }
 async function fetchAskHistory(userId: string): Promise<AskHistoryRow[]> {
   const apiUrl =
-    process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+    getInternalApiUrl();
   try {
     const res = await fetch(`${apiUrl}/v1/ask/history?userId=${encodeURIComponent(userId)}&limit=5`, {
       cache: 'no-store',

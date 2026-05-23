@@ -25,6 +25,7 @@ import {
   Req,
 } from '@nestjs/common';
 import { z } from 'zod';
+import { LocaleEnum, getWebUrl } from '@bloomoulu/constants';
 import { Queue } from 'bullmq';
 import { jwtVerify } from 'jose';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -53,7 +54,7 @@ const AskDto = z.object({
   // min(2) lets greetings like "Hi" / "Moi" through; the intent classifier
   // (ask.service.ts) routes them to a friendly template, not RAG.
   question: z.string().min(2).max(500),
-  locale: z.enum(['en', 'fi', 'sv']).default('fi'),
+  locale: LocaleEnum.default('fi'),
   userId: z.string().uuid().optional(),
   // Recent conversation turns sent by the client so the server can
   // rewrite anaphoric follow-ups ("tell me more about it") into
@@ -103,7 +104,7 @@ class AskController {
   ) {
     const origin = (req.headers.origin as string | undefined) ?? '';
     const allowedOrigins = new Set([
-      process.env.NEXT_PUBLIC_WEB_URL ?? 'http://localhost:3000',
+      getWebUrl(),
       'http://localhost:3000',
       'http://localhost:3100',
     ]);

@@ -2,6 +2,16 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma } from '@prisma/client';
 import { v7 as uuidv7 } from 'uuid';
 import { z } from 'zod';
+import {
+  AdoptionIntentEnum,
+  BillingIntervalEnum,
+  DEFAULT_INTERVALS_ENABLED,
+  LocaleEnum,
+  PaymentProviderEnum,
+  TierIdEnum,
+  getWebUrl,
+  type BillingInterval,
+} from '@bloomoulu/constants';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AuditService } from '../audit/audit.service.js';
 import { SettingsService } from '../settings/settings.service.js';
@@ -22,14 +32,14 @@ const CoAdopter = z.object({
 
 export const CreateAdoptionDto = z.object({
   plantSlug: z.string().min(1).max(120),
-  tierId: z.enum(['seedling', 'rooted', 'vulnerable', 'endangered', 'corporate']),
-  intent: z.enum(['for_self', 'gift', 'memorial', 'class', 'corporate']).default('for_self'),
+  tierId: TierIdEnum,
+  intent: AdoptionIntentEnum.default('for_self'),
   recurring: z.boolean().default(true),
-  billingInterval: z.enum(['annual', 'monthly', 'one_time']).default('monthly'),
+  billingInterval: BillingIntervalEnum.default('monthly'),
   donor: z.object({
     email: z.string().email(),
     name: z.string().min(1).max(120).optional(),
-    locale: z.enum(['en', 'fi', 'sv']).default('fi'),
+    locale: LocaleEnum.default('fi'),
     countryCode: z.string().length(2).default('FI'),
     homeRegion: z.string().max(32).optional(),
     postalAddress: PostalAddress.optional(),
@@ -50,7 +60,7 @@ export const CreateAdoptionDto = z.object({
   // Visibility + consent
   showOnDonorWall: z.boolean().default(true),
   marketingOptIn: z.boolean().default(false),
-  preferredProvider: z.enum(['paytrail', 'mobilepay', 'bank_transfer']).optional(),
+  preferredProvider: PaymentProviderEnum.optional(),
 });
 export type CreateAdoptionDto = z.infer<typeof CreateAdoptionDto>;
 
@@ -64,18 +74,18 @@ export const CreateBundleDto = z.object({
   items: z.array(
     z.object({
       plantSlug: z.string().min(1).max(120),
-      tierId: z.enum(['seedling', 'rooted', 'vulnerable', 'endangered', 'corporate']),
+      tierId: TierIdEnum,
       nickname: z.string().max(80).optional(),
       dedication: z.string().max(240).optional(),
     }),
   ).min(1).max(25),
-  intent: z.enum(['for_self', 'gift', 'memorial', 'class', 'corporate']).default('for_self'),
+  intent: AdoptionIntentEnum.default('for_self'),
   recurring: z.boolean().default(true),
-  billingInterval: z.enum(['annual', 'monthly', 'one_time']).default('monthly'),
+  billingInterval: BillingIntervalEnum.default('monthly'),
   donor: z.object({
     email: z.string().email(),
     name: z.string().min(1).max(120).optional(),
-    locale: z.enum(['en', 'fi', 'sv']).default('fi'),
+    locale: LocaleEnum.default('fi'),
     countryCode: z.string().length(2).default('FI'),
     homeRegion: z.string().max(32).optional(),
     postalAddress: PostalAddress.optional(),
@@ -97,7 +107,7 @@ export const CreateBundleDto = z.object({
   coAdopters: z.array(CoAdopter).max(10).optional(),
   showOnDonorWall: z.boolean().default(true),
   marketingOptIn: z.boolean().default(false),
-  preferredProvider: z.enum(['paytrail', 'mobilepay', 'bank_transfer']).optional(),
+  preferredProvider: PaymentProviderEnum.optional(),
 });
 export type CreateBundleDto = z.infer<typeof CreateBundleDto>;
 
@@ -114,8 +124,8 @@ export class AdoptionsService {
     // Gate `billingInterval` against the admin-controlled allow-list
     // (`adoption.intervalsEnabled` SystemSetting). Production default
     // hides annual; an admin can flip it on without redeploying.
-    const allowed = this.settings.get().adoption.intervalsEnabled ?? ['monthly', 'one_time'];
-    if (!allowed.includes(dto.billingInterval as 'monthly' | 'annual' | 'one_time')) {
+    const allowed = this.settings.get().adoption.intervalsEnabled ?? DEFAULT_INTERVALS_ENABLED;
+    if (!allowed.includes(dto.billingInterval as BillingInterval)) {
       throw new BadRequestException(
         `Billing interval '${dto.billingInterval}' is disabled. Allowed: ${allowed.join(', ')}`,
       );
@@ -266,7 +276,7 @@ export class AdoptionsService {
       return a;
     });
 
-    const webUrl = process.env.NEXT_PUBLIC_WEB_URL ?? 'http://localhost:3000';
+    const webUrl = getWebUrl();
     const handoff = await this.payments.initiate(
       {
         donorId: donor.id,
@@ -301,8 +311,8 @@ export class AdoptionsService {
    */
   async createBundle(dto: CreateBundleDto, actorIp?: string) {
     // Gate `billingInterval` against the admin-controlled allow-list.
-    const allowed = this.settings.get().adoption.intervalsEnabled ?? ['monthly', 'one_time'];
-    if (!allowed.includes(dto.billingInterval as 'monthly' | 'annual' | 'one_time')) {
+    const allowed = this.settings.get().adoption.intervalsEnabled ?? DEFAULT_INTERVALS_ENABLED;
+    if (!allowed.includes(dto.billingInterval as BillingInterval)) {
       throw new BadRequestException(
         `Billing interval '${dto.billingInterval}' is disabled. Allowed: ${allowed.join(', ')}`,
       );
@@ -474,7 +484,7 @@ export class AdoptionsService {
     // Single Paytrail/MobilePay session for the sum. The "head" adoption
     // is the first one — its activation will fan out to all siblings.
     const head = adoptions[0]!;
-    const webUrl = process.env.NEXT_PUBLIC_WEB_URL ?? 'http://localhost:3000';
+    const webUrl = getWebUrl();
     const itemNames = adoptions
       .map((a) => bySlug.get(a.plantSlug)!.nameEn)
       .join(', ')

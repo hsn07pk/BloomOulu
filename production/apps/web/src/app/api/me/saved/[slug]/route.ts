@@ -14,6 +14,7 @@
  * signature with the shared AUTH_SECRET.
  */
 import { cookies } from 'next/headers';
+import { getInternalApiUrl } from '@bloomoulu/constants';
 import { NextResponse } from 'next/server';
 
 const COOKIE_NAME = 'bloomoulu.session';
@@ -29,7 +30,7 @@ export async function PUT(_req: Request, ctx: { params: Promise<{ slug: string }
   const bearer = await getBearer();
   if (!bearer) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   const apiUrl =
-    process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+    getInternalApiUrl();
   const res = await fetch(`${apiUrl}/v1/me/saved/${encodeURIComponent(slug)}`, {
     method: 'PUT',
     headers: { Authorization: `Bearer ${bearer}` },
@@ -44,7 +45,7 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ slug: strin
   const bearer = await getBearer();
   if (!bearer) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   const apiUrl =
-    process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+    getInternalApiUrl();
   const res = await fetch(`${apiUrl}/v1/me/saved/${encodeURIComponent(slug)}`, {
     method: 'DELETE',
     headers: { Authorization: `Bearer ${bearer}` },

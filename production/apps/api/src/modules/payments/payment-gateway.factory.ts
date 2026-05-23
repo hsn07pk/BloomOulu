@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { getWebUrl } from '@bloomoulu/constants';
 import {
   BankTransferGateway,
   MobilePayGateway,
@@ -64,7 +65,7 @@ export class PaymentGatewayFactory {
       apiBaseUrl: process.env.PAYTRAIL_API_URL,
       webhookSecret: process.env.PAYTRAIL_WEBHOOK_SECRET,
       mockMode,
-      webBaseUrl: process.env.NEXT_PUBLIC_WEB_URL ?? 'http://localhost:3000',
+      webBaseUrl: getWebUrl(),
     });
   }
 

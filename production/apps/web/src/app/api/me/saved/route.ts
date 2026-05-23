@@ -3,6 +3,7 @@
  * POST /api/me/saved/sync     → bulk merge anonymous shadow list on first sign-in
  */
 import { cookies } from 'next/headers';
+import { getInternalApiUrl } from '@bloomoulu/constants';
 import { NextResponse } from 'next/server';
 
 const COOKIE_NAME = 'bloomoulu.session';
@@ -16,7 +17,7 @@ export async function GET() {
   const bearer = await getBearer();
   if (!bearer) return NextResponse.json({ items: [] });
   const apiUrl =
-    process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+    getInternalApiUrl();
   const res = await fetch(`${apiUrl}/v1/me/saved`, {
     headers: { Authorization: `Bearer ${bearer}` },
     cache: 'no-store',
@@ -30,7 +31,7 @@ export async function POST(req: Request) {
   if (!bearer) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   const body = await req.json().catch(() => ({}));
   const apiUrl =
-    process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+    getInternalApiUrl();
   const res = await fetch(`${apiUrl}/v1/me/saved/sync`, {
     method: 'POST',
     headers: {

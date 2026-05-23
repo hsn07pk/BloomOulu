@@ -26,6 +26,7 @@ import {
   Put,
 } from '@nestjs/common';
 import { z } from 'zod';
+import { LocaleEnum } from '@bloomoulu/constants';
 import { ZodValidationPipe } from '../../common/zod.pipe.js';
 import { Roles } from '../../common/roles.decorator.js';
 import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.decorator.js';
@@ -33,7 +34,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 
 const PatchProfile = z.object({
   name: z.string().min(1).max(120).nullable().optional(),
-  locale: z.enum(['en', 'fi', 'sv']).optional(),
+  locale: LocaleEnum.optional(),
   homeRegion: z.string().max(32).nullable().optional(),
   marketingOptIn: z.boolean().optional(),
 });

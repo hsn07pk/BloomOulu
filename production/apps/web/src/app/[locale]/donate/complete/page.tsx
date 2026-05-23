@@ -16,14 +16,13 @@
  * verification never leaks the merchant secret to the browser.
  */
 import { getTranslations } from 'next-intl/server';
+import { getInternalApiUrl } from '@bloomoulu/constants';
 import { curatorEmail } from '../../../../lib/contact';
 
 export const dynamic = 'force-dynamic';
 
 function apiUrl(): string {
-  return (
-    process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
-  );
+  return getInternalApiUrl();
 }
 
 type Outcome =

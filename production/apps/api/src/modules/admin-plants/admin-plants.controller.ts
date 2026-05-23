@@ -21,6 +21,7 @@ import {
   Post,
 } from '@nestjs/common';
 import { z } from 'zod';
+import { RedListStatusEnum } from '@bloomoulu/constants';
 import { ZodValidationPipe } from '../../common/zod.pipe.js';
 import { Roles } from '../../common/roles.decorator.js';
 import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.decorator.js';
@@ -33,7 +34,7 @@ const CreateBody = z.object({
   nameEn: z.string().min(1),
   nameFi: z.string().min(1),
   nameSv: z.string().min(1),
-  redListStatus: z.enum(['LC', 'NT', 'VU', 'EN', 'CR', 'EX', 'DD', 'NA']),
+  redListStatus: RedListStatusEnum,
   bloomSeason: z.enum(['spring', 'summer', 'autumn', 'winter', 'all']),
   bloomWindow: z.string().nullable().optional(),
   origin: z.string(),
@@ -52,7 +53,7 @@ const PatchBody = z.object({
   nameEn: z.string().min(1).optional(),
   nameFi: z.string().min(1).optional(),
   nameSv: z.string().min(1).optional(),
-  redListStatus: z.enum(['LC', 'NT', 'VU', 'EN', 'CR', 'EX', 'DD', 'NA']).optional(),
+  redListStatus: RedListStatusEnum.optional(),
   bloomSeason: z.enum(['spring', 'summer', 'autumn', 'winter', 'all']).optional(),
   bloomWindow: z.string().nullable().optional(),
   origin: z.string().optional(),

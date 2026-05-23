@@ -1,6 +1,7 @@
 'use server';
 
 import { redirect } from 'next/navigation';
+import { getInternalApiUrl } from '@bloomoulu/constants';
 
 // Shared internal helper — both single and bundle actions accept the same
 // donor/gift/memorial/co-adopter fields from the wizard FormData. Whatever
@@ -69,9 +70,7 @@ function apiBase(): string {
   // Server actions run inside the web container; in Docker, the public URL
   // resolves to the container itself. Prefer the internal Docker-network
   // URL when present so the submit POST reaches the api service.
-  return (
-    process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
-  );
+  return getInternalApiUrl();
 }
 
 export async function adoptAction(formData: FormData) {

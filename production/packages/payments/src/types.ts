@@ -19,23 +19,31 @@ import { z } from 'zod';
 export type Cents = number;
 export type CurrencyCode = 'EUR'; // expand when we add USD donations
 
-export const ProviderId = z.enum(['paytrail', 'mobilepay', 'bank_transfer']);
-export type ProviderId = z.infer<typeof ProviderId>;
+// Cross-cutting enums live in @bloomoulu/constants — re-exported here so
+// callers that already import from @bloomoulu/payments/types don't have to
+// chase the move. The constants package is the one place to edit.
+import {
+  AdoptionIntentEnum,
+  BillingIntervalEnum,
+  LocaleEnum,
+  PaymentProviderEnum,
+  type AdoptionIntent as SharedAdoptionIntent,
+  type BillingInterval as SharedBillingInterval,
+  type Locale as SharedLocale,
+  type PaymentProvider as SharedPaymentProvider,
+} from '@bloomoulu/constants';
 
-export const AdoptionIntent = z.enum([
-  'for_self',
-  'gift',
-  'memorial',
-  'class',
-  'corporate',
-]);
-export type AdoptionIntent = z.infer<typeof AdoptionIntent>;
+export const ProviderId = PaymentProviderEnum;
+export type ProviderId = SharedPaymentProvider;
 
-export const BillingInterval = z.enum(['one_time', 'monthly', 'annual']);
-export type BillingInterval = z.infer<typeof BillingInterval>;
+export const AdoptionIntent = AdoptionIntentEnum;
+export type AdoptionIntent = SharedAdoptionIntent;
 
-export const Locale = z.enum(['en', 'fi', 'sv']);
-export type Locale = z.infer<typeof Locale>;
+export const BillingInterval = BillingIntervalEnum;
+export type BillingInterval = SharedBillingInterval;
+
+export const Locale = LocaleEnum;
+export type Locale = SharedLocale;
 
 // ─── Inputs ─────────────────────────────────────────────────────────────────
 

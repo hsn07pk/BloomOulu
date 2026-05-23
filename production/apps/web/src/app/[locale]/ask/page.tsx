@@ -5,17 +5,14 @@
  * AskChat (client component).
  */
 import { getTranslations } from 'next-intl/server';
+import { getInternalApiUrl, getBrowserApiUrl } from '@bloomoulu/constants';
 import AskChat, { type AskSettings, type CorpusStats, type AuditMetric } from './chat.client';
 import { getSession, isStaff } from '../../../lib/session';
 
 export const dynamic = 'force-dynamic';
 
 function internalApiUrl(): string {
-  return (
-    process.env.INTERNAL_API_URL ??
-    process.env.NEXT_PUBLIC_API_URL ??
-    'http://localhost:4000'
-  );
+  return getInternalApiUrl();
 }
 
 async function loadStarters(locale: string): Promise<string[]> {
@@ -148,7 +145,7 @@ export default async function AskPage({ params }: { params: Promise<{ locale: st
         auditMetric={auditMetric}
         ask={ask}
         contactEmailDefault={session.user?.email ?? null}
-        apiUrl={process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'}
+        apiUrl={getBrowserApiUrl()}
       />
     </article>
   );

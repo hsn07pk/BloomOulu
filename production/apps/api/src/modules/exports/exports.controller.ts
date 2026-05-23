@@ -25,6 +25,7 @@ import {
 } from '@nestjs/common';
 import type { FastifyReply } from 'fastify';
 import { z } from 'zod';
+import { RedListStatusEnum } from '@bloomoulu/constants';
 import { Roles } from '../../common/roles.decorator.js';
 import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.decorator.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -36,7 +37,7 @@ const PlantImportRow = z.object({
   nameEn: z.string(),
   nameFi: z.string(),
   nameSv: z.string(),
-  redListStatus: z.enum(['LC', 'NT', 'VU', 'EN', 'CR', 'EX', 'DD', 'NA']),
+  redListStatus: RedListStatusEnum,
   bloomSeason: z.enum(['spring', 'summer', 'autumn', 'winter', 'all']),
   bloomWindow: z.string().optional(),
   origin: z.string(),

@@ -53,7 +53,8 @@
     "undici": "^7.1.1",
     "uuid": "^11.0.3",
     "zod": "^3.23.8",
-    "bcryptjs": "^2.4.3"
+    "bcryptjs": "^2.4.3",
+    "@bloomoulu/constants": "workspace:*"
   },
   "devDependencies": {
     "@nestjs/cli": "^10.4.8",

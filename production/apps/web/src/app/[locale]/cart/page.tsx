@@ -6,14 +6,13 @@
  * /v1/tiers (same source the adopt wizard uses).
  */
 import { getTranslations } from 'next-intl/server';
+import { getInternalApiUrl, getBrowserApiUrl } from '@bloomoulu/constants';
 import CartView from './CartView.client';
 
 export const dynamic = 'force-dynamic';
 
 function internalApiUrl(): string {
-  return (
-    process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
-  );
+  return getInternalApiUrl();
 }
 
 interface Tier {
@@ -69,7 +68,7 @@ export default async function CartPage({
         </p>
       </header>
 
-      <CartView locale={locale} tiers={tiers} apiUrl={process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'} />
+      <CartView locale={locale} tiers={tiers} apiUrl={getBrowserApiUrl()} />
     </main>
   );
 }

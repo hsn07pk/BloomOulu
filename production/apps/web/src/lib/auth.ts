@@ -7,6 +7,7 @@
  * tables live in packages/db).
  */
 import NextAuth, { type NextAuthConfig } from 'next-auth';
+import { getInternalApiUrl } from '@bloomoulu/constants';
 import EmailProvider from 'next-auth/providers/email';
 import Credentials from 'next-auth/providers/credentials';
 import { PrismaAdapter } from '@auth/prisma-adapter';
@@ -22,7 +23,7 @@ const providers: NextAuthConfig['providers'] = [
     authorize: async (creds) => {
       if (!creds?.email || !creds?.token) return null;
       const apiUrl =
-        process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+        getInternalApiUrl();
       const res = await fetch(`${apiUrl}/v1/auth/verify-magic-link`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },

@@ -10,6 +10,7 @@
  * connections. Subscribers are cleaned up on socket close.
  */
 import { Controller, Get, Module, Req, Res } from '@nestjs/common';
+import { getWebUrl } from '@bloomoulu/constants';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { PubsubService, type PubsubChannel, type PubsubMessage } from './pubsub.service.js';
 
@@ -21,7 +22,7 @@ class EventsController {
   async stream(@Req() req: FastifyRequest, @Res() res: FastifyReply) {
     const origin = (req.headers.origin as string | undefined) ?? '';
     const allowedOrigins = new Set([
-      process.env.NEXT_PUBLIC_WEB_URL ?? 'http://localhost:3000',
+      getWebUrl(),
       'http://localhost:3000',
       'http://localhost:3100',
       'http://localhost:4100',

@@ -1,11 +1,12 @@
 import { Body, Controller, Get, Logger, Post, Req } from '@nestjs/common';
 import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { LocaleEnum, getWebUrl } from '@bloomoulu/constants';
 import { ZodValidationPipe } from '../../common/zod.pipe.js';
 import { AuthService } from './auth.service.js';
 import { sendEmail } from '../../infra/email.js';
 
-const EmailBody = z.object({ email: z.string().email(), locale: z.enum(['en', 'fi', 'sv']).optional() });
+const EmailBody = z.object({ email: z.string().email(), locale: LocaleEnum.optional() });
 const VerifyBody = z.object({ email: z.string().email(), token: z.string().min(1) });
 const LookupBody = z.object({ email: z.string().email() });
 const SignInBody = z.object({ email: z.string().email(), password: z.string().min(1) });
@@ -30,7 +31,7 @@ export class AuthController {
   async magicLink(@Body(new ZodValidationPipe(EmailBody)) body: { email: string; locale?: 'en' | 'fi' | 'sv' }) {
     const link = await this.svc.issueMagicLink(body.email);
     const locale = body.locale ?? 'en';
-    const webUrl = process.env.NEXT_PUBLIC_WEB_URL ?? 'http://localhost:3000';
+    const webUrl = getWebUrl();
     const verifyUrl = `${webUrl}/${locale}/auth/verify?email=${encodeURIComponent(body.email)}&token=${encodeURIComponent(link.token)}`;
     const subject =
       locale === 'fi'
@@ -212,7 +213,7 @@ export class AuthController {
     }
     const link = await this.svc.issueMagicLink(body.email);
     const locale = body.locale ?? 'en';
-    const webUrl = process.env.NEXT_PUBLIC_WEB_URL ?? 'http://localhost:3000';
+    const webUrl = getWebUrl();
     const resetUrl = `${webUrl}/${locale}/auth/reset?email=${encodeURIComponent(body.email)}&token=${encodeURIComponent(link.token)}`;
     const subject =
       locale === 'fi' ? 'Vaihda BloomOulu-salasanasi'

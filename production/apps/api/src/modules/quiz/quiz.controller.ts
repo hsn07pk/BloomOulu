@@ -4,11 +4,12 @@
  */
 import { Body, Controller, Get, NotFoundException, Param, Post, Query } from '@nestjs/common';
 import { z } from 'zod';
+import { LocaleEnum } from '@bloomoulu/constants';
 import { ZodValidationPipe } from '../../common/zod.pipe.js';
 import { QuizService } from './quiz.service.js';
 
 const AttemptBody = z.object({
-  locale: z.enum(['en', 'fi', 'sv']),
+  locale: LocaleEnum,
   difficulty: z.string().optional(),
   answers: z.record(z.string(), z.number().int().min(-1).max(99)),
   durationMs: z.number().int().min(0),

@@ -13,15 +13,14 @@
  * 6-year Finnish accounting law retention window.
  */
 import { cookies } from 'next/headers';
+import { getInternalApiUrl } from '@bloomoulu/constants';
 import { NextResponse, type NextRequest } from 'next/server';
 import { jwtVerify } from 'jose';
 
 const COOKIE = 'bloomoulu.session';
 
 function apiBase(): string {
-  return (
-    process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
-  );
+  return getInternalApiUrl();
 }
 
 async function readSession(): Promise<{ sub: string; locale: string; token: string } | null> {

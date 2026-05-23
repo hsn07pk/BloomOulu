@@ -13,6 +13,7 @@
  * one — the legal team reads + edits content, not CSS.
  */
 import { notFound } from 'next/navigation';
+import { getInternalApiUrl } from '@bloomoulu/constants';
 
 interface ContentBlock {
   slug: string;
@@ -24,7 +25,7 @@ interface ContentBlock {
 
 async function loadBlock(slug: string): Promise<ContentBlock | null> {
   const apiUrl =
-    process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+    getInternalApiUrl();
   try {
     const res = await fetch(`${apiUrl}/v1/content-blocks/${encodeURIComponent(slug)}`, {
       cache: 'no-store',

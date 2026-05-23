@@ -15,10 +15,11 @@
  */
 'use client';
 import { useEffect, useState, useRef } from 'react';
+import { getBrowserApiUrl, getWebUrl } from '@bloomoulu/constants';
 
 const KIOSK_ID = process.env.NEXT_PUBLIC_KIOSK_ID ?? '';
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
-const WEB_URL = process.env.NEXT_PUBLIC_WEB_URL ?? 'http://localhost:3000';
+const API_URL = getBrowserApiUrl();
+const WEB_URL = getWebUrl();
 
 interface Plant {
   id: string;

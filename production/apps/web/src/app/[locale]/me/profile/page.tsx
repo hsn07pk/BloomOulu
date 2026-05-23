@@ -3,6 +3,7 @@
  * server actions that bear the donor's session JWT.
  */
 import { redirect } from 'next/navigation';
+import { getInternalApiUrl } from '@bloomoulu/constants';
 import { getTranslations } from 'next-intl/server';
 import { getSession } from '../../../../lib/session';
 import { ProfileForm } from './form.client';
@@ -23,7 +24,7 @@ interface Profile {
 
 async function fetchProfile(token: string): Promise<Profile | null> {
   const apiUrl =
-    process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+    getInternalApiUrl();
   try {
     const res = await fetch(`${apiUrl}/v1/me/profile`, {
       headers: { authorization: `Bearer ${token}` },
