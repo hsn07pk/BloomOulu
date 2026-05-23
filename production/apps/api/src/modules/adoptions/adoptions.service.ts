@@ -56,9 +56,9 @@ export type CreateAdoptionDto = z.infer<typeof CreateAdoptionDto>;
 
 /**
  * Bundle DTO — one donor block, multiple cart items. Each item has its
- * own plant+tier+nickname; the rest (donor identity, recurring, etc.)
- * is shared. We deliberately keep gift/memorial out of this first
- * iteration because they need per-item recipient flows.
+ * own plant+tier+nickname; the rest (donor identity, intent, dedication,
+ * gift/memorial info) is shared across the whole bundle so the same
+ * UX as the single-plant flow applies to N plants.
  */
 export const CreateBundleDto = z.object({
   items: z.array(
@@ -69,6 +69,7 @@ export const CreateBundleDto = z.object({
       dedication: z.string().max(240).optional(),
     }),
   ).min(1).max(25),
+  intent: z.enum(['for_self', 'gift', 'memorial', 'class', 'corporate']).default('for_self'),
   recurring: z.boolean().default(true),
   billingInterval: z.enum(['annual', 'monthly', 'one_time']).default('monthly'),
   donor: z.object({
@@ -79,6 +80,21 @@ export const CreateBundleDto = z.object({
     homeRegion: z.string().max(32).optional(),
     postalAddress: PostalAddress.optional(),
   }),
+  /** Shared dedication for every item in the bundle when intent demands
+   *  one (e.g. memorial). Per-item dedication on `items[].dedication`
+   *  still wins for that item; this is the donor-wide fallback. */
+  dedication: z.string().max(240).optional(),
+  // Gift recipient (applies to the bundle as a single gift parcel)
+  giftRecipientName: z.string().max(120).optional(),
+  giftRecipientEmail: z.string().email().optional(),
+  giftDeliverOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  giftAnonymous: z.boolean().default(false),
+  giftWrap: z.boolean().default(false),
+  // Memorial (applies to the bundle as a single dedication)
+  memorialOf: z.string().max(120).optional(),
+  memorialFamilyEmail: z.string().email().optional(),
+  // Co-adopters share the bundle the same way they would a single adoption.
+  coAdopters: z.array(CoAdopter).max(10).optional(),
   showOnDonorWall: z.boolean().default(true),
   marketingOptIn: z.boolean().default(false),
   preferredProvider: z.enum(['paytrail', 'mobilepay', 'bank_transfer']).optional(),
@@ -291,6 +307,14 @@ export class AdoptionsService {
         `Billing interval '${dto.billingInterval}' is disabled. Allowed: ${allowed.join(', ')}`,
       );
     }
+    // Same intent-gating as the single-plant create() — every donor-facing
+    // entry point (single or bundle) goes through identical validation.
+    if (dto.intent === 'gift' && !dto.giftRecipientEmail) {
+      throw new BadRequestException('Gift adoption requires giftRecipientEmail');
+    }
+    if (dto.intent === 'memorial' && !dto.memorialOf) {
+      throw new BadRequestException('Memorial adoption requires memorialOf');
+    }
 
     // Resolve every plant + tier up front so we fail fast before
     // creating anything.
@@ -313,15 +337,20 @@ export class AdoptionsService {
       if (!byTier.has(id)) throw new NotFoundException(`Tier ${id} not found`);
     }
 
-    // Per-item price = tier price for the chosen interval. Bundles don't
-    // support per-item gift-wrap in this iteration (cart UI doesn't surface it).
+    // Per-item price = tier price for the chosen interval. Gift-wrap is a
+    // single bundle-wide add-on (one wrap for the parcel, not per item)
+    // and is applied once to the first item so the row totals still match
+    // the payment amount.
+    const giftWrapCents = this.settings.get().adoption.giftWrapCents;
+    const giftWrapAddOn = dto.intent === 'gift' && dto.giftWrap ? giftWrapCents : 0;
     const perItemCents = dto.items.map((it) => {
       const tier = byTier.get(it.tierId)!;
       return dto.billingInterval === 'monthly' && tier.monthlyPriceCents
         ? tier.monthlyPriceCents
         : tier.annualPriceCents;
     });
-    const totalCents = perItemCents.reduce((s, c) => s + c, 0);
+    const itemsSubtotal = perItemCents.reduce((s, c) => s + c, 0);
+    const totalCents = itemsSubtotal + giftWrapAddOn;
     if (totalCents <= 0) throw new BadRequestException('Bundle total must be positive');
 
     // Donor upsert — same as single-item flow.
@@ -353,28 +382,58 @@ export class AdoptionsService {
       });
     }
 
+    // Resolve gift recipient as a real User so they can claim My Garden,
+    // same logic as the single create() path.
+    let giftRecipientId: string | null = null;
+    if (dto.intent === 'gift' && dto.giftRecipientEmail) {
+      const recipient = await this.prisma.user.upsert({
+        where: { email: dto.giftRecipientEmail },
+        update: { name: dto.giftRecipientName ?? undefined },
+        create: {
+          email: dto.giftRecipientEmail,
+          name: dto.giftRecipientName ?? null,
+          locale: dto.donor.locale,
+        },
+      });
+      giftRecipientId = recipient.id;
+    }
+
     const bundleId = uuidv7();
+    const sharedDedication = dto.dedication ?? null;
+    const sharedCoAdopters =
+      dto.coAdopters && dto.coAdopters.length > 0 ? (dto.coAdopters as any) : Prisma.JsonNull;
     const adoptions = await this.prisma.$transaction(async (tx) => {
       const rows: Array<{ id: string; plantSlug: string; tierId: string; amountCents: number }> = [];
       for (let i = 0; i < dto.items.length; i++) {
         const it = dto.items[i]!;
         const plant = bySlug.get(it.plantSlug)!;
         const tier = byTier.get(it.tierId)!;
-        const amountCents = perItemCents[i]!;
+        // Apply the bundle-wide gift-wrap add-on to the first row so the
+        // sum of Adoption.amountCents equals the payment total.
+        const amountCents = perItemCents[i]! + (i === 0 ? giftWrapAddOn : 0);
         const a = await tx.adoption.create({
           data: {
             donorId: donor.id,
             plantId: plant.id,
             tierId: tier.id as any,
-            intent: 'for_self' as any,
+            intent: dto.intent as any,
             recurring: dto.recurring,
             billingInterval: dto.billingInterval as any,
             amountCents,
             status: 'pending',
             nickname: it.nickname ?? null,
-            dedication: it.dedication ?? null,
+            dedication: it.dedication ?? sharedDedication,
             showOnDonorWall: dto.showOnDonorWall,
             homeRegion: dto.donor.homeRegion ?? null,
+            memorialOf: dto.memorialOf ?? null,
+            memorialFamilyEmail: dto.memorialFamilyEmail ?? null,
+            giftRecipientId,
+            giftDeliverOn: dto.giftDeliverOn ? new Date(`${dto.giftDeliverOn}T00:00:00Z`) : null,
+            giftAnonymous: dto.giftAnonymous,
+            // Only the first row carries giftWrap=true so downstream
+            // fulfillment doesn't try to wrap N parcels for a single bundle.
+            giftWrap: i === 0 ? dto.giftWrap : false,
+            coAdopters: sharedCoAdopters,
             marketingOptIn: dto.marketingOptIn,
             bundleId,
           },
@@ -388,10 +447,24 @@ export class AdoptionsService {
         after: {
           bundleId,
           totalCents,
+          itemsSubtotal,
+          giftWrapAddOn,
           itemCount: rows.length,
           items: rows,
+          intent: dto.intent,
           billingInterval: dto.billingInterval,
           recurring: dto.recurring,
+          dedication: sharedDedication,
+          giftRecipientEmail: dto.giftRecipientEmail ?? null,
+          giftRecipientId,
+          giftDeliverOn: dto.giftDeliverOn ?? null,
+          giftAnonymous: dto.giftAnonymous,
+          giftWrap: dto.giftWrap,
+          memorialOf: dto.memorialOf ?? null,
+          memorialFamilyEmail: dto.memorialFamilyEmail ?? null,
+          coAdopters: dto.coAdopters ?? [],
+          marketingOptIn: dto.marketingOptIn,
+          preferredProvider: dto.preferredProvider ?? null,
         },
         ip: actorIp ?? null,
       });
@@ -415,9 +488,11 @@ export class AdoptionsService {
         donorCountry: dto.donor.countryCode,
         preferredProvider: dto.preferredProvider,
         amountCents: totalCents,
-        intent: 'for_self',
+        intent: dto.intent,
         recurring: dto.recurring,
-        description: `Adopt ${adoptions.length} plant${adoptions.length === 1 ? '' : 's'}: ${itemNames}`,
+        description: dto.giftWrap
+          ? `Adopt ${adoptions.length} plant${adoptions.length === 1 ? '' : 's'} + linen gift-wrap: ${itemNames}`
+          : `Adopt ${adoptions.length} plant${adoptions.length === 1 ? '' : 's'}: ${itemNames}`,
         adoptionId: head.id,
         // Paytrail appends ?checkout-stamp=...&checkout-status=ok&signature=...
         // to this URL; /donate/complete reads them, hits /webhooks/paytrail

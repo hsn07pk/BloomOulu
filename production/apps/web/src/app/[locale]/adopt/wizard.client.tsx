@@ -1,8 +1,10 @@
 'use client';
 
 import { useEffect, useMemo, useState, useTransition } from 'react';
+import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { adoptAction } from './actions';
+import { adoptAction, adoptBundleAction } from './actions';
+import { useCart, type CartItem } from '../../../lib/cart.client';
 
 // ─── Types ────────────────────────────────────────────────────────────────
 export type AdoptIntent = 'for_self' | 'gift' | 'memorial' | 'class';
@@ -235,6 +237,14 @@ interface AdoptWizardProps {
    *  the donor doesn't have to re-pick on step 1. Null = use the wizard's
    *  own first-enabled default. */
   presetInterval?: 'monthly' | 'annual' | 'one_time' | null;
+  /** Cart mode: render the wizard as the canonical multi-plant checkout
+   *  instead of single-plant. When true the wizard reads items from the
+   *  localStorage cart, replaces step 2 with a basket review, and submits
+   *  to /v1/adoptions/bundle instead of /v1/adoptions. */
+  cartMode?: boolean;
+  /** Browser-facing API base URL — only used in cart mode to look up
+   *  plants that aren't in the prefetched `plants` index. */
+  apiUrl?: string;
   title: string;
   /** Enabled payment rails from /v1/settings/public. Bank transfer is omitted
    *  from the UI by design — Paytrail + MobilePay are the donor-facing rails. */
@@ -251,6 +261,8 @@ export function AdoptWizard({
   presetTier,
   presetIntent,
   presetInterval,
+  cartMode = false,
+  apiUrl,
   title,
   enabledProviders,
   adopt,
@@ -259,9 +271,75 @@ export function AdoptWizard({
   // When the donor arrived from a plant-detail page's "Adopt this plant"
   // button (presetPlantSlug is set), skip the tier+pick steps and drop
   // them straight into the personalise step. They picked already.
+  // In cart mode, the items are already picked too — same fast-forward.
   // Otherwise start at step 1 (tier).
-  const initialStep = presetPlantSlug ? 3 : 1;
+  const initialStep = presetPlantSlug || cartMode ? 3 : 1;
   const [step, setStep] = useState(initialStep);
+
+  // ─── Cart-mode plant lookup ───────────────────────────────────────────
+  // `plants` is the small index of popular plants pre-fetched server-side.
+  // When the cart contains slugs that aren't in that index (donor walked
+  // through niche species), we need to fetch their metadata client-side
+  // so SummaryCard + the basket review render with proper names + images.
+  const cartHook = useCart();
+  const [cartPlants, setCartPlants] = useState<Record<string, AdoptPlant>>({});
+  const cartItems = cartMode ? cartHook.cart.items : [];
+  const cartReady = !cartMode || cartHook.hydrated;
+  useEffect(() => {
+    if (!cartMode || !cartHook.hydrated) return;
+    const missing = cartHook.cart.items
+      .map((i) => i.plantSlug)
+      .filter((slug) => !plants.some((p) => p.slug === slug) && !cartPlants[slug]);
+    if (missing.length === 0) return;
+    let cancelled = false;
+    const base = (apiUrl ?? '').replace(/\/$/, '');
+    (async () => {
+      const fetched = await Promise.all(
+        missing.map(async (slug) => {
+          try {
+            const url = base ? `${base}/v1/plants/${encodeURIComponent(slug)}` : `/v1/plants/${encodeURIComponent(slug)}`;
+            const res = await fetch(url);
+            if (!res.ok) return null;
+            const data = (await res.json()) as AdoptPlant;
+            return { slug, plant: data };
+          } catch {
+            return null;
+          }
+        }),
+      );
+      if (cancelled) return;
+      setCartPlants((prev) => {
+        const next = { ...prev };
+        for (const f of fetched) {
+          if (f) next[f.slug] = f.plant;
+        }
+        return next;
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [cartMode, cartHook.hydrated, cartHook.cart.items, plants, cartPlants, apiUrl]);
+  const lookupPlant = (slug: string): AdoptPlant | null =>
+    plants.find((p) => p.slug === slug) ?? cartPlants[slug] ?? null;
+
+  // Cart-item summary used by SummaryCard (multi-item view) — built from
+  // the localStorage cart joined with the in-memory plant + tier indexes.
+  const cartItemSummaries = useMemo(() => {
+    if (!cartMode) return undefined;
+    return cartItems.map((it) => ({
+      plantSlug: it.plantSlug,
+      tierId: it.tierId,
+      plant: lookupPlant(it.plantSlug),
+      tier: tiers.find((tt) => tt.id === it.tierId) ?? null,
+    })) as CartItemSummary[];
+  }, [cartMode, cartItems, tiers, cartPlants, plants]);
+  const onChangeCartTier = (slug: string, newTier: AdoptTier['id']) => {
+    cartHook.setTier(slug, newTier as CartItem['tierId']);
+  };
+  const onRemoveCartItem = (slug: string) => {
+    cartHook.remove(slug);
+  };
 
   // Tier + billing
   const orderedTiers = useMemo(
@@ -329,19 +407,32 @@ export function AdoptWizard({
     () => tiers.find((tt) => tt.id === tierId) ?? orderedTiers[0] ?? null,
     [tiers, tierId, orderedTiers],
   );
-  const selectedPlant = useMemo(
-    () => plants.find((p) => p.slug === plantSlug) ?? plants[0] ?? null,
-    [plants, plantSlug],
-  );
+  const selectedPlant = useMemo(() => {
+    if (cartMode && cartItems.length > 0) {
+      return lookupPlant(cartItems[0]!.plantSlug) ?? plants[0] ?? null;
+    }
+    return plants.find((p) => p.slug === plantSlug) ?? plants[0] ?? null;
+  }, [plants, plantSlug, cartMode, cartItems, cartPlants]);
 
-  // Pricing derives from the selected tier + the recurring toggle. The
-  // gift-wrap add-on is folded into the displayed total only when intent
-  // is gift, mirroring the demo design and the server-side calc.
+  const priceForTier = (id: AdoptTier['id']): number => {
+    const tier = tiers.find((tt) => tt.id === id);
+    if (!tier) return 0;
+    if (billingInterval === 'monthly' && tier.monthlyPriceCents) return tier.monthlyPriceCents;
+    return tier.annualPriceCents;
+  };
+
+  // Pricing derives from the selected tier + the recurring toggle (single)
+  // or summed across cart items (multi). Gift-wrap is a single bundle-wide
+  // add-on; it's folded into the displayed total only when intent=gift,
+  // mirroring the demo design and the server-side calc.
   const baseCents = useMemo(() => {
+    if (cartMode) {
+      return cartItems.reduce((sum, it) => sum + priceForTier(it.tierId), 0);
+    }
     if (!selectedTier) return 0;
     if (billingInterval === 'monthly' && selectedTier.monthlyPriceCents) return selectedTier.monthlyPriceCents;
     return selectedTier.annualPriceCents;
-  }, [selectedTier, billingInterval]);
+  }, [selectedTier, billingInterval, cartMode, cartItems, tiers]);
   // Gift-wrap add-on price comes from admin settings (admin.adoption.giftWrapCents).
   const wrapAddOnCents = intent === 'gift' && giftWrap ? adopt.giftWrapCents : 0;
   const totalCents = baseCents + wrapAddOnCents;
@@ -363,10 +454,12 @@ export function AdoptWizard({
   })();
 
   const submit = () => {
-    if (!selectedTier || !selectedPlant || !donorEmail) return;
+    if (!donorEmail) return;
+    setSubmitting(true);
+    setErrorMessage(null);
     const fd = new FormData();
-    fd.set('plantSlug', selectedPlant.slug);
-    fd.set('tierId', selectedTier.id);
+    // Shared fields — identical between single and bundle endpoints so
+    // the wizard collects them once.
     fd.set('intent', intent);
     fd.set('recurring', String(recurring));
     fd.set('billingInterval', billingInterval);
@@ -390,8 +483,34 @@ export function AdoptWizard({
     if (co.length > 0) fd.set('coAdopters', JSON.stringify(co));
     fd.set('marketingOptIn', String(marketingOptIn));
     fd.set('preferredProvider', paymentMethod);
-    setSubmitting(true);
-    setErrorMessage(null);
+
+    // Bundle path: every multi-item adoption goes here. Single-plant cart
+    // also routes through bundle so /cart/checkout behaviour is the same
+    // regardless of count.
+    if (cartMode) {
+      if (cartItems.length === 0) {
+        setSubmitting(false);
+        setErrorMessage(t('errorTitle'));
+        return;
+      }
+      fd.set(
+        'items',
+        JSON.stringify(cartItems.map((it) => ({ plantSlug: it.plantSlug, tierId: it.tierId }))),
+      );
+      void adoptBundleAction(fd).catch((err: Error) => {
+        setSubmitting(false);
+        setErrorMessage(err?.message ?? t('errorTitle'));
+      });
+      return;
+    }
+
+    // Single-plant path: classic /v1/adoptions endpoint with rich fields.
+    if (!selectedTier || !selectedPlant) {
+      setSubmitting(false);
+      return;
+    }
+    fd.set('plantSlug', selectedPlant.slug);
+    fd.set('tierId', selectedTier.id);
     void adoptAction(fd).catch((err: Error) => {
       setSubmitting(false);
       setErrorMessage(err?.message ?? t('errorTitle'));
@@ -405,6 +524,44 @@ export function AdoptWizard({
     { key: 'personalise', label: t('stepPersonalise') },
     { key: 'pay', label: t('stepPay') },
   ];
+
+  // Cart mode with an empty basket → show the empty state instead of the
+  // wizard. The donor came here from /cart/checkout but their cart is
+  // empty (cleared in another tab, expired storage, etc.).
+  if (cartMode && cartReady && cartItems.length === 0) {
+    return (
+      <section className="container" style={{ padding: '64px 24px', textAlign: 'center' }}>
+        <div aria-hidden="true" style={{ fontSize: 48, marginBottom: 12 }}>🌱</div>
+        <h1 className="serif" style={{ fontSize: 28, color: 'var(--forest)' }}>
+          {locale === 'fi'
+            ? 'Korisi on tyhjä'
+            : locale === 'sv'
+              ? 'Din korg är tom'
+              : 'Your cart is empty'}
+        </h1>
+        <p className="muted" style={{ marginTop: 12, maxWidth: 480, marginInline: 'auto' }}>
+          {locale === 'fi'
+            ? 'Selaa kasveja ja paina "Adoptoi tämä kasvi" tai "Lisää koriin" jokaisella sivulla.'
+            : locale === 'sv'
+              ? 'Bläddra bland växterna och tryck "Adoptera denna växt" eller "Lägg i korg" på var och en.'
+              : 'Browse the collection and press "Adopt this plant" or "Add to cart" on each plant you want.'}
+        </p>
+        <Link href={`/${locale}/plants`} className="btn btn-primary btn-lg" style={{ marginTop: 24, display: 'inline-flex' }}>
+          {locale === 'fi' ? 'Selaa kasveja →' : locale === 'sv' ? 'Bläddra växter →' : 'Browse plants →'}
+        </Link>
+      </section>
+    );
+  }
+  // Cart mode but localStorage hasn't hydrated yet — render a minimal
+  // placeholder so we don't flash an empty state to a logged-in donor
+  // whose cart is non-empty.
+  if (cartMode && !cartReady) {
+    return (
+      <section className="container" style={{ padding: '64px 24px', textAlign: 'center' }}>
+        <p className="muted">Loading basket…</p>
+      </section>
+    );
+  }
 
   return (
     <>
@@ -577,6 +734,10 @@ export function AdoptWizard({
             canContinue={canContinueFromPersonalise}
             onNext={goNext}
             adopt={adopt}
+            cartItems={cartItemSummaries}
+            onChangeCartTier={cartMode ? onChangeCartTier : undefined}
+            onRemoveCartItem={cartMode ? onRemoveCartItem : undefined}
+            allTiers={cartMode ? tiers : undefined}
           />
         )}
 
@@ -601,6 +762,8 @@ export function AdoptWizard({
             enabledProviders={enabledProviders}
             errorMessage={errorMessage}
             onSubmit={submit}
+            cartItems={cartItemSummaries}
+            allTiers={cartMode ? tiers : undefined}
           />
         )}
       </div>
@@ -1258,6 +1421,12 @@ interface Step3Props {
   canContinue: boolean;
   onNext: () => void;
   adopt: AdoptSettings;
+  /** Cart-mode summary inputs — forwarded straight to SummaryCard. Empty
+   *  in single-plant mode so the card renders the classic single-item layout. */
+  cartItems?: CartItemSummary[];
+  onChangeCartTier?: (plantSlug: string, tierId: AdoptTier['id']) => void;
+  onRemoveCartItem?: (plantSlug: string) => void;
+  allTiers?: AdoptTier[];
 }
 
 function Step3Personalise(props: Step3Props) {
@@ -1297,6 +1466,10 @@ function Step3Personalise(props: Step3Props) {
     canContinue,
     onNext,
     adopt,
+    cartItems,
+    onChangeCartTier,
+    onRemoveCartItem,
+    allTiers,
   } = props;
   const t = useTranslations('Adopt');
 
@@ -1702,6 +1875,10 @@ function Step3Personalise(props: Step3Props) {
             totalCents={totalCents}
             dedication={dedication}
             giftWrap={intent === 'gift' && giftWrap}
+            cartItems={cartItems}
+            onChangeCartTier={onChangeCartTier}
+            onRemoveCartItem={onRemoveCartItem}
+            allTiers={allTiers}
           />
           <button
             type="button"
@@ -1740,6 +1917,8 @@ interface Step4Props {
   adopt: AdoptSettings;
   enabledProviders: AdoptProvider[];
   errorMessage: string | null;
+  cartItems?: CartItemSummary[];
+  allTiers?: AdoptTier[];
 }
 
 function Step4Pay({
@@ -1761,6 +1940,8 @@ function Step4Pay({
   adopt,
   enabledProviders,
   errorMessage,
+  cartItems,
+  allTiers,
 }: Step4Props) {
   const t = useTranslations('Adopt');
 
@@ -1934,6 +2115,8 @@ function Step4Pay({
             totalCents={totalCents}
             dedication={dedication}
             giftWrap={intent === 'gift' && giftWrap}
+            cartItems={cartItems}
+            allTiers={allTiers}
           />
           <button
             type="button"
@@ -2047,6 +2230,13 @@ function Field({
   );
 }
 
+interface CartItemSummary {
+  plantSlug: string;
+  tierId: AdoptTier['id'];
+  plant: AdoptPlant | null;
+  tier: AdoptTier | null;
+}
+
 interface SummaryCardProps {
   locale: string;
   plant: AdoptPlant;
@@ -2059,6 +2249,13 @@ interface SummaryCardProps {
   totalCents: number;
   dedication: string;
   giftWrap: boolean;
+  /** When present, the card renders as a multi-item basket review instead
+   *  of a single-plant card. Each item shows tier + price; the per-item
+   *  tier select edits the cart in localStorage. */
+  cartItems?: CartItemSummary[];
+  onChangeCartTier?: (plantSlug: string, tierId: AdoptTier['id']) => void;
+  onRemoveCartItem?: (plantSlug: string) => void;
+  allTiers?: AdoptTier[];
 }
 
 function SummaryCard({
@@ -2070,6 +2267,10 @@ function SummaryCard({
   totalCents,
   dedication,
   giftWrap,
+  cartItems,
+  onChangeCartTier,
+  onRemoveCartItem,
+  allTiers,
 }: SummaryCardProps) {
   const t = useTranslations('Adopt');
   const intentLabel = (
@@ -2098,63 +2299,210 @@ function SummaryCard({
         ? locale === 'fi' ? '/vuosi' : locale === 'sv' ? '/år' : '/yr'
         : '';
 
+  // Helper for per-item price within the basket review, mirrors the
+  // wizard's priceForTier so the donor sees the same number.
+  const priceForCartTier = (cartTier: AdoptTier | null): number => {
+    if (!cartTier) return 0;
+    if (billingInterval === 'monthly' && cartTier.monthlyPriceCents) return cartTier.monthlyPriceCents;
+    return cartTier.annualPriceCents;
+  };
+
+  const isMulti = Array.isArray(cartItems) && cartItems.length > 0;
+
   return (
     <div className="card" style={{ overflow: 'hidden' }}>
-      <div
-        style={{
-          padding: 24,
-          background: 'var(--paper)',
-          borderBottom: '1px solid var(--line)',
-        }}
-      >
-        <div style={{ display: 'flex', gap: 14 }}>
-          <div
-            style={{
-              width: 60,
-              height: 76,
-              borderRadius: 10,
-              background: plantAccent(plant.id),
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-              overflow: 'hidden',
-            }}
-          >
-            {plant.primaryImage?.url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={plant.primaryImage.url}
-                alt=""
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-              />
-            ) : (
-              <span aria-hidden="true" style={{ fontSize: "2rem" }}>
-                🌿
-              </span>
-            )}
+      {isMulti ? (
+        <div
+          style={{
+            padding: 16,
+            background: 'var(--paper)',
+            borderBottom: '1px solid var(--line)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 10,
+          }}
+        >
+          <div className="tiny" style={{ textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--ink-mute)' }}>
+            {cartItems!.length}{' '}
+            {locale === 'fi'
+              ? cartItems!.length === 1 ? 'kasvi korissa' : 'kasvia korissa'
+              : locale === 'sv'
+                ? cartItems!.length === 1 ? 'växt i korgen' : 'växter i korgen'
+                : cartItems!.length === 1 ? 'plant in basket' : 'plants in basket'}
           </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div className="tiny">{plant.nameFi}</div>
+          {cartItems!.map((it) => {
+            const p = it.plant;
+            const tt = it.tier;
+            return (
+              <div
+                key={it.plantSlug}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '36px 1fr auto',
+                  gap: 10,
+                  alignItems: 'center',
+                  padding: '6px 0',
+                  borderBottom: '1px dashed var(--line)',
+                }}
+              >
+                <div
+                  aria-hidden="true"
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 8,
+                    background: p ? plantAccent(p.id) : 'var(--sage-pale)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    overflow: 'hidden',
+                  }}
+                >
+                  {p?.primaryImage?.url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={p.primaryImage.url}
+                      alt=""
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                  ) : (
+                    <span style={{ fontSize: "1.067rem" }}>🌿</span>
+                  )}
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div
+                    className="serif"
+                    style={{ fontSize: "0.933rem", fontStyle: 'italic', lineHeight: 1.15, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                    title={p?.taxon?.latinName ?? p?.nameEn ?? it.plantSlug}
+                  >
+                    {p?.taxon?.latinName ?? p?.nameEn ?? it.plantSlug}
+                  </div>
+                  {allTiers && onChangeCartTier ? (
+                    <select
+                      value={it.tierId}
+                      onChange={(e) => onChangeCartTier(it.plantSlug, e.target.value as AdoptTier['id'])}
+                      style={{
+                        marginTop: 2,
+                        padding: '2px 6px',
+                        borderRadius: 6,
+                        border: '1px solid var(--line)',
+                        background: 'var(--cream)',
+                        fontSize: "0.733rem",
+                        maxWidth: 180,
+                      }}
+                      aria-label={`tier for ${it.plantSlug}`}
+                    >
+                      {allTiers.map((tier) => {
+                        const cents =
+                          billingInterval === 'monthly' && tier.monthlyPriceCents
+                            ? tier.monthlyPriceCents
+                            : tier.annualPriceCents;
+                        return (
+                          <option key={tier.id} value={tier.id}>
+                            {tierName(tier, locale)} · €{euros(cents, locale)}{recurringSuffix}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  ) : (
+                    <div className="tiny muted" style={{ marginTop: 2 }}>
+                      {tt ? tierName(tt, locale) : it.tierId}
+                    </div>
+                  )}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                  <div className="small" style={{ fontFamily: 'ui-monospace, monospace', whiteSpace: 'nowrap' }}>
+                    €{euros(priceForCartTier(tt), locale)}{recurringSuffix}
+                  </div>
+                  {onRemoveCartItem && (
+                    <button
+                      type="button"
+                      onClick={() => onRemoveCartItem(it.plantSlug)}
+                      className="tiny"
+                      style={{
+                        background: 'transparent',
+                        border: '1px solid var(--line)',
+                        borderRadius: 4,
+                        padding: '2px 6px',
+                        cursor: 'pointer',
+                        color: 'var(--rust-on-light)',
+                      }}
+                      aria-label={`remove ${it.plantSlug}`}
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+          <Link
+            href={`/${locale}/plants`}
+            className="tiny"
+            style={{ color: 'var(--forest)', textAlign: 'center', textDecoration: 'underline', padding: '4px 0' }}
+          >
+            {locale === 'fi' ? '+ Lisää kasveja' : locale === 'sv' ? '+ Lägg till växter' : '+ Add more plants'}
+          </Link>
+        </div>
+      ) : (
+        <div
+          style={{
+            padding: 24,
+            background: 'var(--paper)',
+            borderBottom: '1px solid var(--line)',
+          }}
+        >
+          <div style={{ display: 'flex', gap: 14 }}>
             <div
-              className="serif"
-              style={{ fontSize: "1.467rem", fontStyle: 'italic', lineHeight: 1.1, marginTop: 2 }}
+              style={{
+                width: 60,
+                height: 76,
+                borderRadius: 10,
+                background: plantAccent(plant.id),
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                overflow: 'hidden',
+              }}
             >
-              {plant.taxon?.latinName ?? plant.nameEn}
+              {plant.primaryImage?.url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={plant.primaryImage.url}
+                  alt=""
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                />
+              ) : (
+                <span aria-hidden="true" style={{ fontSize: "2rem" }}>
+                  🌿
+                </span>
+              )}
             </div>
-            <div style={{ marginTop: 6 }}>
-              <span className={`badge badge-${(plant.redListStatus ?? 'NA').toLowerCase()}`}>
-                {plant.redListStatus}
-              </span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="tiny">{plant.nameFi}</div>
+              <div
+                className="serif"
+                style={{ fontSize: "1.467rem", fontStyle: 'italic', lineHeight: 1.1, marginTop: 2 }}
+              >
+                {plant.taxon?.latinName ?? plant.nameEn}
+              </div>
+              <div style={{ marginTop: 6 }}>
+                <span className={`badge badge-${(plant.redListStatus ?? 'NA').toLowerCase()}`}>
+                  {plant.redListStatus}
+                </span>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
       <div style={{ padding: 24 }}>
-        <SummaryRow
-          label={t('summaryTier', { tier: tierName(tier, locale) })}
-          value={`€${euros(tierPriceCents, locale)}${recurringSuffix}`}
-        />
+        {!isMulti && (
+          <SummaryRow
+            label={t('summaryTier', { tier: tierName(tier, locale) })}
+            value={`€${euros(tierPriceCents, locale)}${recurringSuffix}`}
+          />
+        )}
         <SummaryRow label={t('summaryIntent')} value={intentLabel} />
         {dedication && (
           <SummaryRow

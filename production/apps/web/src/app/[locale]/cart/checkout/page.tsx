@@ -1,48 +1,70 @@
 /**
- * /[locale]/cart/checkout — donor details + redirect to the bundled
- * Paytrail/MobilePay session. Server-component shell fetches tiers
- * (same source as /cart and /adopt); the form itself is a client
- * component because it reads the cart out of localStorage.
+ * /[locale]/cart/checkout — renders the unified adoption wizard in cart
+ * mode. The wizard reads basket items from localStorage and submits to
+ * /v1/adoptions/bundle. This is the SAME UI as /adopt for a single plant
+ * so the donor sees one consistent flow regardless of count.
  */
 import { getTranslations } from 'next-intl/server';
-import CheckoutForm from './CheckoutForm.client';
+import {
+  AdoptWizard,
+  type AdoptIntent,
+  type AdoptTier,
+  type AdoptPlant,
+  type AdoptSettings,
+} from '../../adopt/wizard.client';
 
 export const dynamic = 'force-dynamic';
 
-interface Tier {
-  id: 'seedling' | 'rooted' | 'vulnerable' | 'endangered' | 'corporate';
-  name: string;
-  nameFi: string;
-  nameSv: string;
-  annualPriceCents: number;
-  monthlyPriceCents?: number | null;
-}
-
-function apiBase(): string {
+function internalApiUrl(): string {
   return (
     process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
   );
 }
 
-async function fetchTiers(): Promise<Tier[]> {
+async function fetchTiers(): Promise<AdoptTier[]> {
   try {
-    const res = await fetch(`${apiBase()}/v1/tiers`, { cache: 'no-store' });
+    const res = await fetch(`${internalApiUrl()}/v1/tiers`, { cache: 'no-store' });
     return res.ok ? res.json() : [];
   } catch {
     return [];
   }
 }
 
-async function fetchIntervalsEnabled(): Promise<Array<'monthly' | 'annual' | 'one_time'>> {
+async function fetchPlants(limit: number): Promise<AdoptPlant[]> {
   try {
-    const res = await fetch(`${apiBase()}/v1/settings/public`, { cache: 'no-store' });
-    if (!res.ok) return ['monthly', 'one_time'];
-    const data = (await res.json()) as { adoption?: { intervalsEnabled?: string[] } };
-    return (data.adoption?.intervalsEnabled ?? ['monthly', 'one_time']) as Array<'monthly' | 'annual' | 'one_time'>;
+    const res = await fetch(`${internalApiUrl()}/v1/plants?limit=${limit}`, { cache: 'no-store' });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.items ?? [];
   } catch {
-    return ['monthly', 'one_time'];
+    return [];
   }
 }
+
+interface PublicSettingsResponse {
+  payments?: { bank_transfer?: boolean; paytrail?: boolean; mobilepay?: boolean };
+  adoption?: Partial<AdoptSettings>;
+  features?: { corporateTier?: boolean };
+}
+
+async function fetchPublicSettings(): Promise<PublicSettingsResponse> {
+  try {
+    const res = await fetch(`${internalApiUrl()}/v1/settings/public`, { cache: 'no-store' });
+    return res.ok ? res.json() : {};
+  } catch {
+    return {};
+  }
+}
+
+const DEFAULT_ADOPT_SETTINGS: AdoptSettings = {
+  giftWrapCents: 400,
+  donationShareBp: 7200,
+  plaqueEligibleTiers: ['endangered', 'corporate'],
+  dedicationMaxChars: 240,
+  coAdopterMax: 10,
+  fundsFlowUrl: '/about#funds-flow',
+  intervalsEnabled: ['monthly', 'one_time'],
+};
 
 export default async function CartCheckoutPage({
   params,
@@ -50,46 +72,44 @@ export default async function CartCheckoutPage({
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
-  await getTranslations({ locale, namespace: 'Adopt' });
-  const [tiers, intervalsEnabled] = await Promise.all([fetchTiers(), fetchIntervalsEnabled()]);
+  const t = await getTranslations({ locale, namespace: 'Adopt' });
+  const [tiers, plants, publicSettings] = await Promise.all([
+    fetchTiers(),
+    fetchPlants(16),
+    fetchPublicSettings(),
+  ]);
+
+  const showCorporate = publicSettings.features?.corporateTier ?? true;
+  const filteredTiers = showCorporate ? tiers : tiers.filter((tt) => tt.id !== 'corporate');
+
+  const adminPayments = publicSettings.payments ?? {};
+  const enabledProviders = (['paytrail', 'mobilepay'] as const).filter(
+    (p) => adminPayments[p] !== false,
+  );
+
+  const adopt = {
+    ...DEFAULT_ADOPT_SETTINGS,
+    ...(publicSettings.adoption ?? {}),
+  } satisfies AdoptSettings;
+
+  const browserApi = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+  const presetIntent: AdoptIntent = 'for_self';
 
   return (
-    <main
-      style={{
-        maxWidth: 880,
-        margin: '0 auto',
-        padding: 'clamp(32px, 6vw, 64px) 24px',
-      }}
-    >
-      <header style={{ marginBottom: 28 }}>
-        <div className="eyebrow eyebrow--rust" style={{ color: 'var(--rust-on-light)' }}>
-          {locale === 'fi'
-            ? 'Kassalle'
-            : locale === 'sv'
-              ? 'Till kassan'
-              : 'Checkout'}
-        </div>
-        <h1 style={{ fontSize: 'clamp(40px, 6vw, 56px)', marginTop: 12, lineHeight: 1.05 }}>
-          {locale === 'fi'
-            ? 'Yksi maksu, koko korisi'
-            : locale === 'sv'
-              ? 'En betalning för hela din korg'
-              : 'One payment for your whole cart'}
-        </h1>
-        <p className="muted" style={{ marginTop: 12, fontSize: 16, lineHeight: 1.55 }}>
-          {locale === 'fi'
-            ? 'Anna yhteystietosi alla. Sinut ohjataan turvalliseen maksupalveluun, ja kaikki valitsemasi kasvit aktivoituvat heti maksun jälkeen.'
-            : locale === 'sv'
-              ? 'Ange dina kontaktuppgifter nedan. Du skickas vidare till en säker betaltjänst, och alla dina valda växter aktiveras direkt efter betalning.'
-              : 'Enter your contact details below. You’ll be sent to a secure payment provider, and every plant in your cart activates the moment payment clears.'}
-        </p>
-      </header>
-      <CheckoutForm
+    <article className="fade-in">
+      <AdoptWizard
         locale={locale}
-        tiers={tiers}
-        intervalsEnabled={intervalsEnabled}
-        apiUrl={process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'}
+        tiers={filteredTiers}
+        plants={plants}
+        presetPlantSlug={null}
+        presetTier={'vulnerable' as AdoptTier['id']}
+        presetIntent={presetIntent}
+        cartMode
+        apiUrl={browserApi}
+        title={t('title')}
+        enabledProviders={enabledProviders.length > 0 ? Array.from(enabledProviders) : ['paytrail', 'mobilepay']}
+        adopt={adopt}
       />
-    </main>
+    </article>
   );
 }
