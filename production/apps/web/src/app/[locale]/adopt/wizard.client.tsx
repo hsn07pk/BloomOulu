@@ -323,24 +323,6 @@ export function AdoptWizard({
   const lookupPlant = (slug: string): AdoptPlant | null =>
     plants.find((p) => p.slug === slug) ?? cartPlants[slug] ?? null;
 
-  // Cart-item summary used by SummaryCard (multi-item view) — built from
-  // the localStorage cart joined with the in-memory plant + tier indexes.
-  const cartItemSummaries = useMemo(() => {
-    if (!cartMode) return undefined;
-    return cartItems.map((it) => ({
-      plantSlug: it.plantSlug,
-      tierId: it.tierId,
-      plant: lookupPlant(it.plantSlug),
-      tier: tiers.find((tt) => tt.id === it.tierId) ?? null,
-    })) as CartItemSummary[];
-  }, [cartMode, cartItems, tiers, cartPlants, plants]);
-  const onChangeCartTier = (slug: string, newTier: AdoptTier['id']) => {
-    cartHook.setTier(slug, newTier as CartItem['tierId']);
-  };
-  const onRemoveCartItem = (slug: string) => {
-    cartHook.remove(slug);
-  };
-
   // Tier + billing
   const orderedTiers = useMemo(
     () => tiers.filter((tt) => tt.id !== 'corporate').sort((a, b) => TIER_ORDER.indexOf(a.id) - TIER_ORDER.indexOf(b.id)),
@@ -371,9 +353,81 @@ export function AdoptWizard({
     }
   };
 
-  // Plant
-  const [plantSlug, setPlantSlug] = useState<string>(
-    presetPlantSlug ?? plants[0]?.slug ?? '',
+  // Picked items — the canonical "what am I adopting" state. Always an
+  // array of 1+ items (or empty before the donor picks anything). Single-
+  // plant entry seeds it from URL preset; cart entry seeds from
+  // localStorage; fresh entry starts empty and the donor builds the
+  // basket in step 2.
+  interface PickedItem {
+    plantSlug: string;
+    tierId: AdoptTier['id'];
+  }
+  const initialPicked: PickedItem[] = (() => {
+    if (cartMode) return []; // hydrated from useEffect below
+    if (presetPlantSlug) return [{ plantSlug: presetPlantSlug, tierId: presetTier }];
+    return [];
+  })();
+  const [pickedItems, setPickedItems] = useState<PickedItem[]>(initialPicked);
+  // Sync cart-mode pickedItems FROM localStorage on hydration.
+  useEffect(() => {
+    if (!cartMode || !cartHook.hydrated) return;
+    setPickedItems(
+      cartHook.cart.items.map((it) => ({ plantSlug: it.plantSlug, tierId: it.tierId as AdoptTier['id'] })),
+    );
+  }, [cartMode, cartHook.hydrated, cartHook.cart.items]);
+  // Helpers — mutate pickedItems in-session; also persist to localStorage
+  // when we're in cart mode so the basket survives navigation.
+  const addPick = (slug: string, tier: AdoptTier['id']) => {
+    setPickedItems((prev) => {
+      if (prev.some((it) => it.plantSlug === slug)) return prev; // dedupe
+      return [...prev, { plantSlug: slug, tierId: tier }];
+    });
+    if (cartMode) cartHook.add(slug, tier as CartItem['tierId']);
+  };
+  const removePick = (slug: string) => {
+    setPickedItems((prev) => prev.filter((it) => it.plantSlug !== slug));
+    if (cartMode) cartHook.remove(slug);
+  };
+  const togglePick = (slug: string, tier: AdoptTier['id']) => {
+    if (pickedItems.some((it) => it.plantSlug === slug)) removePick(slug);
+    else addPick(slug, tier);
+  };
+  const setItemTier = (slug: string, newTier: AdoptTier['id']) => {
+    setPickedItems((prev) => prev.map((it) => (it.plantSlug === slug ? { ...it, tierId: newTier } : it)));
+    if (cartMode) cartHook.setTier(slug, newTier as CartItem['tierId']);
+  };
+
+  // Compatibility shims for code that used the old single-plant state.
+  // The first picked item is treated as the "primary" plant for displays
+  // that still render a single-card layout (entry from a plant page with
+  // count === 1).
+  const plantSlug = pickedItems[0]?.plantSlug ?? presetPlantSlug ?? plants[0]?.slug ?? '';
+
+  // Picked-item summary used by SummaryCard — built from pickedItems
+  // joined with the in-memory plant + tier indexes. Defined only when
+  // there are 2+ items so SummaryCard switches to multi-item layout;
+  // length-1 baskets keep the classic single-card layout.
+  const itemSummaries = useMemo<CartItemSummary[] | undefined>(() => {
+    if (pickedItems.length < 2) return undefined;
+    return pickedItems.map((it) => ({
+      plantSlug: it.plantSlug,
+      tierId: it.tierId,
+      plant: lookupPlant(it.plantSlug),
+      tier: tiers.find((tt) => tt.id === it.tierId) ?? null,
+    }));
+  }, [pickedItems, tiers, cartPlants, plants]);
+  // Step 2 always wants a full per-item summary so the basket section
+  // renders even with a single picked item (the donor needs to see what
+  // they've picked vs. the picker grid below).
+  const allPickedSummaries = useMemo<CartItemSummary[]>(
+    () =>
+      pickedItems.map((it) => ({
+        plantSlug: it.plantSlug,
+        tierId: it.tierId,
+        plant: lookupPlant(it.plantSlug),
+        tier: tiers.find((tt) => tt.id === it.tierId) ?? null,
+      })),
+    [pickedItems, tiers, cartPlants, plants],
   );
 
   // Personalise
@@ -403,16 +457,21 @@ export function AdoptWizard({
   const [submitting, setSubmitting] = useTransitionState();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // The "primary" tier (selectedTier) and "primary" plant (selectedPlant)
+  // drive the single-card SummaryCard layout for length-1 baskets. For
+  // length >= 2 baskets, SummaryCard switches to the multi-item view and
+  // these values are only used as a visual fallback.
+  const primaryTierId = pickedItems[0]?.tierId ?? tierId;
   const selectedTier = useMemo(
-    () => tiers.find((tt) => tt.id === tierId) ?? orderedTiers[0] ?? null,
-    [tiers, tierId, orderedTiers],
+    () => tiers.find((tt) => tt.id === primaryTierId) ?? orderedTiers[0] ?? null,
+    [tiers, primaryTierId, orderedTiers],
   );
   const selectedPlant = useMemo(() => {
-    if (cartMode && cartItems.length > 0) {
-      return lookupPlant(cartItems[0]!.plantSlug) ?? plants[0] ?? null;
+    if (pickedItems.length > 0) {
+      return lookupPlant(pickedItems[0]!.plantSlug) ?? plants[0] ?? null;
     }
-    return plants.find((p) => p.slug === plantSlug) ?? plants[0] ?? null;
-  }, [plants, plantSlug, cartMode, cartItems, cartPlants]);
+    return plants[0] ?? null;
+  }, [plants, pickedItems, cartPlants]);
 
   const priceForTier = (id: AdoptTier['id']): number => {
     const tier = tiers.find((tt) => tt.id === id);
@@ -421,18 +480,19 @@ export function AdoptWizard({
     return tier.annualPriceCents;
   };
 
-  // Pricing derives from the selected tier + the recurring toggle (single)
-  // or summed across cart items (multi). Gift-wrap is a single bundle-wide
-  // add-on; it's folded into the displayed total only when intent=gift,
-  // mirroring the demo design and the server-side calc.
+  // Pricing always sums over every picked item — single-plant entry is
+  // simply a 1-item basket. Gift-wrap is a single bundle-wide add-on
+  // (one parcel), folded in only when intent=gift, matching the
+  // server-side calc.
   const baseCents = useMemo(() => {
-    if (cartMode) {
-      return cartItems.reduce((sum, it) => sum + priceForTier(it.tierId), 0);
+    if (pickedItems.length === 0) {
+      // Empty basket — preview the default tier price from step 1.
+      if (!selectedTier) return 0;
+      if (billingInterval === 'monthly' && selectedTier.monthlyPriceCents) return selectedTier.monthlyPriceCents;
+      return selectedTier.annualPriceCents;
     }
-    if (!selectedTier) return 0;
-    if (billingInterval === 'monthly' && selectedTier.monthlyPriceCents) return selectedTier.monthlyPriceCents;
-    return selectedTier.annualPriceCents;
-  }, [selectedTier, billingInterval, cartMode, cartItems, tiers]);
+    return pickedItems.reduce((sum, it) => sum + priceForTier(it.tierId), 0);
+  }, [selectedTier, billingInterval, pickedItems, tiers]);
   // Gift-wrap add-on price comes from admin settings (admin.adoption.giftWrapCents).
   const wrapAddOnCents = intent === 'gift' && giftWrap ? adopt.giftWrapCents : 0;
   const totalCents = baseCents + wrapAddOnCents;
@@ -484,34 +544,31 @@ export function AdoptWizard({
     fd.set('marketingOptIn', String(marketingOptIn));
     fd.set('preferredProvider', paymentMethod);
 
-    // Bundle path: every multi-item adoption goes here. Single-plant cart
-    // also routes through bundle so /cart/checkout behaviour is the same
-    // regardless of count.
-    if (cartMode) {
-      if (cartItems.length === 0) {
-        setSubmitting(false);
-        setErrorMessage(t('errorTitle'));
-        return;
-      }
-      fd.set(
-        'items',
-        JSON.stringify(cartItems.map((it) => ({ plantSlug: it.plantSlug, tierId: it.tierId }))),
-      );
-      void adoptBundleAction(fd).catch((err: Error) => {
+    // Route on count, not entry mode. Single-plant adoption (whether the
+    // donor came from a plant page or built a 1-item basket fresh) hits
+    // /v1/adoptions; any 2+ item basket hits /v1/adoptions/bundle. The
+    // backend supports the same field set on both, so the donor sees
+    // identical receipts regardless of count.
+    if (pickedItems.length === 0) {
+      setSubmitting(false);
+      setErrorMessage(t('errorTitle'));
+      return;
+    }
+    if (pickedItems.length === 1) {
+      const only = pickedItems[0]!;
+      fd.set('plantSlug', only.plantSlug);
+      fd.set('tierId', only.tierId);
+      void adoptAction(fd).catch((err: Error) => {
         setSubmitting(false);
         setErrorMessage(err?.message ?? t('errorTitle'));
       });
       return;
     }
-
-    // Single-plant path: classic /v1/adoptions endpoint with rich fields.
-    if (!selectedTier || !selectedPlant) {
-      setSubmitting(false);
-      return;
-    }
-    fd.set('plantSlug', selectedPlant.slug);
-    fd.set('tierId', selectedTier.id);
-    void adoptAction(fd).catch((err: Error) => {
+    fd.set(
+      'items',
+      JSON.stringify(pickedItems.map((it) => ({ plantSlug: it.plantSlug, tierId: it.tierId }))),
+    );
+    void adoptBundleAction(fd).catch((err: Error) => {
       setSubmitting(false);
       setErrorMessage(err?.message ?? t('errorTitle'));
     });
@@ -688,11 +745,17 @@ export function AdoptWizard({
           <Step2PickPlant
             locale={locale}
             plants={plants}
-            plantSlug={plantSlug}
-            setPlantSlug={setPlantSlug}
+            pickedItems={pickedItems}
+            togglePick={(slug) => togglePick(slug, primaryTierId)}
+            setItemTier={setItemTier}
+            removePick={removePick}
+            defaultTierId={primaryTierId}
             selectedTier={selectedTier}
+            tiers={tiers}
+            billingInterval={billingInterval}
             totalCents={totalCents}
             recurringSuffix={recurringSuffix}
+            allPickedSummaries={allPickedSummaries}
             onNext={goNext}
           />
         )}
@@ -734,10 +797,11 @@ export function AdoptWizard({
             canContinue={canContinueFromPersonalise}
             onNext={goNext}
             adopt={adopt}
-            cartItems={cartItemSummaries}
-            onChangeCartTier={cartMode ? onChangeCartTier : undefined}
-            onRemoveCartItem={cartMode ? onRemoveCartItem : undefined}
-            allTiers={cartMode ? tiers : undefined}
+            cartItems={itemSummaries}
+            onChangeCartTier={itemSummaries ? setItemTier : undefined}
+            onRemoveCartItem={itemSummaries ? removePick : undefined}
+            allTiers={itemSummaries ? tiers : undefined}
+            onAddMore={() => setStep(2)}
           />
         )}
 
@@ -762,8 +826,8 @@ export function AdoptWizard({
             enabledProviders={enabledProviders}
             errorMessage={errorMessage}
             onSubmit={submit}
-            cartItems={cartItemSummaries}
-            allTiers={cartMode ? tiers : undefined}
+            cartItems={itemSummaries}
+            allTiers={itemSummaries ? tiers : undefined}
           />
         )}
       </div>
@@ -1052,22 +1116,39 @@ function Step1ChooseTier({
 interface Step2Props {
   locale: string;
   plants: AdoptPlant[];
-  plantSlug: string;
-  setPlantSlug: (slug: string) => void;
+  /** All currently-picked items. Step 2 toggles plants in/out of this set
+   *  and lets the donor change per-item tier inline. */
+  pickedItems: Array<{ plantSlug: string; tierId: AdoptTier['id'] }>;
+  togglePick: (slug: string) => void;
+  setItemTier: (slug: string, tierId: AdoptTier['id']) => void;
+  removePick: (slug: string) => void;
+  /** Tier applied when adding a new plant. Per-item dropdowns override. */
+  defaultTierId: AdoptTier['id'];
   selectedTier: AdoptTier;
+  /** Full tier catalogue used by per-item dropdowns. */
+  tiers: AdoptTier[];
+  billingInterval: 'monthly' | 'annual' | 'one_time';
   totalCents: number;
   recurringSuffix: string;
+  /** Picked items joined with plant/tier metadata, for the basket view. */
+  allPickedSummaries: CartItemSummary[];
   onNext: () => void;
 }
 
 function Step2PickPlant({
   locale,
   plants,
-  plantSlug,
-  setPlantSlug,
+  pickedItems,
+  togglePick,
+  setItemTier,
+  removePick,
+  defaultTierId: _defaultTierId,
   selectedTier,
+  tiers,
+  billingInterval,
   totalCents,
   recurringSuffix,
+  allPickedSummaries,
   onNext,
 }: Step2Props) {
   const t = useTranslations('Adopt');
@@ -1109,7 +1190,25 @@ function Step2PickPlant({
   }, [query, redListFilter, plants]);
 
   const visible = results;
-  const selectedPlant = visible.find((p) => p.slug === plantSlug) ?? visible[0] ?? null;
+  const pickedSlugs = new Set(pickedItems.map((it) => it.plantSlug));
+  const headerHint =
+    pickedItems.length === 0
+      ? locale === 'fi'
+        ? 'Valitse yksi tai useampi kasvi alta. Voit valita eri tason jokaiselle.'
+        : locale === 'sv'
+          ? 'Välj en eller flera växter nedan. Du kan välja olika nivåer per växt.'
+          : 'Pick one or more plants below. You can choose different tiers per plant.'
+      : pickedItems.length === 1
+        ? locale === 'fi'
+          ? '1 kasvi valittuna. Lisää useampi tai jatka.'
+          : locale === 'sv'
+            ? '1 växt vald. Lägg till fler eller fortsätt.'
+            : '1 plant picked. Add more or continue.'
+        : locale === 'fi'
+          ? `${pickedItems.length} kasvia valittuna. Lisää tai jatka maksamiseen.`
+          : locale === 'sv'
+            ? `${pickedItems.length} växter valda. Lägg till fler eller fortsätt.`
+            : `${pickedItems.length} plants picked. Add more or continue.`;
 
   return (
     <section className="fade-in" aria-labelledby="step2-title">
@@ -1128,10 +1227,14 @@ function Step2PickPlant({
             {t('step2of4')}
           </div>
           <h2 id="step2-title" style={{ fontSize: 'clamp(2.667rem, 6vw, 3.733rem)', marginTop: 12 }}>
-            {t('pickPlant')}
+            {locale === 'fi'
+              ? 'Valitse kasvit'
+              : locale === 'sv'
+                ? 'Välj växter'
+                : 'Pick your plants'}
           </h2>
           <p className="muted" style={{ marginTop: 12, maxWidth: 600 }}>
-            {t('pickPlantHint')}
+            {headerHint}
           </p>
         </div>
         <span className="pill">
@@ -1142,6 +1245,137 @@ function Step2PickPlant({
           })}
         </span>
       </header>
+
+      {/* ── Basket (picked items) ─────────────────────────────────────────
+          Always visible above the picker, so the donor knows exactly what
+          they're carrying and can re-tier or remove without scrolling. */}
+      {pickedItems.length > 0 && (
+        <div
+          style={{
+            marginBottom: 24,
+            padding: 16,
+            background: 'var(--sage-pale)',
+            border: '1px solid var(--forest-mid)',
+            borderRadius: 14,
+          }}
+          aria-label={
+            locale === 'fi' ? 'Valitut kasvit' : locale === 'sv' ? 'Valda växter' : 'Picked plants'
+          }
+        >
+          <div
+            className="tiny"
+            style={{ textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--forest)' }}
+          >
+            {pickedItems.length}{' '}
+            {pickedItems.length === 1
+              ? locale === 'fi' ? 'kasvi valittu' : locale === 'sv' ? 'växt vald' : 'plant picked'
+              : locale === 'fi' ? 'kasvia valittu' : locale === 'sv' ? 'växter valda' : 'plants picked'}
+            {' · '}
+            {locale === 'fi' ? 'kokonaishinta' : locale === 'sv' ? 'totalpris' : 'total'}: €{euros(totalCents, locale)}{recurringSuffix}
+          </div>
+          <ul style={{ listStyle: 'none', padding: 0, margin: '12px 0 0', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {allPickedSummaries.map((it) => (
+              <li
+                key={it.plantSlug}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '40px 1fr auto auto auto',
+                  gap: 10,
+                  alignItems: 'center',
+                  padding: '8px 10px',
+                  background: 'var(--cream)',
+                  border: '1px solid var(--line)',
+                  borderRadius: 10,
+                }}
+              >
+                <div
+                  aria-hidden="true"
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 8,
+                    background: it.plant ? plantAccent(it.plant.id) : 'var(--sage-pale)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    overflow: 'hidden',
+                  }}
+                >
+                  {it.plant?.primaryImage?.url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={it.plant.primaryImage.url}
+                      alt=""
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                  ) : (
+                    <span style={{ fontSize: "1.2rem" }}>🌿</span>
+                  )}
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div
+                    className="serif"
+                    style={{ fontSize: "1rem", fontStyle: 'italic', lineHeight: 1.15, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                  >
+                    {it.plant?.taxon?.latinName ?? it.plant?.nameEn ?? it.plantSlug}
+                  </div>
+                  {it.plant && (
+                    <div className="tiny muted">{plantName(it.plant, locale)}</div>
+                  )}
+                </div>
+                <select
+                  value={it.tierId}
+                  onChange={(e) => setItemTier(it.plantSlug, e.target.value as AdoptTier['id'])}
+                  aria-label={`tier for ${it.plantSlug}`}
+                  style={{
+                    padding: '6px 10px',
+                    borderRadius: 8,
+                    border: '1px solid var(--line)',
+                    background: 'var(--cream)',
+                    fontSize: "0.867rem",
+                  }}
+                >
+                  {tiers.map((tier) => {
+                    const cents =
+                      billingInterval === 'monthly' && tier.monthlyPriceCents
+                        ? tier.monthlyPriceCents
+                        : tier.annualPriceCents;
+                    return (
+                      <option key={tier.id} value={tier.id}>
+                        {tierName(tier, locale)} · €{euros(cents, locale)}{recurringSuffix}
+                      </option>
+                    );
+                  })}
+                </select>
+                <div className="small" style={{ fontFamily: 'ui-monospace, monospace', minWidth: 70, textAlign: 'right' }}>
+                  €{euros(
+                    billingInterval === 'monthly' && it.tier?.monthlyPriceCents
+                      ? it.tier.monthlyPriceCents
+                      : it.tier?.annualPriceCents ?? 0,
+                    locale,
+                  )}{recurringSuffix}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removePick(it.plantSlug)}
+                  aria-label={`remove ${it.plantSlug}`}
+                  style={{
+                    background: 'transparent',
+                    border: '1px solid var(--line)',
+                    borderRadius: 6,
+                    padding: '4px 8px',
+                    cursor: 'pointer',
+                    color: 'var(--rust-on-light)',
+                    fontSize: "0.867rem",
+                  }}
+                >
+                  ✕
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* ── Search + Red-List filter ────────────────────────────────── */}
       <div
@@ -1223,12 +1457,18 @@ function Step2PickPlant({
 
       <div
         data-grid-mobile="2"
-        role="radiogroup"
-        aria-label={t('pickPlant')}
+        role="group"
+        aria-label={
+          locale === 'fi'
+            ? 'Valitse kasveja'
+            : locale === 'sv'
+              ? 'Välj växter'
+              : 'Pick plants (multi-select)'
+        }
         style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}
       >
         {visible.map((p) => {
-          const isSelected = p.slug === plantSlug;
+          const isSelected = pickedSlugs.has(p.slug);
           const funded = plantFundedPct(p);
           const needs = funded < 80;
           const accent = plantAccent(p.id);
@@ -1236,9 +1476,14 @@ function Step2PickPlant({
             <button
               key={p.id}
               type="button"
-              role="radio"
+              role="checkbox"
               aria-checked={isSelected}
-              onClick={() => setPlantSlug(p.slug)}
+              aria-label={
+                isSelected
+                  ? `${plantName(p, locale)} — ${locale === 'fi' ? 'poista valinta' : locale === 'sv' ? 'avmarkera' : 'remove from basket'}`
+                  : `${plantName(p, locale)} — ${locale === 'fi' ? 'lisää koriin' : locale === 'sv' ? 'lägg till' : 'add to basket'}`
+              }
+              onClick={() => togglePick(p.slug)}
               className="card"
               style={{
                 padding: 0,
@@ -1374,9 +1619,18 @@ function Step2PickPlant({
           type="button"
           className="btn btn-primary btn-lg"
           onClick={onNext}
-          disabled={!selectedPlant}
+          disabled={pickedItems.length === 0}
         >
-          {t('continueWith', { label: selectedPlant ? plantName(selectedPlant, locale) : '' })} →
+          {pickedItems.length === 1
+            ? t('continueWith', {
+                label: allPickedSummaries[0]?.plant ? plantName(allPickedSummaries[0]!.plant!, locale) : '',
+              })
+            : locale === 'fi'
+              ? `Jatka ${pickedItems.length} kasvilla →`
+              : locale === 'sv'
+                ? `Fortsätt med ${pickedItems.length} växter →`
+                : `Continue with ${pickedItems.length} plants →`}
+          {pickedItems.length === 1 ? ' →' : ''}
         </button>
       </div>
     </section>
@@ -1421,12 +1675,16 @@ interface Step3Props {
   canContinue: boolean;
   onNext: () => void;
   adopt: AdoptSettings;
-  /** Cart-mode summary inputs — forwarded straight to SummaryCard. Empty
+  /** Multi-item summary inputs — forwarded straight to SummaryCard. Empty
    *  in single-plant mode so the card renders the classic single-item layout. */
   cartItems?: CartItemSummary[];
   onChangeCartTier?: (plantSlug: string, tierId: AdoptTier['id']) => void;
   onRemoveCartItem?: (plantSlug: string) => void;
   allTiers?: AdoptTier[];
+  /** Callback for the "+ Add more plants" affordance in SummaryCard. When
+   *  provided, the link navigates BACK to step 2 to keep the donor in the
+   *  wizard; otherwise it points at the /plants browse page. */
+  onAddMore?: () => void;
 }
 
 function Step3Personalise(props: Step3Props) {
@@ -1470,6 +1728,7 @@ function Step3Personalise(props: Step3Props) {
     onChangeCartTier,
     onRemoveCartItem,
     allTiers,
+    onAddMore,
   } = props;
   const t = useTranslations('Adopt');
 
@@ -1879,6 +2138,7 @@ function Step3Personalise(props: Step3Props) {
             onChangeCartTier={onChangeCartTier}
             onRemoveCartItem={onRemoveCartItem}
             allTiers={allTiers}
+            onAddMore={onAddMore}
           />
           <button
             type="button"
@@ -2256,6 +2516,10 @@ interface SummaryCardProps {
   onChangeCartTier?: (plantSlug: string, tierId: AdoptTier['id']) => void;
   onRemoveCartItem?: (plantSlug: string) => void;
   allTiers?: AdoptTier[];
+  /** Optional handler for the "+ Add more plants" affordance. When set,
+   *  the affordance becomes an in-wizard button (jumps to step 2) rather
+   *  than a link to /plants. */
+  onAddMore?: () => void;
 }
 
 function SummaryCard({
@@ -2271,6 +2535,7 @@ function SummaryCard({
   onChangeCartTier,
   onRemoveCartItem,
   allTiers,
+  onAddMore,
 }: SummaryCardProps) {
   const t = useTranslations('Adopt');
   const intentLabel = (
@@ -2436,13 +2701,32 @@ function SummaryCard({
               </div>
             );
           })}
-          <Link
-            href={`/${locale}/plants`}
-            className="tiny"
-            style={{ color: 'var(--forest)', textAlign: 'center', textDecoration: 'underline', padding: '4px 0' }}
-          >
-            {locale === 'fi' ? '+ Lisää kasveja' : locale === 'sv' ? '+ Lägg till växter' : '+ Add more plants'}
-          </Link>
+          {onAddMore ? (
+            <button
+              type="button"
+              onClick={onAddMore}
+              className="tiny"
+              style={{
+                color: 'var(--forest)',
+                textAlign: 'center',
+                textDecoration: 'underline',
+                padding: '4px 0',
+                background: 'transparent',
+                border: 0,
+                cursor: 'pointer',
+              }}
+            >
+              {locale === 'fi' ? '+ Lisää kasveja' : locale === 'sv' ? '+ Lägg till växter' : '+ Add more plants'}
+            </button>
+          ) : (
+            <Link
+              href={`/${locale}/plants`}
+              className="tiny"
+              style={{ color: 'var(--forest)', textAlign: 'center', textDecoration: 'underline', padding: '4px 0' }}
+            >
+              {locale === 'fi' ? '+ Lisää kasveja' : locale === 'sv' ? '+ Lägg till växter' : '+ Add more plants'}
+            </Link>
+          )}
         </div>
       ) : (
         <div
