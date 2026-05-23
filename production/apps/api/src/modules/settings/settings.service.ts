@@ -116,6 +116,29 @@ export interface BloomOuluSettings {
       plantnet: string;
     };
   };
+  /** 24/7 plant enrichment worker knobs. Controls the continuous
+   *  background scheduler that re-enriches plants from open-data sources
+   *  (Wikipedia, GBIF, laji.fi, Wikimedia Commons), plus the human-in-
+   *  the-loop review gate. */
+  enrichment: {
+    /** Master switch — when false the cron stops seeding. */
+    enabled: boolean;
+    /** Per-field auto-apply policy. When `true`, the worker writes the
+     *  value directly to Plant; when `false`, it records an
+     *  EnrichmentSuggestion the admin must approve in /admin → Review. */
+    autoApply: {
+      story: boolean;
+      origin: boolean;
+      status: boolean;
+      image: boolean;
+    };
+    /** Days between automatic refreshes of a single plant. */
+    refreshDays: number;
+    /** Max plants enqueued per worker tick (rate-limit safe). */
+    batchSize: number;
+    /** Tick interval (cron pattern). */
+    cronPattern: string;
+  };
   /** QR / physical-label print knobs. Lets ops tune the printed label
    *  size for different signage formats (small herbarium tag vs. large
    *  greenhouse sign) and toggle which info appears next to the code
@@ -275,6 +298,18 @@ export function buildSettingsDefaults(): BloomOuluSettings {
         gbif: envStr('ASK_OUT_OF_DOMAIN_GBIF', 'https://www.gbif.org/species/search'),
         plantnet: envStr('ASK_OUT_OF_DOMAIN_PLANTNET', 'https://identify.plantnet.org/'),
       },
+    },
+    enrichment: {
+      enabled: envBool('ENRICHMENT_ENABLED', true),
+      autoApply: {
+        story: envBool('ENRICHMENT_AUTO_STORY', false),
+        origin: envBool('ENRICHMENT_AUTO_ORIGIN', true),
+        status: envBool('ENRICHMENT_AUTO_STATUS', true),
+        image: envBool('ENRICHMENT_AUTO_IMAGE', false),
+      },
+      refreshDays: envInt('ENRICHMENT_REFRESH_DAYS', 30),
+      batchSize: envInt('ENRICHMENT_BATCH_SIZE', 20),
+      cronPattern: envStr('ENRICHMENT_CRON', '*/15 * * * *'),
     },
     qrLabel: {
       // Defaults match an 80×50 mm laser-printer label sheet with a

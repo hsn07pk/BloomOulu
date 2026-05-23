@@ -20,6 +20,7 @@ import {
   QUEUE_TAX_CERT_ANNUAL,
   QUEUE_RAG_EVAL,
   QUEUE_AUDIT_GAP,
+  QUEUE_ENRICHMENT_SWEEP,
   defaultJobOpts,
 } from './queues.js';
 
@@ -70,6 +71,17 @@ export async function registerCronJobs() {
   await ragEval.upsertJobScheduler('monthly-1st-0430', { pattern: '30 4 1 * *' }, {
     name: 'monthly',
     data: { sampleSize: 50 },
+    opts: defaultJobOpts,
+  });
+
+  // 24/7 plant enrichment sweep — every 15 min checks EnrichmentSchedule
+  // for plants due for refresh, enqueues a small batch to plant-enrich.
+  // Cadence + batch size are admin-configurable via SystemSetting.
+  // enrichment.cronPattern / enrichment.batchSize.
+  const enrichSweep = new Queue(QUEUE_ENRICHMENT_SWEEP, { connection });
+  await enrichSweep.upsertJobScheduler('every-15m', { pattern: '*/15 * * * *' }, {
+    name: 'sweep',
+    data: {},
     opts: defaultJobOpts,
   });
 

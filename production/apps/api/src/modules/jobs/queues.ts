@@ -20,6 +20,9 @@ export const QUEUE_TAX_CERT_ANNUAL = 'tax-cert-annual';
 export const QUEUE_RAG_EVAL = 'rag-eval';
 export const QUEUE_AUDIT_GAP = 'audit-gap';
 export const QUEUE_PLANT_ENRICH = 'plant-enrich';
+/// 24/7 enrichment scheduler — cron tick scans EnrichmentSchedule for
+/// `nextDueAt <= now()` and seeds the plant-enrich queue with a small batch.
+export const QUEUE_ENRICHMENT_SWEEP = 'enrichment-sweep';
 
 export const defaultJobOpts: JobsOptions = {
   attempts: 5,

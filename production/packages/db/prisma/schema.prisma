@@ -76,6 +76,7 @@ model User {
   dataExports   DataExportRequest[]
   erasures      DataErasureRequest[]
   auditLogs     AuditLog[]    @relation("auditActor")
+  enrichmentReviews EnrichmentSuggestion[] @relation("enrichmentReviewer")
 
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -211,6 +212,8 @@ model Plant {
   savedBy         SavedPlant[]
   quizQuestions   QuizQuestion[]
   scans           PlantScan[]
+  enrichmentSuggestions EnrichmentSuggestion[]
+  enrichmentSchedule    EnrichmentSchedule?
 
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
@@ -775,6 +778,81 @@ model PlantScan {
   @@index([plantId, scannedAt(sort: Desc)])
   @@index([scannedAt(sort: Desc)])
   @@index([kioskId, scannedAt(sort: Desc)])
+}
+
+/// EnrichmentSuggestion — proposed open-data value waiting for human review
+/// before it touches a Plant. The 24/7 worker writes these instead of
+/// updating Plant directly when the field is gated behind human review
+/// (admin's `enrichment.autoApply.*` settings). Approved suggestions get
+/// applied + archived; rejected ones stay for audit so nothing is lost.
+///
+/// One row per (plant, field, source, runId). A new enrichment run for the
+/// same field supersedes the previous pending row by marking it `superseded`.
+model EnrichmentSuggestion {
+  id              String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  plantId         String                  @db.Uuid
+  plant           Plant                   @relation(fields: [plantId], references: [id], onDelete: Cascade)
+  /// story / origin / status / image — matches EnrichField in enrichment/types.ts.
+  field           String
+  source          String
+  sourceUrl       String?
+  /// Confidence score 0..1 — used by the auto-apply gate.
+  confidence      Float                   @default(0.8)
+  /// The proposed value, normalised to its target shape:
+  ///   • story  → { en, fi, sv, source: { provider, license, url, fetchedAt } }
+  ///   • origin → string
+  ///   • status → enum string (LC / NT / VU / EN / CR / EX / DD / NA)
+  ///   • image  → { url, licenseSpdx, attribution, width?, height?, source }
+  proposed        Json
+  /// Snapshot of the current Plant value at the time the suggestion was created,
+  /// so the reviewer sees a diff. JSON so we can store whichever shape the field uses.
+  currentSnapshot Json?
+  /// pending / approved / rejected / applied / superseded / auto_applied
+  status          EnrichmentSuggestionStatus @default(pending)
+  /// When auto_applied or approved, the moment the value landed on the Plant row.
+  appliedAt       DateTime?
+  reviewedAt      DateTime?
+  reviewedById    String?                 @db.Uuid
+  reviewedBy      User?                   @relation("enrichmentReviewer", fields: [reviewedById], references: [id])
+  /// Free-form curator note attached on reject (e.g. "wrong species — synonym mismatch").
+  reviewNote      String?
+  /// BullMQ job that produced this — useful for grouping a single run's suggestions.
+  jobRunId        String?                 @db.Uuid
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+
+  @@index([plantId, field, status])
+  @@index([status, createdAt(sort: Desc)])
+  @@index([jobRunId])
+}
+
+enum EnrichmentSuggestionStatus {
+  pending
+  approved
+  rejected
+  applied
+  superseded
+  auto_applied
+}
+
+/// Per-plant enrichment scheduler — single row per plant tracking when it
+/// was last enriched and when it's eligible to be enriched again. The
+/// continuous worker reads `nextDueAt <= now()` to pick the next batch
+/// instead of scanning the whole Plant table.
+model EnrichmentSchedule {
+  plantId       String   @id @db.Uuid
+  plant         Plant    @relation(fields: [plantId], references: [id], onDelete: Cascade)
+  lastRunAt     DateTime?
+  lastResult    String?  // 'ok' | 'no-data' | 'error' | 'partial'
+  lastError     String?
+  /// Defaults to "lastRunAt + 30 days" but slows down for plants where
+  /// every run returns no-data (no Wikipedia / GBIF entry exists).
+  nextDueAt     DateTime @default(now())
+  consecutiveNoData Int  @default(0)
+  consecutiveErrors Int  @default(0)
+  updatedAt     DateTime @updatedAt
+
+  @@index([nextDueAt])
 }
 
 model AuditLog {

@@ -7,5 +7,12 @@
  * through this entry point. See enrich-plant.ts for behaviour.
  */
 export { enrichPlant } from './enrich-plant.js';
+export {
+  enrichPlantWithReview,
+  applyEnrichmentValue,
+  fetchEnrichmentPreview,
+  type AutoApplyMode,
+  type ReviewEnrichOptions,
+} from './enrich-with-review.js';
 export { ALL_FIELDS } from './types.js';
 export type { EnrichField, EnrichOptions, EnrichResult, SourceRef } from './types.js';

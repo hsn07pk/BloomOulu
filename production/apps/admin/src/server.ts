@@ -213,6 +213,9 @@ const AdoptionConfigPage = componentLoader.add('AdoptionConfig', path.join(here,
 const QrMetricsPage = componentLoader.add('QrMetrics', path.join(here, 'pages/QrMetrics'));
 const QrLabelConfigPage = componentLoader.add('QrLabelConfig', path.join(here, 'pages/QrLabelConfig'));
 const BulkQrPrintPage = componentLoader.add('BulkQrPrint', path.join(here, 'pages/BulkQrPrint'));
+const EnrichmentConfigPage = componentLoader.add('EnrichmentConfig', path.join(here, 'pages/EnrichmentConfig'));
+const EnrichmentReviewPage = componentLoader.add('EnrichmentReview', path.join(here, 'pages/EnrichmentReview'));
+const EnrichmentAssistantPage = componentLoader.add('EnrichmentAssistant', path.join(here, 'pages/EnrichmentAssistant'));
 
 // AdminJS 7's exported types are looser than its runtime accepts (page `label`,
 // `branding.softwareBrothers`, the static `AdminJS.bundle` helper, action
@@ -811,6 +814,18 @@ const adminConfig = new AdminJS({
       handler: async () => ({}),
       component: BulkQrPrintPage,
     },
+    enrichmentAssistant: {
+      label: 'Add plant (assistant)',
+      icon: 'Search',
+      handler: async () => ({}),
+      component: EnrichmentAssistantPage,
+    },
+    enrichmentReview: {
+      label: 'Enrichment review',
+      icon: 'CheckSquare',
+      handler: async () => ({}),
+      component: EnrichmentReviewPage,
+    },
     ingest: {
       label: 'Ingest RAG doc',
       icon: 'Plus',
@@ -849,6 +864,12 @@ const adminConfig = new AdminJS({
       icon: 'Printer',
       handler: async () => ({}),
       component: QrLabelConfigPage,
+    },
+    enrichmentConfig: {
+      label: 'Enrichment',
+      icon: 'Globe',
+      handler: async () => ({}),
+      component: EnrichmentConfigPage,
     },
   },
 } as any);

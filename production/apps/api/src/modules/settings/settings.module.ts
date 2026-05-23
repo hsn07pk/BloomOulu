@@ -28,6 +28,7 @@ class SettingsController {
       ask: s.ask,
       vat: s.vat,
       qrLabel: s.qrLabel,
+      enrichment: s.enrichment,
     };
   }
 }
