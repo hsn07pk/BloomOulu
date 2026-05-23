@@ -270,7 +270,18 @@ export function AdoptWizard({
   // them straight into the personalise step. They picked already.
   // In cart mode, the items are already picked too — same fast-forward.
   // Otherwise start at step 1 (tier).
-  const initialStep = presetPlantSlug || cartMode ? 3 : 1;
+  // Donor entry → starting step.
+  //   cartMode (entered via /cart/checkout): items are already chosen on
+  //     prior plant pages — jump to step 3 personalise.
+  //   presetPlantSlug (entered via /adopt?plant=X from a plant detail
+  //     page): start at step 1 so the donor sees the full tier cards
+  //     with perks + the corporate strip + the multi-plant picker in
+  //     step 2 — identical options to a direct /adopt visitor. The
+  //     plant + tier + interval are pre-filled, so step 1 + step 2 are
+  //     two "Continue" clicks if the donor doesn't want to change
+  //     anything.
+  //   fresh /adopt: start at step 1.
+  const initialStep = cartMode ? 3 : 1;
   const [step, setStep] = useState(initialStep);
 
   // ─── Cart-mode plant lookup ───────────────────────────────────────────
