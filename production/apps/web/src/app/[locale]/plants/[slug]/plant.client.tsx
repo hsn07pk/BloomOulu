@@ -257,10 +257,14 @@ export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled,
   const suggestedId = suggestedTierId(plant.redListStatus);
   const sortedTiers = [...tiers].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
   const [selectedTierId, setSelectedTierId] = useState<Tier['id']>(suggestedId);
-  // Default to the first enabled interval (admin-controlled). If
-  // annual is disabled production-wide, donors land on monthly.
+  // Prefer one-time as the default — first-time donors shouldn't be
+  // quietly enrolled into a recurring charge; they can opt in to monthly
+  // via the toggle. Falls back to the first enabled interval if admin
+  // has disabled one-time.
   const [billingInterval, setBillingInterval] = useState<BillingInterval>(
-    (intervalsEnabled[0] ?? 'monthly') as BillingInterval,
+    (intervalsEnabled.includes('one_time')
+      ? 'one_time'
+      : intervalsEnabled[0] ?? 'monthly') as BillingInterval,
   );
   const selectedTier = sortedTiers.find((t) => t.id === selectedTierId)
     ?? sortedTiers.find((t) => t.id === suggestedId)

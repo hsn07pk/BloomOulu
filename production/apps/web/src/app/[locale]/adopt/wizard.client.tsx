@@ -337,12 +337,16 @@ export function AdoptWizard({
   // donors on monthly.
   const enabledIntervals = adopt.intervalsEnabled ?? ['monthly', 'one_time'];
   // Honour presetInterval (forwarded from the plant-detail page) when it's
-  // in the admin allow-list; otherwise fall back to the first enabled
-  // interval so a disabled annual lands donors on monthly.
+  // in the admin allow-list. Otherwise prefer one-time as the default so
+  // first-time donors aren't quietly enrolled into a recurring charge —
+  // they can opt in to monthly via the toggle. Falls back to the first
+  // enabled interval if one-time has been disabled in admin.
   const initialInterval: 'monthly' | 'annual' | 'one_time' =
     presetInterval && enabledIntervals.includes(presetInterval)
       ? presetInterval
-      : (enabledIntervals[0] ?? 'monthly');
+      : enabledIntervals.includes('one_time')
+        ? 'one_time'
+        : (enabledIntervals[0] ?? 'monthly');
   const [billingInterval, setBillingInterval] = useState<'monthly' | 'annual' | 'one_time'>(initialInterval);
   const recurring = billingInterval !== 'one_time';
   const setRecurring = (next: boolean) => {
