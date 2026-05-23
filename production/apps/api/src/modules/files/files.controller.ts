@@ -6,21 +6,24 @@
  * audio narrations, GDPR exports, plant images — anything stored via
  * `uploadToS3` (which now writes locally).
  *
- * Access model matches the previous "presigned URL anyone with the link
- * can fetch" — there's no ACL enforcement here. Keys are UUID/SHA-derived
- * so they're effectively unguessable; receipts/exports use long random
- * tokens in their keys.
+ * Routing: Fastify rejects named wildcard params (e.g. `*path`), so we
+ * use a plain Fastify wildcard at the controller path and read the key
+ * from `request.params['*']` — the standard way to capture a multi-
+ * segment URL suffix on Fastify.
  */
-import { Controller, Get, NotFoundException, Param, Res } from '@nestjs/common';
-import type { FastifyReply } from 'fastify';
+import { Controller, Get, NotFoundException, Req, Res } from '@nestjs/common';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 import { readFile } from '../../infra/storage.js';
 
 @Controller('files')
 export class FilesController {
-  @Get('*key')
-  async serve(@Param('key') keyParts: string[] | string, @Res() reply: FastifyReply) {
-    const key = Array.isArray(keyParts) ? keyParts.join('/') : keyParts;
-    const file = await readFile(key);
+  @Get('*')
+  async serve(@Req() request: FastifyRequest, @Res() reply: FastifyReply) {
+    const params = (request.params ?? {}) as Record<string, string | undefined>;
+    // Fastify maps a trailing `*` wildcard to `params['*']`.
+    const key = params['*'] ?? '';
+    if (!key) throw new NotFoundException('file path missing');
+    const file = await readFile(decodeURIComponent(key));
     if (!file) throw new NotFoundException(`file not found: ${key}`);
     reply
       .header('content-type', file.contentType)
