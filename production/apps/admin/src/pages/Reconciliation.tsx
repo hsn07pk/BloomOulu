@@ -49,7 +49,7 @@ const ReconciliationPage: React.FC = () => {
   async function submit() {
     setBusy(true);
     try {
-      const res = await fetch('/admin-api/reconciliation/entries', {
+      const res = await fetch('/admin/reconciliation/entries', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ entries: parsed }),

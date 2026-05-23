@@ -1025,6 +1025,152 @@ async function bootstrap() {
       }
       return;
     }
+    // ── Backups (local file dumps under STORAGE_DIR/backups) ─────────
+    if (req.url === '/admin/backups' && req.method === 'GET') {
+      try {
+        const fs = await import('node:fs/promises');
+        const path = await import('node:path');
+        const dir = path.resolve(
+          process.env.STORAGE_DIR ?? path.join(process.cwd(), 'var', 'storage'),
+          'backups',
+        );
+        let entries: string[] = [];
+        try {
+          entries = await fs.readdir(dir);
+        } catch {
+          entries = [];
+        }
+        const snapshots = await Promise.all(
+          entries
+            .filter((f) => f.endsWith('.json'))
+            .map(async (f) => {
+              const full = path.join(dir, f);
+              try {
+                const stat = await fs.stat(full);
+                const raw = await fs.readFile(full, 'utf-8');
+                const data = JSON.parse(raw) as { id: string; createdAt: string; tables: Record<string, number> };
+                return {
+                  id: data.id,
+                  time: data.createdAt,
+                  sizeBytes: stat.size,
+                  filename: f,
+                  tables: data.tables,
+                };
+              } catch {
+                return null;
+              }
+            }),
+        );
+        reply.send({
+          snapshots: snapshots
+            .filter((s): s is NonNullable<typeof s> => s !== null)
+            .sort((a, b) => b.time.localeCompare(a.time)),
+        });
+      } catch (err) {
+        reply.code(500).send({ error: (err as Error).message });
+      }
+      return;
+    }
+    if (req.url === '/admin/backups/run' && req.method === 'POST') {
+      try {
+        const fs = await import('node:fs/promises');
+        const path = await import('node:path');
+        const dir = path.resolve(
+          process.env.STORAGE_DIR ?? path.join(process.cwd(), 'var', 'storage'),
+          'backups',
+        );
+        await fs.mkdir(dir, { recursive: true });
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const id = stamp;
+        const filename = `${stamp}.json`;
+        // Per-table snapshot — kept small enough for a single JSON file.
+        // Covers the operationally-critical tables; large RAG / Plant
+        // image rows stay in the DB (they're the bulk by volume).
+        const [
+          systemSettings,
+          translations,
+          tiers,
+          plants,
+          adoptions,
+          payments,
+          plantScans,
+        ] = await Promise.all([
+          prisma.systemSetting.findMany(),
+          prisma.translation.findMany(),
+          prisma.tier.findMany(),
+          prisma.plant.findMany({
+            select: {
+              id: true, slug: true, nameEn: true, nameFi: true, nameSv: true,
+              redListStatus: true, status: true, adopterCount: true,
+              fundedCents: true, scanCount: true,
+            },
+          }),
+          prisma.adoption.findMany({
+            select: {
+              id: true, plantId: true, donorId: true, tierId: true, intent: true,
+              status: true, amountCents: true, billingInterval: true, createdAt: true,
+              bundleId: true,
+            },
+          }),
+          prisma.payment.findMany({
+            select: {
+              id: true, adoptionId: true, provider: true, status: true,
+              amountCents: true, currency: true, createdAt: true,
+            },
+          }),
+          prisma.plantScan.findMany({
+            select: { id: true, plantId: true, scannedAt: true, locale: true, kioskId: true },
+          }),
+        ]);
+        const payload = {
+          id,
+          createdAt: new Date().toISOString(),
+          version: 1,
+          tables: {
+            SystemSetting: systemSettings.length,
+            Translation: translations.length,
+            Tier: tiers.length,
+            Plant: plants.length,
+            Adoption: adoptions.length,
+            Payment: payments.length,
+            PlantScan: plantScans.length,
+          },
+          data: {
+            SystemSetting: systemSettings,
+            Translation: translations,
+            Tier: tiers,
+            Plant: plants,
+            Adoption: adoptions,
+            Payment: payments,
+            PlantScan: plantScans,
+          },
+        };
+        await fs.writeFile(path.join(dir, filename), JSON.stringify(payload, null, 2));
+        reply.send({ ok: true, id, filename, tables: payload.tables });
+      } catch (err) {
+        reply.code(500).send({ ok: false, message: (err as Error).message });
+      }
+      return;
+    }
+    // ── Reconciliation: proxy to the API, which owns the matching logic ──
+    if (req.url === '/admin/reconciliation/entries' && req.method === 'POST') {
+      try {
+        const apiBase = (process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://api:4000').replace(/\/$/, '');
+        const upstream = await fetch(`${apiBase}/v1/reconciliation/entries`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: typeof req.body === 'string' ? req.body : JSON.stringify(req.body ?? {}),
+        });
+        const text = await upstream.text();
+        reply
+          .code(upstream.status)
+          .header('content-type', upstream.headers.get('content-type') ?? 'application/json')
+          .send(text);
+      } catch (err) {
+        reply.code(502).send({ error: (err as Error).message });
+      }
+      return;
+    }
     if (req.url === '/admin/rebuild-summaries' && req.method === 'POST') {
       void (async () => {
         try {
