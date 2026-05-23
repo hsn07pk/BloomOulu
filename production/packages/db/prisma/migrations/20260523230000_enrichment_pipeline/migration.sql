@@ -21,7 +21,7 @@ CREATE TABLE "EnrichmentSuggestion" (
   "reviewedAt"      TIMESTAMP(3),
   "reviewedById"    UUID         REFERENCES "User"("id") ON DELETE SET NULL,
   "reviewNote"      TEXT,
-  "jobRunId"        UUID,
+  "jobRunId"        TEXT,
   "createdAt"       TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updatedAt"       TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

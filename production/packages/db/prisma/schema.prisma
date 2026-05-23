@@ -817,7 +817,8 @@ model EnrichmentSuggestion {
   /// Free-form curator note attached on reject (e.g. "wrong species — synonym mismatch").
   reviewNote      String?
   /// BullMQ job that produced this — useful for grouping a single run's suggestions.
-  jobRunId        String?                 @db.Uuid
+  /// Stored as text since BullMQ job ids are arbitrary strings, not UUIDs.
+  jobRunId        String?
   createdAt       DateTime                @default(now())
   updatedAt       DateTime                @updatedAt
 
