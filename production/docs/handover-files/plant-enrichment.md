@@ -1,8 +1,8 @@
 # Plant Enrichment — feature & handoff
 
-**Audience:** whoever builds the plant CRUD in the admin panel (and their
-Claude Code thread). This explains the on-demand enrichment feature so it can
-be wired into the CRUD cleanly.
+**Audience:** whoever builds the plant CRUD in the admin panel (engineers
+or assistant tools working on it). This explains the on-demand enrichment
+feature so it can be wired into the CRUD cleanly.
 
 > Handoff note: this is a handoff aid. Fold the durable parts into
 > `system-design.md` once the CRUD work lands; this file can then be removed.

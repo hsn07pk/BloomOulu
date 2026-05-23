@@ -12,6 +12,9 @@ __pycache__
 .venv
 .conda
 .claude
+.cursor
+.vscode
+.idea
 README.md
 CONTRIBUTING.md
 LICENSE
