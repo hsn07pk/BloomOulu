@@ -12,7 +12,7 @@
  *   POST   /:plantId/run-now  Enqueue a one-shot enrichment for one plant
  *                             (manual override of the cron schedule).
  */
-import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, HttpCode, NotFoundException, Param, Post, Query } from '@nestjs/common';
 import { Queue } from 'bullmq';
 import { z } from 'zod';
 import {
@@ -95,6 +95,7 @@ export class EnrichmentController {
   }
 
   @Post(':id/approve')
+  @HttpCode(200)
   async approve(@Param('id') id: string) {
     const row = await this.prisma.enrichmentSuggestion.findUnique({ where: { id } });
     if (!row) throw new NotFoundException();
