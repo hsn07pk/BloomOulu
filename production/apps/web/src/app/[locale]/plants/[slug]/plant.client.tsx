@@ -1173,10 +1173,14 @@ export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled,
                   })}
                 </div>
 
-                {/* Billing-interval pills (monthly / annual / one-time).
-                    Matches /cart/checkout exactly. */}
+                {/* Billing-interval pills (one-time / annual / monthly).
+                    Display order is fixed; admin's intervalsEnabled list
+                    controls which appear. Matches the wizard step 1
+                    layout exactly. */}
                 <div role="radiogroup" style={{ display: 'flex', gap: 6, marginTop: 12 }}>
-                  {(intervalsEnabled as BillingInterval[]).map((iv) => {
+                  {(['one_time', 'annual', 'monthly'] as BillingInterval[])
+                    .filter((iv) => (intervalsEnabled as BillingInterval[]).includes(iv))
+                    .map((iv) => {
                     const active = billingInterval === iv;
                     const label =
                       iv === 'monthly' ? (locale === 'fi' ? 'Kuukausi' : locale === 'sv' ? 'Månad' : 'Monthly')

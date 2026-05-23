@@ -909,9 +909,9 @@ function Step1ChooseTier({
         }}
       >
         {([
-          { id: 'monthly' as const, label: locale === 'fi' ? 'Kuukausi' : locale === 'sv' ? 'Månad' : 'Monthly' },
-          { id: 'annual' as const, label: locale === 'fi' ? 'Vuosi' : locale === 'sv' ? 'År' : 'Annual' },
           { id: 'one_time' as const, label: locale === 'fi' ? 'Kerran' : locale === 'sv' ? 'Engång' : 'One-time' },
+          { id: 'annual' as const, label: locale === 'fi' ? 'Vuosi' : locale === 'sv' ? 'År' : 'Annual' },
+          { id: 'monthly' as const, label: locale === 'fi' ? 'Kuukausi' : locale === 'sv' ? 'Månad' : 'Monthly' },
         ]).filter((o) => enabledIntervals.includes(o.id)).map((opt) => {
           const active = billingInterval === opt.id;
           return (
