@@ -231,6 +231,10 @@ interface AdoptWizardProps {
   presetPlantSlug: string | null;
   presetTier: AdoptTier['id'];
   presetIntent: AdoptIntent;
+  /** Optional billing interval forwarded from a plant-detail "Adopt" CTA so
+   *  the donor doesn't have to re-pick on step 1. Null = use the wizard's
+   *  own first-enabled default. */
+  presetInterval?: 'monthly' | 'annual' | 'one_time' | null;
   title: string;
   /** Enabled payment rails from /v1/settings/public. Bank transfer is omitted
    *  from the UI by design — Paytrail + MobilePay are the donor-facing rails. */
@@ -246,6 +250,7 @@ export function AdoptWizard({
   presetPlantSlug,
   presetTier,
   presetIntent,
+  presetInterval,
   title,
   enabledProviders,
   adopt,
@@ -271,9 +276,14 @@ export function AdoptWizard({
   // initial selection, so disabling annual (the production default) lands
   // donors on monthly.
   const enabledIntervals = adopt.intervalsEnabled ?? ['monthly', 'one_time'];
-  const [billingInterval, setBillingInterval] = useState<'monthly' | 'annual' | 'one_time'>(
-    enabledIntervals[0] ?? 'monthly',
-  );
+  // Honour presetInterval (forwarded from the plant-detail page) when it's
+  // in the admin allow-list; otherwise fall back to the first enabled
+  // interval so a disabled annual lands donors on monthly.
+  const initialInterval: 'monthly' | 'annual' | 'one_time' =
+    presetInterval && enabledIntervals.includes(presetInterval)
+      ? presetInterval
+      : (enabledIntervals[0] ?? 'monthly');
+  const [billingInterval, setBillingInterval] = useState<'monthly' | 'annual' | 'one_time'>(initialInterval);
   const recurring = billingInterval !== 'one_time';
   const setRecurring = (next: boolean) => {
     if (next) {
@@ -562,6 +572,7 @@ export function AdoptWizard({
             coAdopters={coAdopters}
             setCoAdopters={setCoAdopters}
             recurring={recurring}
+            billingInterval={billingInterval}
             totalCents={totalCents}
             canContinue={canContinueFromPersonalise}
             onNext={goNext}
@@ -576,6 +587,7 @@ export function AdoptWizard({
             tier={selectedTier}
             intent={intent}
             recurring={recurring}
+            billingInterval={billingInterval}
             dedication={dedication}
             giftWrap={giftWrap}
             totalCents={totalCents}
@@ -1240,6 +1252,8 @@ interface Step3Props {
   coAdopters: CoAdopter[];
   setCoAdopters: (a: CoAdopter[]) => void;
   recurring: boolean;
+  /** Forwarded to SummaryCard so it can distinguish annual from one-off. */
+  billingInterval: 'monthly' | 'annual' | 'one_time';
   totalCents: number;
   canContinue: boolean;
   onNext: () => void;
@@ -1278,6 +1292,7 @@ function Step3Personalise(props: Step3Props) {
     coAdopters,
     setCoAdopters,
     recurring,
+    billingInterval,
     totalCents,
     canContinue,
     onNext,
@@ -1682,7 +1697,7 @@ function Step3Personalise(props: Step3Props) {
             locale={locale}
             plant={plant}
             tier={tier}
-            recurring={recurring}
+            billingInterval={billingInterval}
             intent={intent}
             totalCents={totalCents}
             dedication={dedication}
@@ -1710,6 +1725,8 @@ interface Step4Props {
   tier: AdoptTier;
   intent: AdoptIntent;
   recurring: boolean;
+  /** Forwarded to SummaryCard so it shows the right billing label. */
+  billingInterval: 'monthly' | 'annual' | 'one_time';
   dedication: string;
   giftWrap: boolean;
   totalCents: number;
@@ -1731,6 +1748,7 @@ function Step4Pay({
   tier,
   intent,
   recurring,
+  billingInterval,
   dedication,
   giftWrap,
   totalCents,
@@ -1911,7 +1929,7 @@ function Step4Pay({
             locale={locale}
             plant={plant}
             tier={tier}
-            recurring={recurring}
+            billingInterval={billingInterval}
             intent={intent}
             totalCents={totalCents}
             dedication={dedication}
@@ -2033,7 +2051,10 @@ interface SummaryCardProps {
   locale: string;
   plant: AdoptPlant;
   tier: AdoptTier;
-  recurring: boolean;
+  /** Drives every cadence-dependent thing in the summary: the billing
+   *  label, the per-period price, and the suffix. Replaces a previous
+   *  `recurring` boolean which couldn't distinguish annual from one-off. */
+  billingInterval: 'monthly' | 'annual' | 'one_time';
   intent: AdoptIntent;
   totalCents: number;
   dedication: string;
@@ -2044,7 +2065,7 @@ function SummaryCard({
   locale,
   plant,
   tier,
-  recurring,
+  billingInterval,
   intent,
   totalCents,
   dedication,
@@ -2059,20 +2080,23 @@ function SummaryCard({
       class: t('intentLabelClass'),
     } as Record<AdoptIntent, string>
   )[intent];
-  const billing = recurring
-    ? t('summaryMonthlyCancel')
-    : recurring === false && tier.id !== 'corporate'
-      ? t('summaryAnnualBilling')
-      : t('summaryOneOff');
+  const billing =
+    billingInterval === 'monthly'
+      ? t('summaryMonthlyCancel')
+      : billingInterval === 'annual'
+        ? t('summaryAnnualBilling')
+        : t('summaryOneOff');
+  // monthly → use monthly price (or annual fallback); annual/one_time → annual price.
   const tierPriceCents =
-    recurring && tier.monthlyPriceCents ? tier.monthlyPriceCents : tier.annualPriceCents;
-  const recurringSuffix = recurring
-    ? locale === 'fi'
-      ? '/kk'
-      : locale === 'sv'
-        ? '/mån'
-        : '/mo'
-    : '';
+    billingInterval === 'monthly' && tier.monthlyPriceCents
+      ? tier.monthlyPriceCents
+      : tier.annualPriceCents;
+  const recurringSuffix =
+    billingInterval === 'monthly' && tier.monthlyPriceCents
+      ? locale === 'fi' ? '/kk' : locale === 'sv' ? '/mån' : '/mo'
+      : billingInterval === 'annual'
+        ? locale === 'fi' ? '/vuosi' : locale === 'sv' ? '/år' : '/yr'
+        : '';
 
   return (
     <div className="card" style={{ overflow: 'hidden' }}>
@@ -2156,7 +2180,7 @@ function SummaryCard({
           <div style={{ fontWeight: 500 }}>{t('summaryTotal')}</div>
           <div className="serif" style={{ fontSize: "2.133rem" }}>
             €{euros(totalCents, locale)}
-            {recurring && (
+            {recurringSuffix && (
               <span style={{ fontSize: "0.933rem", color: 'var(--ink-mute)' }}>{recurringSuffix}</span>
             )}
           </div>

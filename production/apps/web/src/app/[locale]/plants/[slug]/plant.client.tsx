@@ -16,10 +16,11 @@ import { useTranslations } from 'next-intl';
 import qrcode from 'qrcode-generator';
 import { useCart } from '../../../../lib/cart.client';
 
-/** Add-to-cart CTA on the plant detail page. Carries the donor's
- *  selected tier (defaulting to the Red-List-suggested one). Toggles
- *  between "Add to cart" and "✓ In cart" with a "Go to cart" link so
- *  the visitor can keep browsing without losing the selection. */
+/** Secondary "Add to cart" CTA so visitors can queue multiple plants
+ *  before checkout. The primary adopt path on this page routes the donor
+ *  directly into the /adopt wizard (single canonical adoption flow).
+ *  Toggles between "Add to cart" and "✓ In cart" with a "View cart" link
+ *  so the visitor can keep browsing without losing the selection. */
 function AddToCartButton({
   slug,
   tierId,
@@ -30,13 +31,19 @@ function AddToCartButton({
   locale: string;
 }) {
   const { add, has, hydrated } = useCart();
+  const baseStyle: React.CSSProperties = {
+    marginTop: 12,
+    background: 'transparent',
+    border: '1px solid var(--line)',
+    color: 'var(--forest-deep)',
+  };
   if (!hydrated) {
     return (
       <button
         type="button"
         disabled
-        className="btn btn-primary btn-block btn-lg"
-        style={{ marginTop: 16, opacity: 0.6 }}
+        className="btn btn-block"
+        style={{ ...baseStyle, opacity: 0.6 }}
       >
         🌱 …
       </button>
@@ -45,11 +52,11 @@ function AddToCartButton({
   const inCart = has(slug);
   if (inCart) {
     return (
-      <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+      <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
         <button
           type="button"
           disabled
-          className="btn btn-block btn-lg"
+          className="btn btn-block"
           style={{
             flex: 1,
             background: 'var(--sage-pale)',
@@ -62,7 +69,7 @@ function AddToCartButton({
         </button>
         <Link
           href={`/${locale}/cart`}
-          className="btn btn-secondary btn-lg"
+          className="btn btn-secondary"
           style={{ whiteSpace: 'nowrap' }}
         >
           {locale === 'fi' ? 'Koriin →' : locale === 'sv' ? 'Till korg →' : 'View cart →'}
@@ -74,15 +81,15 @@ function AddToCartButton({
     <button
       type="button"
       onClick={() => add(slug, tierId)}
-      className="btn btn-primary btn-block btn-lg"
-      style={{ marginTop: 16 }}
+      className="btn btn-block"
+      style={baseStyle}
     >
       🌱{' '}
       {locale === 'fi'
-        ? 'Lisää adoptiokoriin'
+        ? 'Lisää koriin (adoptoi useita)'
         : locale === 'sv'
-          ? 'Lägg i adoptionskorg'
-          : 'Add to my adoption cart'}
+          ? 'Lägg i korg (adoptera flera)'
+          : 'Add to cart (adopt several)'}
     </button>
   );
 }
@@ -1197,22 +1204,42 @@ export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled,
                 </div>
               </div>
 
-              <AddToCartButton slug={plant.slug} tierId={selectedTierId} locale={locale} />
+              {/* Single canonical adoption path: every CTA here routes
+                  into the /adopt wizard with the donor's tier + interval
+                  + plant preselected. Intent (self / gift / memorial /
+                  class) is chosen in the wizard's step 3 — the buttons
+                  below are just shortcuts that pre-fill it. The cart is
+                  kept as a separate "queue several plants" workflow. */}
               <Link
-                href={`/${locale}/adopt?plant=${plant.slug}&intent=gift`}
-                className="btn btn-secondary btn-block"
-                style={{ marginTop: 8 }}
+                href={`/${locale}/adopt?plant=${plant.slug}&tier=${selectedTierId}&interval=${billingInterval}`}
+                className="btn btn-primary btn-block btn-lg"
+                style={{ marginTop: 16 }}
               >
-                🎁{' '}
+                🌱{' '}
                 {locale === 'fi'
-                  ? 'Adoptoi lahjaksi'
+                  ? 'Adoptoi tämä kasvi →'
                   : locale === 'sv'
-                    ? 'Adoptera som gåva'
-                    : 'Adopt as a gift'}
+                    ? 'Adoptera denna växt →'
+                    : 'Adopt this plant →'}
               </Link>
-              <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+              <div className="tiny muted" style={{ marginTop: 14, textAlign: 'center' }}>
+                {locale === 'fi'
+                  ? 'Tai adoptoi:'
+                  : locale === 'sv'
+                    ? 'Eller adoptera som:'
+                    : 'Or adopt as:'}
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                 <Link
-                  href={`/${locale}/adopt?plant=${plant.slug}&intent=memorial`}
+                  href={`/${locale}/adopt?plant=${plant.slug}&tier=${selectedTierId}&interval=${billingInterval}&intent=gift`}
+                  className="btn btn-ghost small"
+                  style={{ flex: 1, border: '1px solid var(--line)', textAlign: 'center' }}
+                >
+                  🎁{' '}
+                  {locale === 'fi' ? 'Lahja' : locale === 'sv' ? 'Gåva' : 'Gift'}
+                </Link>
+                <Link
+                  href={`/${locale}/adopt?plant=${plant.slug}&tier=${selectedTierId}&interval=${billingInterval}&intent=memorial`}
                   className="btn btn-ghost small"
                   style={{ flex: 1, border: '1px solid var(--line)', textAlign: 'center' }}
                 >
@@ -1220,14 +1247,15 @@ export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled,
                   {locale === 'fi' ? 'Muistolahja' : locale === 'sv' ? 'Minnesgåva' : 'Memorial'}
                 </Link>
                 <Link
-                  href={`/${locale}/adopt?plant=${plant.slug}&intent=class`}
+                  href={`/${locale}/adopt?plant=${plant.slug}&tier=${selectedTierId}&interval=${billingInterval}&intent=class`}
                   className="btn btn-ghost small"
                   style={{ flex: 1, border: '1px solid var(--line)', textAlign: 'center' }}
                 >
                   🎓{' '}
-                  {locale === 'fi' ? 'Luokka · 50 €' : locale === 'sv' ? 'Klass · 50 €' : 'Class · €50'}
+                  {locale === 'fi' ? 'Luokka' : locale === 'sv' ? 'Klass' : 'Class'}
                 </Link>
               </div>
+              <AddToCartButton slug={plant.slug} tierId={selectedTierId} locale={locale} />
             </div>
 
             <div

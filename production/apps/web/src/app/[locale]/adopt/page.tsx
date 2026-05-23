@@ -76,11 +76,22 @@ async function fetchPublicSettings(): Promise<PublicSettingsResponse> {
 
 const VALID_INTENTS: AdoptIntent[] = ['for_self', 'gift', 'memorial', 'class'];
 const VALID_TIERS = ['seedling', 'rooted', 'vulnerable', 'endangered', 'corporate'] as const;
+const VALID_INTERVALS = ['monthly', 'annual', 'one_time'] as const;
+type Interval = (typeof VALID_INTERVALS)[number];
 
 function normaliseIntent(raw?: string): AdoptIntent {
   if (!raw) return 'for_self';
   if (raw === 'self' || raw === 'for_self') return 'for_self';
   return (VALID_INTENTS.includes(raw as AdoptIntent) ? raw : 'for_self') as AdoptIntent;
+}
+
+function normaliseInterval(raw: string | undefined, enabled: readonly Interval[]): Interval | null {
+  if (!raw) return null;
+  const candidate = raw === 'one-time' ? 'one_time' : raw;
+  if ((VALID_INTERVALS as readonly string[]).includes(candidate) && enabled.includes(candidate as Interval)) {
+    return candidate as Interval;
+  }
+  return null;
 }
 
 const DEFAULT_ADOPT_SETTINGS: AdoptSettings = {
@@ -98,7 +109,7 @@ export default async function AdoptPage({
   searchParams,
 }: {
   params: Promise<{ locale: string }>;
-  searchParams: Promise<{ plant?: string; tier?: string; intent?: string }>;
+  searchParams: Promise<{ plant?: string; tier?: string; intent?: string; interval?: string }>;
 }) {
   const { locale } = await params;
   const sp = await searchParams;
@@ -141,6 +152,12 @@ export default async function AdoptPage({
     ...(publicSettings.adoption ?? {}),
   } satisfies AdoptSettings;
 
+  // Preset interval lets the plant-detail page forward the donor's tier
+  // + interval choice into the wizard so step 1 doesn't reset their pick.
+  // Falls back to the wizard's own first-enabled default if absent or
+  // disabled in admin.
+  const presetInterval = normaliseInterval(sp.interval, adopt.intervalsEnabled);
+
   return (
     <article className="fade-in">
       <AdoptWizard
@@ -150,6 +167,7 @@ export default async function AdoptPage({
         presetPlantSlug={presetPlant?.slug ?? null}
         presetTier={presetTier as AdoptTier['id']}
         presetIntent={presetIntent}
+        presetInterval={presetInterval}
         title={t('title')}
         enabledProviders={enabledProviders.length > 0 ? Array.from(enabledProviders) : ['paytrail', 'mobilepay']}
         adopt={adopt}
