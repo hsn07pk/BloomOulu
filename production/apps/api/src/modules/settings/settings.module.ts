@@ -19,6 +19,7 @@ class SettingsController {
         bic: s.bankTransfer.bic,
         beneficiaryName: s.bankTransfer.beneficiaryName,
       },
+      garden: s.garden,
       payments: s.payments,
       features: s.features,
       defaultAmountCents: s.defaultAmountCents,

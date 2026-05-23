@@ -31,6 +31,19 @@ export interface BloomOuluSettings {
     beneficiaryName: string;
     instructionsUrl: string;
   };
+  /** Garden's legal / signage identity. Surfaced on printed receipts,
+   *  tax certificates, donation pages, and the public footer. Admins
+   *  edit these via /admin → Garden Identity. */
+  garden: {
+    /** Display name on receipts and the public footer. */
+    name: string;
+    /** Finnish VAT / Business ID (Y-tunnus) — printed on receipts. */
+    vatId: string;
+    /** Full postal address, one string with line breaks (\n). */
+    address: string;
+    /** Optional public contact email. */
+    contactEmail: string;
+  };
   /** VAT — donations to a Finnish yleishyödyllinen yhteisö are typically
    *  outside VAT scope; configurable per line type. */
   vat: {
@@ -180,6 +193,15 @@ export function buildSettingsDefaults(): BloomOuluSettings {
         'GARDEN_DONATE_URL',
         `${envStr('NEXT_PUBLIC_WEB_URL', 'http://localhost:3000')}/en/donate/pay`,
       ),
+    },
+    garden: {
+      name: envStr('GARDEN_ORG_NAME', 'Oulun yliopiston kasvitieteellinen puutarha'),
+      vatId: envStr('GARDEN_VAT_ID', 'FI01234567'),
+      address: envStr(
+        'GARDEN_ADDRESS',
+        'Oulun yliopisto\nKasvitieteellinen puutarha\nPL 3000\n90014 Oulu',
+      ),
+      contactEmail: envStr('GARDEN_CONTACT_EMAIL', 'garden@bloomoulu.fi'),
     },
     vat: {
       donationRateBp: envInt('VAT_DONATION_RATE_BP', 0),

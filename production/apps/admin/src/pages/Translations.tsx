@@ -101,6 +101,54 @@ const TranslationsPage: React.FC = () => {
           <option value="needs_review">Needs review</option>
         </select>
         <button onClick={exportCsv}>Export CSV</button>
+        <label
+          style={{
+            padding: '6px 10px',
+            background: '#f5f3eb',
+            border: '1px solid #d9d2bb',
+            borderRadius: 4,
+            cursor: 'pointer',
+            fontSize: 12,
+          }}
+        >
+          Import CSV
+          <input
+            type="file"
+            accept=".csv,text/csv"
+            style={{ display: 'none' }}
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              try {
+                const text = await file.text();
+                const res = await fetch('/admin/translations/import', {
+                  method: 'POST',
+                  headers: { 'content-type': 'application/json' },
+                  body: JSON.stringify({ csv: text }),
+                });
+                if (!res.ok) {
+                  const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+                  setError(`Import failed: ${err.error ?? res.status}`);
+                  return;
+                }
+                const out = (await res.json()) as { upserted?: number };
+                setError(null);
+                // Reload to surface the new rows.
+                const r = await api.resourceAction({
+                  resourceId: 'Translation',
+                  actionName: 'list',
+                  params: { perPage: 1000 },
+                });
+                setRows((r as any).data.records.map((rec: any) => rec.params));
+                window.alert(`Imported ${out.upserted ?? 0} translation rows.`);
+              } catch (err) {
+                setError((err as Error).message);
+              } finally {
+                e.target.value = '';
+              }
+            }}
+          />
+        </label>
         <button onClick={save} disabled={saving || !Object.keys(dirty).length}>
           {saving ? 'Saving…' : `Save (${Object.keys(dirty).length})`}
         </button>

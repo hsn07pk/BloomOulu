@@ -212,6 +212,7 @@ const CuratorConfigPage = componentLoader.add('CuratorConfig', path.join(here, '
 const AdoptionConfigPage = componentLoader.add('AdoptionConfig', path.join(here, 'pages/AdoptionConfig'));
 const QrMetricsPage = componentLoader.add('QrMetrics', path.join(here, 'pages/QrMetrics'));
 const QrLabelConfigPage = componentLoader.add('QrLabelConfig', path.join(here, 'pages/QrLabelConfig'));
+const BulkQrPrintPage = componentLoader.add('BulkQrPrint', path.join(here, 'pages/BulkQrPrint'));
 
 // AdminJS 7's exported types are looser than its runtime accepts (page `label`,
 // `branding.softwareBrothers`, the static `AdminJS.bundle` helper, action
@@ -492,7 +493,15 @@ const adminConfig = new AdminJS({
           status: { description: 'pending · succeeded · failed · refunded · cancelled.' },
           amountCents: { description: 'Gross amount in cents (€25 = 2500).' },
         },
-        actions: restrictTo(...FINANCE_OR_ADMIN),
+        // Financial rows MUST be immutable from the UI: deletes break
+        // reconciliation + audit trail. Refunds use the dedicated
+        // /v1/admin/payments/:id/refund flow, not row delete.
+        actions: {
+          ...restrictTo(...FINANCE_OR_ADMIN),
+          delete: { isAccessible: false },
+          bulkDelete: { isAccessible: false },
+          new: { isAccessible: false },
+        },
       },
     },
     {
@@ -506,9 +515,16 @@ const adminConfig = new AdminJS({
           receiptNumber: { description: 'Sequential id (BLO-YYYY-000001). Resets each year if "Receipt yearReset" is enabled.' },
           donorEmail: { description: 'Snapshot of the donor email at receipt time (still good if the donor renames later).' },
           totalCents: { description: 'Receipt total in cents.' },
-          pdfUrl: { description: 'Pre-signed S3/MinIO URL — 7-day TTL. Donors download the PDF from /garden.' },
+          pdfUrl: { description: 'Local /v1/files/* URL — served directly from STORAGE_DIR (no presign).' },
         },
-        actions: restrictTo(...FINANCE_OR_ADMIN),
+        // Issued receipts are legally binding. Re-issue a corrected copy,
+        // never delete.
+        actions: {
+          ...restrictTo(...FINANCE_OR_ADMIN),
+          delete: { isAccessible: false },
+          bulkDelete: { isAccessible: false },
+          new: { isAccessible: false },
+        },
       },
     },
     {
@@ -521,9 +537,14 @@ const adminConfig = new AdminJS({
         properties: {
           year: { description: 'Tax year covered (e.g. 2026 = donations from 1 Jan 2026 to 31 Dec 2026).' },
           totalCents: { description: 'Sum of deductible donations for that year, in cents.' },
-          pdfUrl: { description: 'Pre-signed S3/MinIO URL — 7-day TTL.' },
+          pdfUrl: { description: 'Local /v1/files/* URL — served directly from STORAGE_DIR.' },
         },
-        actions: restrictTo(...FINANCE_OR_ADMIN),
+        actions: {
+          ...restrictTo(...FINANCE_OR_ADMIN),
+          delete: { isAccessible: false },
+          bulkDelete: { isAccessible: false },
+          new: { isAccessible: false },
+        },
       },
     },
     {
@@ -784,6 +805,12 @@ const adminConfig = new AdminJS({
       handler: async () => ({}),
       component: QrMetricsPage,
     },
+    bulkQrPrint: {
+      label: 'Bulk QR print',
+      icon: 'Printer',
+      handler: async () => ({}),
+      component: BulkQrPrintPage,
+    },
     ingest: {
       label: 'Ingest RAG doc',
       icon: 'Plus',
@@ -845,6 +872,112 @@ async function bootstrap() {
       return;
     }
     // ── Manual RAG doc ingest ────────────────────────────────────────
+    // ── Plant search for Bulk QR Print picker ───────────────────────
+    if (req.url?.startsWith('/admin/plants/search') && req.method === 'GET') {
+      try {
+        const u = new URL(req.url, 'http://x');
+        const q = (u.searchParams.get('q') ?? '').trim();
+        const redList = u.searchParams.get('redList') ?? '';
+        const limit = Math.min(200, Math.max(1, parseInt(u.searchParams.get('limit') ?? '60', 10) || 60));
+        const where: any = { status: 'active' };
+        if (redList) where.redListStatus = redList;
+        if (q) {
+          where.OR = [
+            { nameEn: { contains: q, mode: 'insensitive' } },
+            { nameFi: { contains: q, mode: 'insensitive' } },
+            { nameSv: { contains: q, mode: 'insensitive' } },
+            { slug: { contains: q, mode: 'insensitive' } },
+            { taxon: { latinName: { contains: q, mode: 'insensitive' } } },
+          ];
+        }
+        const items = await prisma.plant.findMany({
+          where,
+          take: limit,
+          orderBy: [{ adopterCount: 'desc' }, { nameEn: 'asc' }],
+          select: {
+            id: true, slug: true, nameEn: true, nameFi: true, nameSv: true,
+            redListStatus: true, gardenZone: true, adopterCount: true,
+            taxon: { select: { latinName: true } },
+          },
+        });
+        reply.send({ items });
+      } catch (err) {
+        reply.code(500).send({ error: (err as Error).message });
+      }
+      return;
+    }
+    // ── Translation bulk import (CSV: i18nKey,en,fi,sv[,status]) ──
+    if (req.url === '/admin/translations/import' && req.method === 'POST') {
+      try {
+        const body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body ?? {});
+        const payload = JSON.parse(body) as { csv?: string };
+        const csv = payload.csv ?? '';
+        if (!csv.trim()) {
+          reply.code(400).send({ error: 'empty csv' });
+          return;
+        }
+        const lines = csv.split(/\r?\n/).filter((l) => l.trim().length > 0);
+        if (lines.length < 2) {
+          reply.code(400).send({ error: 'csv needs a header row + at least one data row' });
+          return;
+        }
+        const splitRow = (row: string): string[] => {
+          const out: string[] = [];
+          let cur = '';
+          let inQ = false;
+          for (let i = 0; i < row.length; i++) {
+            const ch = row[i];
+            if (ch === '"') {
+              if (inQ && row[i + 1] === '"') {
+                cur += '"';
+                i++;
+              } else {
+                inQ = !inQ;
+              }
+            } else if (ch === ',' && !inQ) {
+              out.push(cur);
+              cur = '';
+            } else {
+              cur += ch;
+            }
+          }
+          out.push(cur);
+          return out;
+        };
+        const header = splitRow(lines[0]!).map((c) => c.trim().toLowerCase());
+        const idx = {
+          key: header.indexOf('i18nkey'),
+          en: header.indexOf('en'),
+          fi: header.indexOf('fi'),
+          sv: header.indexOf('sv'),
+          status: header.indexOf('status'),
+        };
+        if (idx.key < 0 || idx.en < 0 || idx.fi < 0 || idx.sv < 0) {
+          reply.code(400).send({ error: 'header must include i18nKey,en,fi,sv (status optional)' });
+          return;
+        }
+        let upserted = 0;
+        for (let i = 1; i < lines.length; i++) {
+          const cols = splitRow(lines[i]!);
+          const key = cols[idx.key]?.trim();
+          if (!key) continue;
+          const en = cols[idx.en] ?? '';
+          const fi = cols[idx.fi] ?? '';
+          const sv = cols[idx.sv] ?? '';
+          const status = idx.status >= 0 ? (cols[idx.status]?.trim() || 'active') : 'active';
+          await prisma.translation.upsert({
+            where: { i18nKey: key },
+            update: { en, fi, sv, status },
+            create: { i18nKey: key, en, fi, sv, status },
+          });
+          upserted++;
+        }
+        reply.send({ ok: true, upserted });
+      } catch (err) {
+        reply.code(500).send({ error: (err as Error).message });
+      }
+      return;
+    }
     if (req.url === '/admin/manual-docs' && req.method === 'GET') {
       try {
         const rows = await prisma.ragDocument.findMany({
@@ -1068,6 +1201,33 @@ async function bootstrap() {
         });
       } catch (err) {
         reply.code(500).send({ error: (err as Error).message });
+      }
+      return;
+    }
+    // Stream a stored snapshot back as a downloadable JSON file.
+    if (req.url?.startsWith('/admin/backups/') && req.url.endsWith('/download') && req.method === 'GET') {
+      try {
+        const fs = await import('node:fs/promises');
+        const path = await import('node:path');
+        const id = req.url.split('/')[3] ?? '';
+        const dir = path.resolve(
+          process.env.STORAGE_DIR ?? path.join(process.cwd(), 'var', 'storage'),
+          'backups',
+        );
+        const filename = `${id}.json`;
+        const full = path.join(dir, filename);
+        // Path traversal guard — id must match the format we wrote.
+        if (!/^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z$/.test(id)) {
+          reply.code(400).send({ error: 'bad id' });
+          return;
+        }
+        const body = await fs.readFile(full);
+        reply
+          .header('content-type', 'application/json')
+          .header('content-disposition', `attachment; filename="bloomoulu-backup-${id}.json"`)
+          .send(body);
+      } catch (err) {
+        reply.code(404).send({ error: (err as Error).message });
       }
       return;
     }

@@ -105,6 +105,7 @@ const BackupsPage: React.FC = () => {
               <th style={{ padding: '6px' }}>ID</th>
               <th style={{ padding: '6px' }}>Size</th>
               <th style={{ padding: '6px' }}>Tables</th>
+              <th style={{ padding: '6px' }}></th>
             </tr>
           </thead>
           <tbody>
@@ -117,6 +118,14 @@ const BackupsPage: React.FC = () => {
                   {Object.entries(s.tables ?? {})
                     .map(([t, n]) => `${t}:${n}`)
                     .join(' · ')}
+                </td>
+                <td style={{ padding: '6px' }}>
+                  <a
+                    href={`/admin/backups/${encodeURIComponent(s.id)}/download`}
+                    style={{ color: '#1F3A2C', fontSize: 12 }}
+                  >
+                    ⬇ Download
+                  </a>
                 </td>
               </tr>
             ))}
