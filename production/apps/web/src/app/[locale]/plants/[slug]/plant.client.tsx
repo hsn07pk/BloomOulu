@@ -1588,13 +1588,14 @@ export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled,
               >
                 {locale === 'fi' ? 'Kopioi linkki' : locale === 'sv' ? 'Kopiera länk' : 'Copy link'}
               </button>
-              <button
-                type="button"
+              <a
+                href={`/${locale}/plants/${plant.slug}/print${arrivedViaQr && qrKioskId ? `?kiosk=${encodeURIComponent(qrKioskId)}` : ''}`}
+                target="_blank"
+                rel="noopener"
                 className="btn btn-secondary small"
-                onClick={() => window.print()}
               >
-                {tc('print')}
-              </button>
+                {tc('print')} →
+              </a>
             </div>
           </div>
         </div>

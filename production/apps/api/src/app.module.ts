@@ -31,6 +31,8 @@ import { ExportsModule } from './modules/exports/exports.module.js';
 import { AdminUsersModule } from './modules/admin-users/admin-users.module.js';
 import { AdminPlantsModule } from './modules/admin-plants/admin-plants.module.js';
 import { EventsModule } from './modules/events/events.module.js';
+import { FilesModule } from './modules/files/files.module.js';
+import { TranslationsModule } from './modules/translations/translations.module.js';
 
 const isProd = process.env.NODE_ENV === 'production';
 
@@ -103,6 +105,8 @@ const isProd = process.env.NODE_ENV === 'production';
     ExportsModule,
     AdminUsersModule,
     AdminPlantsModule,
+    FilesModule,
+    TranslationsModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: RolesGuard }],

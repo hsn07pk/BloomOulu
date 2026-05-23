@@ -211,6 +211,7 @@ const PaymentProvidersPage = componentLoader.add('PaymentProviders', path.join(h
 const CuratorConfigPage = componentLoader.add('CuratorConfig', path.join(here, 'pages/CuratorConfig'));
 const AdoptionConfigPage = componentLoader.add('AdoptionConfig', path.join(here, 'pages/AdoptionConfig'));
 const QrMetricsPage = componentLoader.add('QrMetrics', path.join(here, 'pages/QrMetrics'));
+const QrLabelConfigPage = componentLoader.add('QrLabelConfig', path.join(here, 'pages/QrLabelConfig'));
 
 // AdminJS 7's exported types are looser than its runtime accepts (page `label`,
 // `branding.softwareBrothers`, the static `AdminJS.bundle` helper, action
@@ -815,6 +816,12 @@ const adminConfig = new AdminJS({
       icon: 'Heart',
       handler: async () => ({}),
       component: AdoptionConfigPage,
+    },
+    qrLabelConfig: {
+      label: 'QR labels',
+      icon: 'Printer',
+      handler: async () => ({}),
+      component: QrLabelConfigPage,
     },
   },
 } as any);

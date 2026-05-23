@@ -103,6 +103,33 @@ export interface BloomOuluSettings {
       plantnet: string;
     };
   };
+  /** QR / physical-label print knobs. Lets ops tune the printed label
+   *  size for different signage formats (small herbarium tag vs. large
+   *  greenhouse sign) and toggle which info appears next to the code
+   *  without touching code. Surfaced via /v1/settings/public so the
+   *  /[locale]/plants/[slug]/print page reads them at request time. */
+  qrLabel: {
+    /** Physical print size of the QR square in millimetres. */
+    sizeMm: number;
+    /** Label paper width / height in mm — defines the print area. */
+    labelWidthMm: number;
+    labelHeightMm: number;
+    /** Whether to print the localised common name next to the QR. */
+    showCommonName: boolean;
+    /** Whether to print the Latin (scientific) name. */
+    showLatin: boolean;
+    /** Whether to print the IUCN Red List status badge. */
+    showRedList: boolean;
+    /** Whether to print the garden zone code (helps curators relabel). */
+    showGardenZone: boolean;
+    /** Whether to print the plant slug as a small footer (helps QA). */
+    showSlug: boolean;
+    /** Whether to include the kioskId tracking param in the encoded URL. */
+    embedKioskId: boolean;
+    /** Default kiosk label baked into the QR URL when the curator hasn't
+     *  set one per-plant. Leave empty for no tag. */
+    defaultKioskId: string;
+  };
 }
 
 /**
@@ -226,6 +253,21 @@ export function buildSettingsDefaults(): BloomOuluSettings {
         gbif: envStr('ASK_OUT_OF_DOMAIN_GBIF', 'https://www.gbif.org/species/search'),
         plantnet: envStr('ASK_OUT_OF_DOMAIN_PLANTNET', 'https://identify.plantnet.org/'),
       },
+    },
+    qrLabel: {
+      // Defaults match an 80×50 mm laser-printer label sheet with a
+      // 35 mm QR. Admins resize in /admin → SystemSetting without
+      // a redeploy.
+      sizeMm: envInt('QR_LABEL_SIZE_MM', 35),
+      labelWidthMm: envInt('QR_LABEL_WIDTH_MM', 80),
+      labelHeightMm: envInt('QR_LABEL_HEIGHT_MM', 50),
+      showCommonName: envBool('QR_LABEL_SHOW_COMMON_NAME', true),
+      showLatin: envBool('QR_LABEL_SHOW_LATIN', true),
+      showRedList: envBool('QR_LABEL_SHOW_RED_LIST', true),
+      showGardenZone: envBool('QR_LABEL_SHOW_GARDEN_ZONE', false),
+      showSlug: envBool('QR_LABEL_SHOW_SLUG', false),
+      embedKioskId: envBool('QR_LABEL_EMBED_KIOSK_ID', true),
+      defaultKioskId: envStr('QR_LABEL_DEFAULT_KIOSK_ID', ''),
     },
   };
 }

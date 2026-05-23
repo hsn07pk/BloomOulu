@@ -26,6 +26,7 @@ class SettingsController {
       adoption: s.adoption,
       ask: s.ask,
       vat: s.vat,
+      qrLabel: s.qrLabel,
     };
   }
 }
