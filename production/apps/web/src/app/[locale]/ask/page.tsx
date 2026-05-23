@@ -15,6 +15,24 @@ function internalApiUrl(): string {
   return getInternalApiUrl();
 }
 
+interface PlantSummary {
+  slug: string;
+  nameEn: string;
+  nameFi: string;
+  nameSv: string;
+  taxon?: { latinName?: string | null } | null;
+}
+
+async function fetchPlant(slug: string | undefined): Promise<PlantSummary | null> {
+  if (!slug) return null;
+  try {
+    const res = await fetch(`${internalApiUrl()}/v1/plants/${slug}`, { cache: 'no-store' });
+    return res.ok ? res.json() : null;
+  } catch {
+    return null;
+  }
+}
+
 async function loadStarters(locale: string): Promise<string[]> {
   try {
     const res = await fetch(`${internalApiUrl()}/v1/ask/starters`, { cache: 'no-store' });
@@ -81,8 +99,15 @@ const DEFAULT_ASK_SETTINGS: AskSettings = {
   },
 };
 
-export default async function AskPage({ params }: { params: Promise<{ locale: string }> }) {
+export default async function AskPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ locale: string }>;
+  searchParams: Promise<{ plant?: string }>;
+}) {
   const { locale } = await params;
+  const sp = await searchParams;
   const t = await getTranslations({ locale, namespace: 'Ask' });
   const session = await getSession();
   const userName = session.user?.name?.split(' ')[0] || session.user?.email?.split('@')[0] || '';
@@ -91,15 +116,33 @@ export default async function AskPage({ params }: { params: Promise<{ locale: st
   const greeting = signedIn ? t('greetSignedIn', { name: userName }) : t('greetAnon');
   const intro = signedIn ? t('introSignedIn') : t('introAnon');
 
-  const [starters, staffStarters, corpusStats, auditMetric, publicSettings] = await Promise.all([
+  const [starters, staffStarters, corpusStats, auditMetric, publicSettings, plant] = await Promise.all([
     loadStarters(locale),
     staffEligible ? loadStaffStarters(locale) : Promise.resolve([] as string[]),
     loadCorpusStats(),
     loadAuditMetric(),
     loadPublicSettings(),
+    fetchPlant(sp.plant),
   ]);
 
   const ask = { ...DEFAULT_ASK_SETTINGS, ...(publicSettings?.ask ?? {}) };
+
+  // If the donor landed here from a plant detail "Ask the Garden about
+  // this plant" link, seed the chat input with a contextual first
+  // question so the rest of the conversation has plant context without
+  // making the donor type it. The latin name reads cleanest cross-locale.
+  const plantDisplayName =
+    plant?.taxon?.latinName ??
+    (locale === 'fi' ? plant?.nameFi : locale === 'sv' ? plant?.nameSv : plant?.nameEn) ??
+    plant?.nameEn ??
+    null;
+  const initialPrompt = plantDisplayName
+    ? locale === 'fi'
+      ? `Kerro lisää kasvista ${plantDisplayName}.`
+      : locale === 'sv'
+        ? `Berätta mer om växten ${plantDisplayName}.`
+        : `Tell me more about ${plantDisplayName}.`
+    : null;
 
   return (
     <article className="container fade-in" style={{ paddingTop: 32 }}>
@@ -146,6 +189,8 @@ export default async function AskPage({ params }: { params: Promise<{ locale: st
         ask={ask}
         contactEmailDefault={session.user?.email ?? null}
         apiUrl={getBrowserApiUrl()}
+        initialPrompt={initialPrompt}
+        autoSendInitial
       />
     </article>
   );

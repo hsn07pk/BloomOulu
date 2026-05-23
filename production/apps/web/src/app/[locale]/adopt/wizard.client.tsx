@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import {
@@ -359,40 +359,51 @@ export function AdoptWizard({
     }
   };
 
-  // Picked items — the canonical "what am I adopting" state. Always an
-  // array of 1+ items (or empty before the donor picks anything). Single-
-  // plant entry seeds it from URL preset; cart entry seeds from
-  // localStorage; fresh entry starts empty and the donor builds the
-  // basket in step 2.
+  // Picked items — the canonical "what am I adopting" state. The
+  // localStorage cart is the cross-page source of truth, so pickedItems
+  // is just a mirror of it for rendering. Entries from any flow (plant
+  // page "Adopt this plant" / "Add to cart" / /cart/checkout / fresh
+  // /adopt) all see the same basket.
   interface PickedItem {
     plantSlug: string;
     tierId: AdoptTier['id'];
   }
-  const initialPicked: PickedItem[] = (() => {
-    if (cartMode) return []; // hydrated from useEffect below
-    if (presetPlantSlug) return [{ plantSlug: presetPlantSlug, tierId: presetTier }];
-    return [];
-  })();
-  const [pickedItems, setPickedItems] = useState<PickedItem[]>(initialPicked);
-  // Sync cart-mode pickedItems FROM localStorage on hydration.
+  const [pickedItems, setPickedItems] = useState<PickedItem[]>([]);
+  // Effect 1 (runs once on hydration): merge the URL preset into the cart
+  // if the donor came via a plant-detail "Adopt this plant" link. This
+  // means a donor with existing cart items A+B who clicks "Adopt this
+  // plant C" from a plant page sees A+B+C in the basket, not just C.
+  const presetMergedRef = useRef(false);
   useEffect(() => {
-    if (!cartMode || !cartHook.hydrated) return;
+    if (!cartHook.hydrated || presetMergedRef.current) return;
+    if (presetPlantSlug && !cartHook.cart.items.some((it) => it.plantSlug === presetPlantSlug)) {
+      cartHook.add(presetPlantSlug, presetTier as CartItem['tierId']);
+    }
+    presetMergedRef.current = true;
+  }, [cartHook.hydrated, cartHook.cart.items, presetPlantSlug, presetTier]);
+  // Effect 2: keep pickedItems in lockstep with the cart. Also picks up
+  // cross-tab changes via the storage event the cart hook subscribes to.
+  useEffect(() => {
+    if (!cartHook.hydrated) return;
     setPickedItems(
       cartHook.cart.items.map((it) => ({ plantSlug: it.plantSlug, tierId: it.tierId as AdoptTier['id'] })),
     );
-  }, [cartMode, cartHook.hydrated, cartHook.cart.items]);
-  // Helpers — mutate pickedItems in-session; also persist to localStorage
-  // when we're in cart mode so the basket survives navigation.
+  }, [cartHook.hydrated, cartHook.cart.items]);
+  // Helpers — mutate pickedItems in-session AND mirror to localStorage cart
+  // unconditionally. This lets the donor mix flows: pick A on a plant page
+  // via "Add to cart", then pick B in the /adopt wizard step 2, then see
+  // both in /cart and /cart/checkout. The cart is the cross-page source
+  // of truth; the wizard's pickedItems is just the rendered slice of it.
   const addPick = (slug: string, tier: AdoptTier['id']) => {
     setPickedItems((prev) => {
       if (prev.some((it) => it.plantSlug === slug)) return prev; // dedupe
       return [...prev, { plantSlug: slug, tierId: tier }];
     });
-    if (cartMode) cartHook.add(slug, tier as CartItem['tierId']);
+    cartHook.add(slug, tier as CartItem['tierId']);
   };
   const removePick = (slug: string) => {
     setPickedItems((prev) => prev.filter((it) => it.plantSlug !== slug));
-    if (cartMode) cartHook.remove(slug);
+    cartHook.remove(slug);
   };
   const togglePick = (slug: string, tier: AdoptTier['id']) => {
     if (pickedItems.some((it) => it.plantSlug === slug)) removePick(slug);
@@ -400,7 +411,7 @@ export function AdoptWizard({
   };
   const setItemTier = (slug: string, newTier: AdoptTier['id']) => {
     setPickedItems((prev) => prev.map((it) => (it.plantSlug === slug ? { ...it, tierId: newTier } : it)));
-    if (cartMode) cartHook.setTier(slug, newTier as CartItem['tierId']);
+    cartHook.setTier(slug, newTier as CartItem['tierId']);
   };
 
   // Compatibility shims for code that used the old single-plant state.
@@ -641,15 +652,29 @@ export function AdoptWizard({
           className="container"
           style={{ padding: '16px 32px', display: 'flex', alignItems: 'center', gap: 24 }}
         >
-          <button
-            type="button"
-            className="btn btn-ghost small"
-            onClick={() => (step > 1 ? goPrev() : window.history.back())}
-            aria-label={step === 1 ? t('backToGarden') : t('previous')}
-            style={{ padding: '6px 12px', fontSize: "0.867rem" }}
-          >
-            ← {step === 1 ? t('backToGarden') : t('previous')}
-          </button>
+          {step > 1 ? (
+            <button
+              type="button"
+              className="btn btn-ghost small"
+              onClick={goPrev}
+              aria-label={t('previous')}
+              style={{ padding: '6px 12px', fontSize: "0.867rem" }}
+            >
+              ← {t('previous')}
+            </button>
+          ) : (
+            // On step 1 we don't use window.history.back(): if the donor
+            // deep-linked here (search / share / bookmark) history goes
+            // somewhere unexpected. Always land on /plants — the canonical
+            // "back" target for anything adoption-related.
+            <Link
+              href={`/${locale}/plants`}
+              className="btn btn-ghost small"
+              style={{ padding: '6px 12px', fontSize: "0.867rem" }}
+            >
+              ← {t('backToGarden')}
+            </Link>
+          )}
           <ol
             style={{
               display: 'flex',

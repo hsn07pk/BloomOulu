@@ -90,6 +90,8 @@ export default function AskChat({
   ask,
   contactEmailDefault,
   apiUrl,
+  initialPrompt = null,
+  autoSendInitial = false,
 }: {
   locale: Locale;
   starters: string[];
@@ -102,6 +104,12 @@ export default function AskChat({
   ask: AskSettings;
   contactEmailDefault: string | null;
   apiUrl: string;
+  /** Seed text for the input composer. When set, the chat opens with
+   *  this question already typed; combined with `autoSendInitial` it
+   *  fires the first request automatically — used by the "Ask the
+   *  Garden about this plant" link on the plant detail page. */
+  initialPrompt?: string | null;
+  autoSendInitial?: boolean;
 }) {
   // The server component passes the browser-side URL as a prop so the
   // bundle isn't dependent on build-time env-var inlining. Trailing
@@ -109,7 +117,7 @@ export default function AskChat({
   const API = apiUrl.replace(/\/$/, '');
   const t = useTranslations('Ask');
   const [turns, setTurns] = useState<Turn[]>([]);
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState(initialPrompt ?? '');
   const [busy, setBusy] = useState(false);
   const [activeTurn, setActiveTurn] = useState<string | null>(null);
   const [mode, setMode] = useState<AskMode>('visitor');
@@ -155,6 +163,19 @@ export default function AskChat({
       return next;
     });
   }
+
+  // Auto-fire the seeded question once on mount. Used by the "Ask the
+  // Garden about this plant" link so the donor lands on the chat with
+  // the first response already streaming, no extra click required.
+  const autoFiredRef = useRef(false);
+  useEffect(() => {
+    if (autoFiredRef.current) return;
+    if (!autoSendInitial || !initialPrompt) return;
+    autoFiredRef.current = true;
+    void ask_(initialPrompt);
+    // ask_ is stable enough for an on-mount fire; intentional one-shot.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function newConversation() {
     setTurns([]);

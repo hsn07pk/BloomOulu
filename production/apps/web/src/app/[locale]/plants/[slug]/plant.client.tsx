@@ -217,6 +217,55 @@ function fmtTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
+/**
+ * Suppress placeholder strings the legacy seed/enrich scripts wrote into
+ * the DB. The plant detail page must NEVER render these — show the field
+ * only when there's real data behind it.
+ *
+ * Known placeholders:
+ *   • "(see taxon)" — legacy family fallback (enrich-legacy-garden.ts)
+ *   • "Origin pending" / anything ending in "pending"/"pending." —
+ *     unfilled origin/curator copy
+ *   • "all" — bloom-season default that reads as a placeholder
+ *   • "Curator description pending." — story fallback
+ *   • Empty / whitespace-only strings
+ *
+ * Returns the cleaned value or null. When null, the caller should skip
+ * rendering the field entirely.
+ */
+function cleanField(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const lower = trimmed.toLowerCase();
+  if (lower === '(see taxon)' || lower === 'see taxon') return null;
+  if (lower === 'all') return null;
+  if (lower.endsWith('pending') || lower.endsWith('pending.')) return null;
+  if (lower === '—' || lower === '-' || lower === 'n/a') return null;
+  return trimmed;
+}
+
+/** Legacy story placeholders we never want to show — these were written
+ *  by import/enrich scripts when a curator hadn't filled in the public
+ *  copy yet. Match leniently (lowercase, trimmed) and across locales. */
+const LEGACY_STORY_PLACEHOLDERS = [
+  "imported from the garden's legacy accession database. curator to write the public story.",
+  "imported from the garden's legacy accession database. curator to write the public story",
+  'curator description pending.',
+  'curator description pending',
+];
+
+/** Pick the localised story text for a plant, suppressing the curator
+ *  placeholder so the story section can be hidden when there's no real
+ *  copy. */
+function plantStory(plant: { story?: Record<string, string> }, locale: string): string | null {
+  const raw = plant.story?.[locale] || plant.story?.en || '';
+  const cleaned = cleanField(raw);
+  if (!cleaned) return null;
+  if (LEGACY_STORY_PLACEHOLDERS.includes(cleaned.toLowerCase())) return null;
+  return cleaned;
+}
+
 function makeQrDataUrl(text: string, size = 280): string {
   const qr = qrcode(0, 'H');
   qr.addData(text);
@@ -245,7 +294,22 @@ export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled,
 
   const name = localisedName(plant, locale);
   const latin = plant.taxon?.latinName ?? plant.nameEn;
-  const story = (plant.story && (plant.story[locale] || plant.story.en)) ?? '';
+  // Real data only — cleanField suppresses placeholders the seed/enrich
+  // scripts wrote ("(see taxon)", "Origin pending", "all", curator-
+  // pending story copy, etc.) so the UI doesn't render meaningless
+  // values. Anything `null` here means "hide the field"; anything truthy
+  // is real plant data ready to display.
+  const story = plantStory(plant, locale);
+  const cleanFamily = cleanField(plant.taxon?.family);
+  const cleanOrigin = cleanField(plant.origin);
+  const cleanHabitat = cleanField(plant.habitat);
+  const cleanBiome = cleanField(plant.biome);
+  const cleanGardenZone = cleanField(plant.gardenZone);
+  const cleanBloom = cleanField(plant.bloomWindow) ?? cleanField(plant.bloomSeason);
+  // Best available "where in the garden" string — the donor cares about
+  // the specific zone if we have it, falling back to the country of
+  // origin only when both are real data.
+  const cleanLocation = cleanGardenZone ?? cleanOrigin;
   const narration = plant.narrations?.find((n) => n.locale === locale) ?? plant.narrations?.[0];
   const transcript = narration?.transcript ?? '';
   const audioProgress = audioDuration > 0 ? (audioCurrent / audioDuration) * 100 : 0;
@@ -441,21 +505,24 @@ export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled,
     if (raw.length > 0) {
       return raw
         .slice(0, 4)
-        .map((q): [string, string] => {
-          if (Array.isArray(q) && q.length >= 2) return [tr(String(q[0])), String(q[1])];
+        .map((q): [string, string | null] => {
+          if (Array.isArray(q) && q.length >= 2) return [tr(String(q[0])), cleanField(String(q[1]))];
           if (q && typeof q === 'object' && 'labelKey' in q && 'value' in q) {
-            return [tr(String((q as { labelKey: unknown }).labelKey)), String((q as { value: unknown }).value)];
+            return [tr(String((q as { labelKey: unknown }).labelKey)), cleanField(String((q as { value: unknown }).value))];
           }
-          return ['', ''];
+          return ['', null];
         })
-        .filter(([k, v]) => k || v);
+        .filter((entry): entry is [string, string] => Boolean(entry[0]) && entry[1] !== null);
     }
-    return [
-      [labelMap.origin!, plant.origin],
-      [labelMap.habitat!, plant.habitat],
-      [labelMap.biome!, plant.biome],
-      [labelMap.redList!, plant.redListStatus],
-    ];
+    // Auto-fallback when the seed didn't supply quickFacts: pull from
+    // the plant's own columns, but only include fields with real data
+    // so we never render "Origin pending" / "(see taxon)" placeholders.
+    return ([
+      [labelMap.origin!, cleanOrigin],
+      [labelMap.habitat!, cleanHabitat],
+      [labelMap.biome!, cleanBiome],
+      [labelMap.redList!, cleanField(plant.redListStatus)],
+    ] as Array<[string, string | null]>).filter((entry): entry is [string, string] => entry[1] !== null);
   })();
 
   return (
@@ -474,8 +541,12 @@ export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled,
           className="container"
           style={{ padding: '14px 32px', display: 'flex', alignItems: 'center', gap: 16 }}
         >
-          <Link href={`/${locale}`} className="btn btn-ghost small" aria-label={tc('back')}>
-            ← {tc('back')}
+          <Link
+            href={`/${locale}/plants`}
+            className="btn btn-ghost small"
+            aria-label={locale === 'fi' ? 'Takaisin kasvilistaan' : locale === 'sv' ? 'Tillbaka till växtlistan' : 'Back to plants'}
+          >
+            ← {locale === 'fi' ? 'Kasvit' : locale === 'sv' ? 'Växter' : 'Plants'}
           </Link>
           <span className="tiny" aria-hidden="true">
             {locale === 'fi' ? 'Skannattu QR-koodilla' : locale === 'sv' ? 'Skannad via QR' : 'Scanned via QR'}
@@ -589,12 +660,12 @@ export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled,
               <span className={`badge badge-${plant.redListStatus.toLowerCase()}`}>
                 {plant.redListStatus}
               </span>
-              {plant.taxon?.family && (
+              {cleanFamily && (
                 <span
                   className="badge"
                   style={{ background: 'rgba(255,255,255,0.85)', color: 'var(--ink-2)' }}
                 >
-                  {plant.taxon.family}
+                  {cleanFamily}
                 </span>
               )}
             </div>
@@ -770,22 +841,26 @@ export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled,
                 {latin}
               </h1>
               <div className="muted" style={{ marginTop: 12, fontSize: 16 }}>
-                {name} {plant.taxon?.family ? `· ${plant.taxon.family}` : ''}
+                {name}{cleanFamily ? ` · ${cleanFamily}` : ''}
               </div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end' }}>
-              <button
-                type="button"
-                className="pill"
-                onClick={() => setShowMap(true)}
-                style={{ cursor: 'pointer', border: 0 }}
-                aria-label={t('showOnMap')}
-              >
-                <span aria-hidden="true">📍</span> {plant.gardenZone ?? plant.origin}
-              </button>
-              <span className="pill">
-                <span aria-hidden="true">🌸</span> {plant.bloomWindow ?? plant.bloomSeason}
-              </span>
+              {cleanLocation && (
+                <button
+                  type="button"
+                  className="pill"
+                  onClick={() => setShowMap(true)}
+                  style={{ cursor: 'pointer', border: 0 }}
+                  aria-label={t('showOnMap')}
+                >
+                  <span aria-hidden="true">📍</span> {cleanLocation}
+                </button>
+              )}
+              {cleanBloom && (
+                <span className="pill">
+                  <span aria-hidden="true">🌸</span> {cleanBloom}
+                </span>
+              )}
             </div>
           </div>
 
@@ -794,7 +869,7 @@ export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled,
             <KidIntro plant={plant} name={name} locale={locale} />
           ) : mode === 'school' ? (
             <SchoolIntro plant={plant} locale={locale} onStartQuiz={() => setShowQuiz(true)} />
-          ) : (
+          ) : story ? (
             <div
               style={{
                 marginTop: 32,
@@ -817,7 +892,7 @@ export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled,
                 {story.split(/\n\n/)[0]}
               </p>
             </div>
-          )}
+          ) : null}
 
           {/* Quick facts strip */}
           <div
@@ -890,9 +965,19 @@ export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled,
           <div style={{ paddingTop: 28 }} role="tabpanel">
             {tab === 'story' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-                <p style={{ fontSize: 15, lineHeight: 1.7, color: 'var(--ink-soft)', whiteSpace: 'pre-line' }}>
-                  {story}
-                </p>
+                {story ? (
+                  <p style={{ fontSize: 15, lineHeight: 1.7, color: 'var(--ink-soft)', whiteSpace: 'pre-line' }}>
+                    {story}
+                  </p>
+                ) : (
+                  <p className="muted" style={{ fontSize: 14, lineHeight: 1.6 }}>
+                    {locale === 'fi'
+                      ? 'Kuraattori ei ole vielä kirjoittanut tämän kasvin tarinaa — kysy puutarhalta lisää alta.'
+                      : locale === 'sv'
+                        ? 'Kuratorn har inte skrivit en berättelse för den här växten än — fråga trädgården nedan.'
+                        : "The curator hasn't written a story for this plant yet — ask the Garden below."}
+                  </p>
+                )}
                 <Link
                   href={`/${locale}/ask?plant=${plant.slug}`}
                   className="btn btn-secondary"
@@ -913,16 +998,16 @@ export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled,
                   <tbody>
                     {(
                       [
-                        [locale === 'fi' ? 'Alkuperä' : locale === 'sv' ? 'Ursprung' : 'Origin', plant.origin],
-                        [locale === 'fi' ? 'Elinympäristö' : locale === 'sv' ? 'Habitat' : 'Habitat', plant.habitat],
-                        [locale === 'fi' ? 'Kasvuvyöhyke' : locale === 'sv' ? 'Biom' : 'Biome', plant.biome],
-                        [locale === 'fi' ? 'Kukinta-aika' : locale === 'sv' ? 'Blomningstid' : 'Blooms', plant.bloomWindow ?? plant.bloomSeason],
-                        [locale === 'fi' ? 'Uhanalaisuusluokka' : locale === 'sv' ? 'Rödlistningsstatus' : 'Red-List status', plant.redListStatus],
-                        [locale === 'fi' ? 'Heimo' : locale === 'sv' ? 'Familj' : 'Family', plant.taxon?.family ?? '—'],
+                        [locale === 'fi' ? 'Alkuperä' : locale === 'sv' ? 'Ursprung' : 'Origin', cleanOrigin],
+                        [locale === 'fi' ? 'Elinympäristö' : locale === 'sv' ? 'Habitat' : 'Habitat', cleanHabitat],
+                        [locale === 'fi' ? 'Kasvuvyöhyke' : locale === 'sv' ? 'Biom' : 'Biome', cleanBiome],
+                        [locale === 'fi' ? 'Kukinta-aika' : locale === 'sv' ? 'Blomningstid' : 'Blooms', cleanBloom],
+                        [locale === 'fi' ? 'Uhanalaisuusluokka' : locale === 'sv' ? 'Rödlistningsstatus' : 'Red-List status', cleanField(plant.redListStatus)],
+                        [locale === 'fi' ? 'Heimo' : locale === 'sv' ? 'Familj' : 'Family', cleanFamily],
                         [locale === 'fi' ? 'Tieteellinen nimi' : locale === 'sv' ? 'Vetenskapligt namn' : 'Latin name', latin],
-                        [locale === 'fi' ? 'Puutarha-alue' : locale === 'sv' ? 'Trädgårdsområde' : 'Garden zone', plant.gardenZone ?? '—'],
-                      ] as const
-                    ).map(([k, v]) => (
+                        [locale === 'fi' ? 'Puutarha-alue' : locale === 'sv' ? 'Trädgårdsområde' : 'Garden zone', cleanGardenZone],
+                      ] as ReadonlyArray<readonly [string, string | null]>
+                    ).filter((row): row is [string, string] => row[1] !== null && row[1] !== '').map(([k, v]) => (
                       <tr key={k} style={{ borderBottom: '1px solid var(--line)' }}>
                         <td
                           style={{
@@ -1530,9 +1615,11 @@ export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled,
             <h3 className="serif" style={{ fontSize: 24, marginTop: 8, fontStyle: 'italic' }}>
               {latin}
             </h3>
-            <div className="small muted" style={{ marginTop: 4 }}>
-              {plant.gardenZone ?? plant.origin}
-            </div>
+            {cleanLocation && (
+              <div className="small muted" style={{ marginTop: 4 }}>
+                {cleanLocation}
+              </div>
+            )}
             <div style={{ marginTop: 14 }}>
               <PlantMap
                 lat={plant.microLat == null ? null : Number(plant.microLat)}
@@ -1607,6 +1694,20 @@ function KidIntro({
   locale: Locale;
 }) {
   const latin = plant.taxon?.latinName ?? plant.nameEn;
+  const location = cleanField(plant.gardenZone) ?? cleanField(plant.origin);
+  const bloom = cleanField(plant.bloomWindow) ?? cleanField(plant.bloomSeason);
+  const cleanRedList = cleanField(plant.redListStatus);
+  const cards: Array<[string, string, string]> = [];
+  const cleanedOrigin = cleanField(plant.origin);
+  if (cleanedOrigin) {
+    cards.push(['🌍', locale === 'fi' ? 'Mistä olen kotoisin' : locale === 'sv' ? 'Var jag kommer från' : "Where I'm from", cleanedOrigin]);
+  }
+  if (bloom) {
+    cards.push(['🌸', locale === 'fi' ? 'Milloin kukin' : locale === 'sv' ? 'När jag blommar' : 'When I bloom', bloom]);
+  }
+  if (cleanRedList) {
+    cards.push(['🛡️', locale === 'fi' ? 'Miten voin' : locale === 'sv' ? 'Hur jag mår' : "How I'm doing", cleanRedList]);
+  }
   return (
     <div
       style={{
@@ -1629,33 +1730,40 @@ function KidIntro({
             : `Hi! I'm ${name}.`}
       </h2>
       <p style={{ marginTop: 12, fontSize: 17, lineHeight: 1.5, color: 'var(--ink-soft)' }}>
-        {locale === 'fi'
-          ? `Tieteellinen nimeni on ${latin}. Etsi minut puutarhasta — Olen ${plant.gardenZone ?? plant.origin} -alueella.`
-          : locale === 'sv'
-            ? `Mitt vetenskapliga namn är ${latin}. Hitta mig i trädgården — Jag är i ${plant.gardenZone ?? plant.origin}.`
-            : `My scientific name is ${latin}. Find me in the garden — I'm in the ${plant.gardenZone ?? plant.origin}.`}
+        {(() => {
+          const base = locale === 'fi'
+            ? `Tieteellinen nimeni on ${latin}.`
+            : locale === 'sv'
+              ? `Mitt vetenskapliga namn är ${latin}.`
+              : `My scientific name is ${latin}.`;
+          if (!location) return base;
+          const findMe = locale === 'fi'
+            ? ` Etsi minut puutarhasta — olen ${location}-alueella.`
+            : locale === 'sv'
+              ? ` Hitta mig i trädgården — jag är i ${location}.`
+              : ` Find me in the garden — I'm in ${location}.`;
+          return base + findMe;
+        })()}
       </p>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginTop: 16 }}>
-        {[
-          ['🌍', locale === 'fi' ? 'Mistä olen kotoisin' : locale === 'sv' ? 'Var jag kommer från' : "Where I'm from", plant.origin],
-          ['🌸', locale === 'fi' ? 'Milloin kukin' : locale === 'sv' ? 'När jag blommar' : 'When I bloom', plant.bloomWindow ?? plant.bloomSeason],
-          ['🛡️', locale === 'fi' ? 'Miten voin' : locale === 'sv' ? 'Hur jag mår' : "How I'm doing", plant.redListStatus],
-        ].map(([emoji, label, value]) => (
-          <div
-            key={label}
-            style={{
-              padding: 14,
-              background: 'var(--paper)',
-              borderRadius: 12,
-              border: '1px solid var(--line)',
-            }}
-          >
-            <div style={{ fontSize: 24 }} aria-hidden="true">{emoji}</div>
-            <div className="tiny" style={{ marginTop: 6 }}>{label}</div>
-            <div style={{ fontSize: 14, fontWeight: 600, marginTop: 4 }}>{value}</div>
-          </div>
-        ))}
-      </div>
+      {cards.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cards.length}, 1fr)`, gap: 12, marginTop: 16 }}>
+          {cards.map(([emoji, label, value]) => (
+            <div
+              key={label}
+              style={{
+                padding: 14,
+                background: 'var(--paper)',
+                borderRadius: 12,
+                border: '1px solid var(--line)',
+              }}
+            >
+              <div style={{ fontSize: 24 }} aria-hidden="true">{emoji}</div>
+              <div className="tiny" style={{ marginTop: 6 }}>{label}</div>
+              <div style={{ fontSize: 14, fontWeight: 600, marginTop: 4 }}>{value}</div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -1686,44 +1794,45 @@ function SchoolIntro({
       <h2 className="serif" style={{ fontSize: 28, lineHeight: 1.15, color: 'var(--ink)', margin: 0 }}>
         {locale === 'fi' ? 'Mitä opit?' : locale === 'sv' ? 'Vad du lär dig' : 'What will you learn?'}
       </h2>
-      <ul
-        style={{
-          marginTop: 14,
-          paddingLeft: 20,
-          lineHeight: 1.7,
-          color: 'var(--ink-soft)',
-          fontSize: 15,
-        }}
-      >
-        <li>
-          {locale === 'fi'
-            ? `Lajin uhanalaisuusluokka: ${plant.redListStatus}`
-            : locale === 'sv'
-              ? `Artens hotstatus: ${plant.redListStatus}`
-              : `Red-List status: ${plant.redListStatus}`}
-        </li>
-        <li>
-          {locale === 'fi'
-            ? `Elinympäristö: ${plant.habitat}`
-            : locale === 'sv'
-              ? `Habitat: ${plant.habitat}`
-              : `Habitat: ${plant.habitat}`}
-        </li>
-        <li>
-          {locale === 'fi'
-            ? `Kasvuvyöhyke: ${plant.biome}`
-            : locale === 'sv'
-              ? `Biom: ${plant.biome}`
-              : `Biome: ${plant.biome}`}
-        </li>
-        <li>
-          {locale === 'fi'
-            ? `Kukinta-aika: ${plant.bloomWindow ?? plant.bloomSeason}`
-            : locale === 'sv'
-              ? `Blomningstid: ${plant.bloomWindow ?? plant.bloomSeason}`
-              : `Bloom: ${plant.bloomWindow ?? plant.bloomSeason}`}
-        </li>
-      </ul>
+      {(() => {
+        // Only list facts the DB actually has — placeholders are silently
+        // dropped so the school-mode summary never reads "Habitat: pending".
+        const rows: Array<[string, string]> = [];
+        const r = cleanField(plant.redListStatus);
+        if (r) rows.push([locale === 'fi' ? 'Lajin uhanalaisuusluokka' : locale === 'sv' ? 'Artens hotstatus' : 'Red-List status', r]);
+        const h = cleanField(plant.habitat);
+        if (h) rows.push([locale === 'fi' ? 'Elinympäristö' : 'Habitat', h]);
+        const b = cleanField(plant.biome);
+        if (b) rows.push([locale === 'fi' ? 'Kasvuvyöhyke' : locale === 'sv' ? 'Biom' : 'Biome', b]);
+        const bl = cleanField(plant.bloomWindow) ?? cleanField(plant.bloomSeason);
+        if (bl) rows.push([locale === 'fi' ? 'Kukinta-aika' : locale === 'sv' ? 'Blomningstid' : 'Bloom', bl]);
+        if (rows.length === 0) {
+          return (
+            <p className="muted" style={{ marginTop: 14, fontSize: 14 }}>
+              {locale === 'fi'
+                ? 'Tämän kasvin tietoja täydennetään parhaillaan.'
+                : locale === 'sv'
+                  ? 'Information om denna växt fylls fortfarande på.'
+                  : "We're still filling in details for this plant."}
+            </p>
+          );
+        }
+        return (
+          <ul
+            style={{
+              marginTop: 14,
+              paddingLeft: 20,
+              lineHeight: 1.7,
+              color: 'var(--ink-soft)',
+              fontSize: 15,
+            }}
+          >
+            {rows.map(([label, value]) => (
+              <li key={label}>{label}: {value}</li>
+            ))}
+          </ul>
+        );
+      })()}
       <div style={{ display: 'flex', gap: 10, marginTop: 18, flexWrap: 'wrap' }}>
         <button type="button" className="btn btn-primary" onClick={onStartQuiz}>
           🎯{' '}
