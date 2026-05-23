@@ -210,6 +210,7 @@ const GardenIdentityPage = componentLoader.add('GardenIdentity', path.join(here,
 const PaymentProvidersPage = componentLoader.add('PaymentProviders', path.join(here, 'pages/PaymentProviders'));
 const CuratorConfigPage = componentLoader.add('CuratorConfig', path.join(here, 'pages/CuratorConfig'));
 const AdoptionConfigPage = componentLoader.add('AdoptionConfig', path.join(here, 'pages/AdoptionConfig'));
+const QrMetricsPage = componentLoader.add('QrMetrics', path.join(here, 'pages/QrMetrics'));
 
 // AdminJS 7's exported types are looser than its runtime accepts (page `label`,
 // `branding.softwareBrothers`, the static `AdminJS.bundle` helper, action
@@ -775,6 +776,12 @@ const adminConfig = new AdminJS({
       icon: 'CheckCircle',
       handler: async () => ({}),
       component: ReconciliationPage,
+    },
+    qrMetrics: {
+      label: 'QR scans',
+      icon: 'BarChart2',
+      handler: async () => ({}),
+      component: QrMetricsPage,
     },
     ingest: {
       label: 'Ingest RAG doc',

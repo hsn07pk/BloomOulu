@@ -17,10 +17,24 @@
  *   - Search query goes via raw SQL to combine FTS ranking with trigram
  *     similarity in a single index scan.
  */
-import { Controller, Get, NotFoundException, Param, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Ip, NotFoundException, Param, Post, Query, Req } from '@nestjs/common';
+import type { FastifyRequest } from 'fastify';
+import { createHash } from 'node:crypto';
+import { LocaleEnum } from '@bloomoulu/constants';
+import { z } from 'zod';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { NarrationService } from '../narration/narration.service.js';
+import { ZodValidationPipe } from '../../common/zod.pipe.js';
 import { presign } from '../../infra/storage.js';
+
+/** Body of POST /v1/plants/:slug/scan. Kept tiny — every field is optional;
+ *  the controller derives a stable visitorHash from IP + UA so we never
+ *  store raw PII. */
+const RecordScanDto = z.object({
+  locale: LocaleEnum.optional(),
+  kioskId: z.string().max(64).optional(),
+});
+type RecordScanDto = z.infer<typeof RecordScanDto>;
 
 const MAX_LIMIT = 100;
 const DEFAULT_LIMIT = 24;
@@ -191,5 +205,52 @@ export class PlantsController {
       }),
     );
     return { ...plant, narrations };
+  }
+
+  /**
+   * Record a physical-label QR scan. Visitors landing on the public
+   * plant page with ?qr=1 fire a single fire-and-forget POST here so we
+   * can build "what's popular today" + the scan → adoption funnel in
+   * /admin.
+   *
+   * GDPR posture: no IP / UA stored verbatim. A SHA-256 over `ip|ua`
+   * becomes the `visitorHash`, which lets us collapse browser refreshes
+   * into one "session" without retaining anything personal. We also
+   * bump Plant.scanCount in the same transaction so list views can
+   * sort by popularity cheaply.
+   */
+  @Post(':slug/scan')
+  @HttpCode(204)
+  async recordScan(
+    @Param('slug') slug: string,
+    @Body(new ZodValidationPipe(RecordScanDto)) dto: RecordScanDto,
+    @Req() req: FastifyRequest,
+    @Ip() ip: string,
+  ) {
+    const plant = await this.prisma.plant.findUnique({
+      where: { slug },
+      select: { id: true },
+    });
+    if (!plant) throw new NotFoundException();
+
+    const ua = (req.headers['user-agent'] as string) ?? '';
+    const visitorHash =
+      ip || ua ? createHash('sha256').update(`${ip}|${ua}`).digest('hex') : '';
+    await this.prisma.$transaction([
+      this.prisma.plantScan.create({
+        data: {
+          plantId: plant.id,
+          locale: dto.locale ?? 'fi',
+          kioskId: dto.kioskId ?? null,
+          visitorHash,
+          userAgent: ua ? ua.slice(0, 240) : null,
+        },
+      }),
+      this.prisma.plant.update({
+        where: { id: plant.id },
+        data: { scanCount: { increment: 1 } },
+      }),
+    ]);
+    return;
   }
 }

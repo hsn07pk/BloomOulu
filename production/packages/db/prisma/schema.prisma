@@ -196,6 +196,12 @@ model Plant {
   targetCents     Int           @default(0)
   status          String        @default("active") // active | retired | hidden
 
+  // Denormalised counter for plant-scan events. Authoritative source is
+  // the PlantScan table; this counter is bumped per insert via the
+  // PlantsService.recordScan path so the homepage and admin index can
+  // sort by popularity without scanning the event table.
+  scanCount       Int           @default(0)
+
   // Relations
   accessions      Accession[]
   adoptions       Adoption[]
@@ -204,6 +210,7 @@ model Plant {
   ragChunks       RagChunk[]
   savedBy         SavedPlant[]
   quizQuestions   QuizQuestion[]
+  scans           PlantScan[]
 
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
@@ -741,6 +748,34 @@ model KioskEvent {
 // ────────────────────────────────────────────────────────────────────────────
 // Audit + GDPR
 // ────────────────────────────────────────────────────────────────────────────
+
+/// QR / physical-label scan event. Recorded every time a visitor lands on a
+/// plant detail page with ?qr=1 (a code printed on a garden label). Used to
+/// build "what's popular today" and the scan → adoption funnel in /admin.
+/// Storage stays anonymous: only a SHA-256 hash of IP + UA so a returning
+/// visitor can be counted as one "session" without us holding raw PII.
+model PlantScan {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  plantId       String   @db.Uuid
+  plant         Plant    @relation(fields: [plantId], references: [id], onDelete: Cascade)
+  scannedAt     DateTime @default(now())
+  /// UI locale at the time of the scan — useful for "Finnish vs English
+  /// signage" comparisons.
+  locale        String   @default("fi")
+  /// Optional kiosk / terminal label printed on the QR sticker, e.g. the
+  /// greenhouse zone code. Lets ops correlate which physical labels get
+  /// the most attention.
+  kioskId       String?
+  /// SHA-256 of `${ip}|${userAgent}` (no salt by design — the hash is
+  /// uniquely a "session"-ish bucket within a day, not a tracking key).
+  /// Empty string when neither header was supplied.
+  visitorHash   String   @default("")
+  userAgent     String?
+
+  @@index([plantId, scannedAt(sort: Desc)])
+  @@index([scannedAt(sort: Desc)])
+  @@index([kioskId, scannedAt(sort: Desc)])
+}
 
 model AuditLog {
   id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid

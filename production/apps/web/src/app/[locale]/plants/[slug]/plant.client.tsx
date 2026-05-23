@@ -12,9 +12,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import qrcode from 'qrcode-generator';
 import {
+  getBrowserApiUrl,
   pickInitialInterval,
   suggestedTierId as sharedSuggestedTierId,
   type BillingInterval,
@@ -279,6 +281,29 @@ const CAPTIONS_KEY = 'bloom_captions';
 export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled, locale, apiUrl: _apiUrl, signedIn = false }: PlantPageClientProps) {
   const t = useTranslations('Plant');
   const tc = useTranslations('Common');
+  const searchParams = useSearchParams();
+  // QR entry detection: kiosk-style QR codes encode a URL with ?qr=1 (and
+  // optionally &kiosk=<terminal-id>) so we can tell a browse visit from a
+  // physical-label scan and only show the "Scanned via QR" chip + record a
+  // PlantScan event when the donor actually walked up to the plant.
+  const arrivedViaQr = searchParams?.get('qr') === '1';
+  const qrKioskId = searchParams?.get('kiosk') ?? null;
+  // Fire-and-forget scan ping. Useffect runs once per slug change; the
+  // backend's idempotency is loose by design (we want a count per visit).
+  const scanPingedRef = useRef(false);
+  useEffect(() => {
+    if (!arrivedViaQr || scanPingedRef.current) return;
+    scanPingedRef.current = true;
+    const api = getBrowserApiUrl().replace(/\/$/, '');
+    void fetch(`${api}/v1/plants/${encodeURIComponent(plant.slug)}/scan`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ locale, kioskId: qrKioskId }),
+      keepalive: true,
+    }).catch(() => {
+      /* analytics ping — never block the page on a failure */
+    });
+  }, [arrivedViaQr, plant.slug, locale, qrKioskId]);
   const [mode, setMode] = useState<Mode>('adult');
   const [tab, setTab] = useState<Tab>('story');
   const [audioPlaying, setAudioPlaying] = useState(false);
@@ -548,9 +573,21 @@ export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled,
           >
             ← {locale === 'fi' ? 'Kasvit' : locale === 'sv' ? 'Växter' : 'Plants'}
           </Link>
-          <span className="tiny" aria-hidden="true">
-            {locale === 'fi' ? 'Skannattu QR-koodilla' : locale === 'sv' ? 'Skannad via QR' : 'Scanned via QR'}
-          </span>
+          {arrivedViaQr && (
+            <span
+              className="tiny"
+              style={{
+                padding: '2px 8px',
+                borderRadius: 999,
+                background: 'var(--sage-pale)',
+                border: '1px solid var(--forest-mid)',
+                color: 'var(--forest-deep)',
+              }}
+            >
+              📷{' '}
+              {locale === 'fi' ? 'Skannattu QR-koodilla' : locale === 'sv' ? 'Skannad via QR' : 'Scanned via QR'}
+            </span>
+          )}
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
             <button
               type="button"
