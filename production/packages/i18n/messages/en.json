@@ -347,5 +347,17 @@
     "accessibility": "Accessibility statement",
     "contact": "Contact",
     "fundsFlow": "Where your money goes"
+  },
+  "A11y": {
+    "title": "Accessibility",
+    "open": "Open accessibility options",
+    "close": "Close",
+    "textSize": "Text size",
+    "textSizeSmall": "Small",
+    "textSizeNormal": "Normal",
+    "textSizeLarge": "Large",
+    "highContrast": "High contrast",
+    "reduceMotion": "Reduce motion",
+    "readStatement": "Read accessibility statement"
   }
 }

@@ -193,6 +193,10 @@ body.bloom-reduced-motion *::before,
 body.bloom-reduced-motion *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 body.bloom-reduced-motion .fade-in { animation: none !important; }
 
+body.bloom-smaller-text { font-size: 0.9rem; }
+body.bloom-smaller-text .small { font-size: 0.8rem !important; }
+body.bloom-smaller-text .tiny  { font-size: 0.7rem !important; }
+
 body.bloom-larger-text { font-size: 1.133rem; }
 body.bloom-larger-text h1, body.bloom-larger-text h2, body.bloom-larger-text h3 { font-size: 110% !important; }
 body.bloom-larger-text .small, body.bloom-larger-text .tiny { font-size: 0.933rem !important; }
