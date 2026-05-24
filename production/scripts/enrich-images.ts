@@ -40,6 +40,11 @@
 
 import { PrismaClient } from '@prisma/client';
 import { setTimeout as sleep } from 'node:timers/promises';
+// Reuse the API's image-hosting helper so this script can't accidentally
+// drift from how the live enrichment flow hosts images. Every PlantImage
+// row that this script creates ends up with a self-hosted URL — we never
+// leave a row pointing at an external host.
+import { hostPlantImage } from '../apps/api/src/modules/enrichment/image-store.js';
 
 const prisma = new PrismaClient();
 
@@ -426,32 +431,47 @@ async function main() {
             `        ${img.url}`,
         );
       } else {
-        await prisma.$transaction(async (tx) => {
-          // --force may re-process a plant that already has images — clear them first.
-          if (plant.primaryImageId) {
-            await tx.plant.update({
-              where: { id: plant.id },
-              data: { primaryImageId: null },
-            });
-            await tx.plantImage.deleteMany({ where: { plantId: plant.id } });
-          }
-          const image = await tx.plantImage.create({
-            data: {
-              plantId: plant.id,
-              url: img!.url,
-              altEn: plant.nameEn,
-              altFi: plant.nameFi,
-              altSv: plant.nameSv,
-              attribution: img!.attribution,
-              licenseSpdx: img!.licenseSpdx,
-              width: img!.width ?? null,
-              height: img!.height ?? null,
-            },
-          });
-          await tx.plant.update({
+        // Create the row first so we have a stable id to key the S3
+        // object by. If hosting fails, roll back the row so we don't
+        // leave a PlantImage pointing at an unfetchable upstream URL —
+        // exactly the failure mode that produced the 225 dead seed
+        // images cleaned up in 2026-05-24.
+        if (plant.primaryImageId) {
+          await prisma.plant.update({
             where: { id: plant.id },
-            data: { primaryImageId: image.id },
+            data: { primaryImageId: null },
           });
+          await prisma.plantImage.deleteMany({ where: { plantId: plant.id } });
+        }
+        const draftImage = await prisma.plantImage.create({
+          data: {
+            plantId: plant.id,
+            url: img.url,
+            altEn: plant.nameEn,
+            altFi: plant.nameFi,
+            altSv: plant.nameSv,
+            attribution: img.attribution,
+            licenseSpdx: img.licenseSpdx,
+            width: img.width ?? null,
+            height: img.height ?? null,
+          },
+        });
+        const hosted = await hostPlantImage(img.url, draftImage.id);
+        if (!hosted) {
+          await prisma.plantImage.delete({ where: { id: draftImage.id } });
+          errors++;
+          console.error(
+            `[${n}/${target.length}] ! ${latin} — image host failed; row rolled back`,
+          );
+          continue;
+        }
+        await prisma.plantImage.update({
+          where: { id: draftImage.id },
+          data: { url: hosted },
+        });
+        await prisma.plant.update({
+          where: { id: plant.id },
+          data: { primaryImageId: draftImage.id },
         });
         updated++;
         console.log(`[${n}/${target.length}] + ${latin} — via ${provider} (${img.licenseSpdx})`);

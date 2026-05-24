@@ -20,10 +20,21 @@ const Preview: React.FC<{ values: Record<string, unknown> }> = ({ values }) => {
   );
 };
 
-const schema: ConfigSchema = {
+export const schema: ConfigSchema = {
   title: 'Curator & AskTheGarden',
+  kicker: 'AskTheGarden behaviour',
   intro:
     'AskTheGarden answers donor questions from the catalogue. When the model isn’t confident, it offers to forward the question to a curator. These values control that handoff.',
+  helpBannerId: 'curator-config-intro',
+  helpBannerTitle: 'About the confidence floor',
+  helpBanner: (
+    <>
+      The confidence floor uses <strong>basis points</strong> (10000 = 1.0). Lower numbers let the
+      AI answer more questions on its own; higher numbers route more to the curator inbox. Start
+      around <strong>1000–2000</strong> (permissive). If you see hallucinated answers in /admin →
+      Ask answers, bump it up by 500 at a time.
+    </>
+  ),
   Preview,
   sections: [
     {

@@ -306,6 +306,13 @@ export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled,
   }, [arrivedViaQr, plant.slug, locale, qrKioskId]);
   const [mode, setMode] = useState<Mode>('adult');
   const [tab, setTab] = useState<Tab>('story');
+  const hasCitations = (plant.citations?.length ?? 0) > 0;
+  // If the citations tab was selected but the plant has no citations
+  // (e.g. they were removed since the page first loaded), fall back to
+  // the story tab so the page doesn't render an empty panel.
+  useEffect(() => {
+    if (tab === 'citations' && !hasCitations) setTab('story');
+  }, [tab, hasCitations]);
   const [audioPlaying, setAudioPlaying] = useState(false);
   const [audioCurrent, setAudioCurrent] = useState(0);
   const [audioDuration, setAudioDuration] = useState(0);
@@ -882,7 +889,13 @@ export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled,
               </div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end' }}>
-              {cleanLocation && (
+              {/* The pill only renders as a clickable map button when we
+                  actually have a location to plot — either the garden zone
+                  the plant is staked in OR microLat/microLng coordinates.
+                  When all we have is the descriptive "Native to …" origin
+                  text, render it as a plain span so the curator doesn't
+                  promise a map and then open an unrelated dialog. */}
+              {cleanLocation && (cleanGardenZone || (plant.microLat != null && plant.microLng != null)) ? (
                 <button
                   type="button"
                   className="pill"
@@ -892,7 +905,21 @@ export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled,
                 >
                   <span aria-hidden="true">📍</span> {cleanLocation}
                 </button>
-              )}
+              ) : cleanOrigin ? (
+                <span
+                  className="pill"
+                  title={
+                    locale === 'fi'
+                      ? 'Luonnonalkuperä — kuvaileva teksti, ei karttalinkki.'
+                      : locale === 'sv'
+                        ? 'Naturligt ursprung — beskrivande text, ingen karta.'
+                        : 'Native origin — descriptive text; no map link.'
+                  }
+                  style={{ cursor: 'default' }}
+                >
+                  <span aria-hidden="true">🌍</span> {cleanOrigin}
+                </span>
+              ) : null}
               {cleanBloom && (
                 <span className="pill">
                   <span aria-hidden="true">🌸</span> {cleanBloom}
@@ -960,7 +987,10 @@ export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled,
             ))}
           </div>
 
-          {/* Tabs */}
+          {/* Tabs — only render tabs that have content to show.
+              "Cited papers" is hidden entirely when the plant has no
+              citations rather than rendering an empty-state apology
+              that adds noise to the page. */}
           <div
             role="tablist"
             aria-label={locale === 'fi' ? 'Lisätietoja' : locale === 'sv' ? 'Mer information' : 'More info'}
@@ -970,8 +1000,10 @@ export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled,
               [
                 ['story', locale === 'fi' ? 'Tarina' : locale === 'sv' ? 'Berättelse' : 'The story'],
                 ['data', locale === 'fi' ? 'Aksessio-data' : locale === 'sv' ? 'Accessionsdata' : 'Accession data'],
-                ['citations', locale === 'fi' ? 'Lähteet' : locale === 'sv' ? 'Källor' : 'Cited papers'],
-              ] as const
+                ...(plant.citations && plant.citations.length > 0
+                  ? ([['citations', locale === 'fi' ? 'Lähteet' : locale === 'sv' ? 'Källor' : 'Cited papers']] as const)
+                  : []),
+              ] as ReadonlyArray<readonly [Tab, string]>
             ).map(([id, label]) => (
               <button
                 key={id}

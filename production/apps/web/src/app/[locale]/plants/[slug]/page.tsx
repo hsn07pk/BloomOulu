@@ -4,7 +4,11 @@ import { PlantPageClient } from './plant.client';
 import { getSession } from '../../../../lib/session';
 
 export const dynamicParams = true;
-export const revalidate = 3600;
+// 60s ISR (was 3600s). The plant detail card surfaces adopterCount /
+// fundedCents / scanCount in real time; the previous 1-hour TTL meant
+// a new adoption took up to an hour to show up. 60s is the same
+// freshness budget the home page uses.
+export const revalidate = 60;
 
 interface Plant {
   id: string;

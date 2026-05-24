@@ -147,7 +147,20 @@ class AskController {
       );
       // Re-fetch citation chunks so the final event carries human-readable
       // titles instead of raw chunk UUIDs.
-      const enriched = await this.enrichCitations(result.citations);
+      //
+      // Image attach is intent-aware (see enrichCitations) so:
+      //   • a question naming a specific plant → only that plant's
+      //     image is shown (and nothing if it has no image)
+      //   • a generic question whose answer lists several species → all
+      //     of those species' images are shown
+      // Anaphoric follow-ups ("can you show me this plant?") rely on
+      // the history to identify the subject, so we pass it separately.
+      const enriched = await this.enrichCitations(
+        result.citations,
+        body.question,
+        result.text,
+        body.history.map((h) => h.text).join('\n'),
+      );
       send('final', { ...result, citations: enriched });
     } catch (err) {
       send('error', { message: (err as Error).message });
@@ -327,33 +340,210 @@ class AskController {
   }
 
   /** Join answer citations back to RagChunk → Citation so the donor sees
-   *  the document title and page rather than a chunk UUID. */
+   *  the document title and page rather than a chunk UUID. When the
+   *  citation points at a per-plant RAG document, also resolve the
+   *  Plant's primary photo + display name so the chat bubble can render
+   *  the image inline.
+   *
+   *  Plant-doc detection has to accept TWO naming conventions because the
+   *  corpus contains both:
+   *    1. `__plant__:<slug>` — written by the live auto-ingest path in
+   *       `enrich-with-review.ts` and `admin/rag-ingest.ts`.
+   *    2. `<slug>` (bare) — written by the original bulk ingest script
+   *       `scripts/build-plant-rag-corpus.ts`, which seeded the existing
+   *       ~7,900 plant docs.
+   *  Without recognising both, plants ingested before the namespacing
+   *  convention existed never got their photos attached in chat answers.
+   */
   private async enrichCitations(
     citations: Array<{ marker: string; chunkId: string }>,
+    questionText: string = '',
+    answerText: string = '',
+    historyText: string = '',
   ) {
-    if (citations.length === 0) return [];
+    if (citations.length === 0 && !questionText && !answerText && !historyText) return [];
     const ids = citations.map((c) => c.chunkId);
-    const rows = await this.prisma.ragChunk.findMany({
-      where: { id: { in: ids } },
-      include: {
-        document: { select: { title: true } },
-        citation: { select: { displayTitle: true, page: true, year: true } },
-      },
-    });
+    const rows = ids.length
+      ? await this.prisma.ragChunk.findMany({
+          where: { id: { in: ids } },
+          include: {
+            document: { select: { title: true, sourceUrl: true } },
+            citation: { select: { displayTitle: true, page: true, year: true } },
+          },
+        })
+      : [];
+    // Collect any title that could be a plant slug (with or without the
+    // `__plant__:` namespace), then verify by joining to Plant. This is a
+    // single round-trip; plants that don't exist with that slug are
+    // silently treated as a non-plant document below.
+    const candidateSlugs = new Set<string>();
+    for (const r of rows) {
+      const t = r.document?.title ?? '';
+      if (!t) continue;
+      candidateSlugs.add(
+        t.startsWith('__plant__:') ? t.slice('__plant__:'.length) : t,
+      );
+    }
+    type PlantHit = {
+      slug: string;
+      nameEn: string;
+      primaryImage: { url: string; attribution: string; licenseSpdx: string } | null;
+    };
+    const plantBySlug = new Map<string, PlantHit>();
+    if (candidateSlugs.size > 0) {
+      const plants = await this.prisma.plant.findMany({
+        where: { slug: { in: Array.from(candidateSlugs) } },
+        select: {
+          slug: true,
+          nameEn: true,
+          primaryImage: { select: { url: true, attribution: true, licenseSpdx: true } },
+        },
+      });
+      for (const p of plants) plantBySlug.set(p.slug, p as PlantHit);
+    }
+    type EnrichedCitation = {
+      marker: string;
+      chunkId: string;
+      title: string;
+      page: string | null;
+      year: number | null;
+      plantSlug: string | null;
+      sourceUrl: string | null;
+      image: { url: string; attribution: string; licenseSpdx: string } | null;
+    };
     const byId = new Map(rows.map((r) => [r.id, r]));
-    return citations.map((c) => {
+    const enriched: EnrichedCitation[] = citations.map((c) => {
       const r = byId.get(c.chunkId);
+      const title = r?.document?.title ?? '';
+      const stripped = title.startsWith('__plant__:')
+        ? title.slice('__plant__:'.length)
+        : title;
+      const plant = plantBySlug.get(stripped) ?? null;
       return {
         marker: c.marker,
         chunkId: c.chunkId,
         title:
           r?.citation?.displayTitle ??
-          r?.document?.title ??
-          (c.marker.replace('[', '').replace(']', '')),
+          // Prefer the plant's English common name when we know it; this
+          // beats showing the bare slug in the sources list.
+          (plant?.nameEn ?? stripped ?? c.marker.replace('[', '').replace(']', '')),
         page: r?.citation?.page ?? null,
         year: r?.citation?.year ?? null,
+        plantSlug: plant ? plant.slug : null,
+        sourceUrl: r?.document?.sourceUrl ?? null,
+        // Deliberately NOT attaching the image here. Retrieval often
+        // surfaces a per-plant doc as a top citation because of vector
+        // similarity to family / origin / habitat terms, not because the
+        // answer is actually about that plant. Attaching its image here
+        // caused the gallery for "Tell me about Abies alba" to show
+        // Abelmoschus esculentus. We restrict image attach to the
+        // synthetic text-mining path below, which only matches plants
+        // explicitly named in the question/answer/history.
+        image: null,
       };
     });
+
+    // Synthetic plant-image citations — intent-aware.
+    //
+    // The user message is the ground truth for what the donor wants to
+    // see. So we look for plant Latin binomials in three text sources,
+    // in priority order:
+    //
+    //   1. The current question and the most recent user turn from
+    //      history (these define the "subject" plant — what the donor
+    //      is actually asking about).
+    //   2. The generated answer text. Only used as a fallback when the
+    //      question/history don't name any specific plant — e.g. a
+    //      generic question like "which plants are endangered?" whose
+    //      answer enumerates several species.
+    //
+    // This prevents the failure mode where asking "Tell me about
+    // Abelmoschus manihot" caused the answer (which also mentions
+    // moschatus and esculentus) to surface esculentus's image — that
+    // image was clearly off-topic for the donor's question.
+    const subjectText = `${questionText}\n${historyText}`.trim();
+    const subjectPlants = subjectText
+      ? await this.findPlantsMentionedInText(subjectText)
+      : [];
+
+    let synthetic = subjectPlants;
+    if (synthetic.length === 0 && answerText.trim()) {
+      // The question wasn't about any specific plant we know — fall
+      // back to plants the answer mentions. This keeps galleries on
+      // generic questions like "which carnivorous plants do you have?"
+      synthetic = await this.findPlantsMentionedInText(answerText);
+    }
+
+    if (synthetic.length > 0) {
+      const alreadyShown = new Set(
+        enriched.filter((e) => e.image && e.plantSlug).map((e) => e.plantSlug as string),
+      );
+      for (const s of synthetic) {
+        if (alreadyShown.has(s.slug)) continue;
+        enriched.push({
+          marker: '[plant]',
+          chunkId: `plant:${s.slug}`,
+          title: s.nameEn,
+          page: null,
+          year: null,
+          plantSlug: s.slug,
+          sourceUrl: `/plants/${s.slug}`,
+          image: s.primaryImage,
+        });
+        alreadyShown.add(s.slug);
+      }
+    }
+    return enriched;
+  }
+
+  /**
+   * Look up plants whose Latin binomial appears anywhere in `text` and
+   * which have a primary image.
+   *
+   * Strategy: extract every plausible Latin-binomial-shaped substring
+   * (`Genus species`), then run a single Prisma query against
+   * Taxon.latinName. We deliberately cap to a small list so a long text
+   * blob can't fan out into a runaway query, and we filter to plants
+   * with a hosted primary image so the gallery never renders empty
+   * placeholders.
+   */
+  private async findPlantsMentionedInText(text: string): Promise<
+    Array<{
+      slug: string;
+      nameEn: string;
+      primaryImage: { url: string; attribution: string; licenseSpdx: string };
+    }>
+  > {
+    if (!text) return [];
+    // Match Latin binomials, optionally italicised by markdown asterisks
+    // (the LLM tends to render scientific names that way). e.g.
+    // "Abelmoschus esculentus" or "*Abelmoschus esculentus*".
+    const re = /(?:\*?\b)([A-Z][a-z]{2,})\s+([a-z]{3,})(?:\b\*?)/g;
+    const candidates = new Set<string>();
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text)) !== null) {
+      candidates.add(`${m[1]} ${m[2]}`);
+      if (candidates.size >= 12) break;
+    }
+    if (candidates.size === 0) return [];
+    const plants = await this.prisma.plant.findMany({
+      where: {
+        taxon: { latinName: { in: Array.from(candidates) } },
+        primaryImageId: { not: null },
+      },
+      select: {
+        slug: true,
+        nameEn: true,
+        primaryImage: { select: { url: true, attribution: true, licenseSpdx: true } },
+      },
+      take: 6,
+    });
+    return plants
+      .filter(
+        (p): p is typeof p & { primaryImage: NonNullable<typeof p['primaryImage']> } =>
+          Boolean(p.primaryImage),
+      )
+      .map((p) => ({ slug: p.slug, nameEn: p.nameEn, primaryImage: p.primaryImage }));
   }
 }
 

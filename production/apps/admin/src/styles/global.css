@@ -1,0 +1,525 @@
+/*
+ * BloomOulu Admin · Global Stylesheet
+ *
+ * Served at /admin/static/global.css and injected into every AdminJS page
+ * via `assets.styles` in server.ts. Overrides the @adminjs/design-system
+ * defaults so the built-in resource pages (Plant list, Adoption edit,
+ * etc.) feel native to BloomOulu's botanical brand.
+ *
+ * Conventions:
+ *   --bo-*  prefixed custom properties live here and mirror tokens.ts.
+ *   AdminJS exposes data-css="..." attributes on key elements — we use
+ *   those for targeted overrides rather than internal class names.
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  /* Palette */
+  --bo-forest-deep: #16301F;
+  --bo-forest: #1F3C2D;
+  --bo-forest-mid: #2D5440;
+  --bo-moss: #3D6A52;
+  --bo-teal: #5FB0A0;
+  --bo-olive: #88A050;
+  --bo-leaf: #A8C060;
+
+  --bo-paper: #FFFFFF;
+  --bo-cream: #FAF7EE;
+  --bo-sage: #E8EEDE;
+  --bo-sage-pale: #F2F0E8;
+  --bo-whisper: #F7F5EC;
+  --bo-parchment: #FDFBF3;
+
+  --bo-line: #E5E2D8;
+  --bo-line-soft: #EFECDF;
+  --bo-line-strong: #C9C6B6;
+
+  --bo-ink: #1F3C2D;
+  --bo-ink-soft: #3A4E3F;
+  --bo-ink-mute: #6B7560;
+  --bo-ink-faint: #88897C;
+
+  --bo-accent: #B8513A;
+  --bo-accent-soft: #FCE8DE;
+  --bo-highlight: #FBE9B0;
+
+  /* Type */
+  --bo-font-display: 'Fraunces', 'Iowan Old Style', Georgia, ui-serif, serif;
+  --bo-font-body: 'Hanken Grotesk', 'Helvetica Neue', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --bo-font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Surface */
+  --bo-radius-sm: 6px;
+  --bo-radius-md: 10px;
+  --bo-radius-lg: 14px;
+
+  --bo-shadow-sm: 0 1px 2px rgba(31, 60, 45, 0.06);
+  --bo-shadow-md: 0 4px 14px rgba(31, 60, 45, 0.08), 0 1px 2px rgba(31, 60, 45, 0.04);
+  --bo-shadow-lg: 0 16px 40px rgba(31, 60, 45, 0.12), 0 4px 10px rgba(31, 60, 45, 0.06);
+}
+
+/* Base */
+html, body, #app {
+  font-family: var(--bo-font-body);
+  background: var(--bo-cream);
+  color: var(--bo-ink);
+  font-feature-settings: 'cv11', 'ss01', 'ss03';
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5 {
+  font-family: var(--bo-font-display);
+  letter-spacing: -0.01em;
+  color: var(--bo-forest-deep);
+}
+
+button, input, select, textarea {
+  font-family: var(--bo-font-body);
+}
+
+::selection {
+  background: var(--bo-leaf);
+  color: var(--bo-forest-deep);
+}
+
+/* ── Sidebar ───────────────────────────────────────────────────────── */
+
+section[data-css='sidebar'] {
+  background: linear-gradient(180deg, var(--bo-forest-deep) 0%, var(--bo-forest) 100%);
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: var(--bo-shadow-md);
+}
+
+section[data-css='sidebar'] a,
+section[data-css='sidebar'] svg {
+  color: rgba(255, 255, 255, 0.78);
+  fill: currentColor;
+}
+
+section[data-css='sidebar'] a:hover {
+  background: rgba(168, 192, 96, 0.10);
+  color: #FFFFFF;
+  transition: background 180ms ease;
+}
+
+section[data-css='sidebar'] a.active,
+section[data-css='sidebar'] [data-css^='sidebar-resource'].active {
+  background: rgba(168, 192, 96, 0.18);
+  color: #FFFFFF;
+  border-left: 3px solid var(--bo-leaf);
+}
+
+a[data-css='sidebar-logo'] {
+  font-family: var(--bo-font-display);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-size: 22px;
+  color: #FFFFFF;
+  padding: 20px 16px 12px;
+  display: block;
+}
+
+a[data-css='sidebar-logo']::before {
+  content: '❀';
+  display: inline-block;
+  margin-right: 8px;
+  color: var(--bo-leaf);
+  font-size: 18px;
+  transform: translateY(-1px);
+}
+
+section[data-css='sidebar-resources'] {
+  padding-top: 8px;
+}
+
+/* Navigation group label */
+section[data-css='sidebar-resources'] h2,
+section[data-css='sidebar-resources'] [class*='SidebarNavSection'] > div:first-child {
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.42);
+  padding: 14px 18px 6px;
+  font-family: var(--bo-font-body);
+}
+
+/* ── Top navigation (page header) ──────────────────────────────────── */
+
+[class*='TopBar'],
+section[data-css='top-bar'] {
+  background: var(--bo-paper);
+  border-bottom: 1px solid var(--bo-line);
+  box-shadow: var(--bo-shadow-sm);
+}
+
+[class*='Breadcrumbs'],
+section[data-css='breadcrumbs'] {
+  font-family: var(--bo-font-body);
+  font-size: 13px;
+  color: var(--bo-ink-mute);
+}
+
+[class*='Breadcrumbs'] a {
+  color: var(--bo-moss);
+}
+
+/* ── Action header (resource list/edit toolbar) ────────────────────── */
+
+[class*='ActionHeader'],
+section[data-css='action-header'] {
+  background: var(--bo-paper);
+  border-bottom: 1px solid var(--bo-line);
+  padding: 20px 28px 16px;
+}
+
+[class*='ActionHeader'] h1,
+section[data-css='action-header'] h1 {
+  font-family: var(--bo-font-display);
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--bo-forest-deep);
+}
+
+/* ── Tables (resource list) ────────────────────────────────────────── */
+
+table {
+  background: var(--bo-paper);
+  border-radius: var(--bo-radius-md);
+  overflow: hidden;
+  box-shadow: var(--bo-shadow-sm);
+}
+
+table thead th {
+  background: var(--bo-whisper);
+  color: var(--bo-ink-mute);
+  font-family: var(--bo-font-body);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--bo-line);
+}
+
+table tbody tr {
+  transition: background 150ms ease;
+}
+
+table tbody tr:hover {
+  background: var(--bo-sage-pale);
+}
+
+table tbody td {
+  padding: 14px;
+  border-bottom: 1px solid var(--bo-line-soft);
+  font-size: 13.5px;
+  color: var(--bo-ink-soft);
+}
+
+table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* ── Buttons ───────────────────────────────────────────────────────── */
+
+button[data-css*='primary'],
+button[variant='primary'],
+[class*='Button'][variant='primary'] {
+  background: var(--bo-forest-mid);
+  color: #FFFFFF;
+  border: 1px solid var(--bo-forest);
+  border-radius: var(--bo-radius-md);
+  font-weight: 500;
+  padding: 9px 18px;
+  font-size: 13.5px;
+  box-shadow: var(--bo-shadow-sm);
+  transition: all 180ms ease;
+}
+
+button[data-css*='primary']:hover,
+button[variant='primary']:hover {
+  background: var(--bo-forest);
+  transform: translateY(-1px);
+  box-shadow: var(--bo-shadow-md);
+}
+
+button[variant='secondary'] {
+  background: var(--bo-cream);
+  color: var(--bo-forest);
+  border: 1px solid var(--bo-line);
+  border-radius: var(--bo-radius-md);
+}
+
+button[variant='danger'],
+button[data-css*='delete'] {
+  background: var(--bo-accent-soft);
+  color: var(--bo-accent);
+  border: 1px solid var(--bo-accent);
+}
+
+/* ── Form fields (resource edit) ───────────────────────────────────── */
+
+input[type='text'],
+input[type='email'],
+input[type='number'],
+input[type='url'],
+input[type='password'],
+input[type='search'],
+input[type='date'],
+input[type='datetime-local'],
+input[type='time'],
+select,
+textarea {
+  background: var(--bo-cream);
+  border: 1px solid var(--bo-line);
+  border-radius: var(--bo-radius-sm);
+  color: var(--bo-ink);
+  font-family: inherit;
+  font-size: 14px;
+  padding: 9px 12px;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--bo-teal);
+  box-shadow: 0 0 0 3px rgba(95, 176, 160, 0.20);
+  background: var(--bo-paper);
+}
+
+label,
+[class*='Label'] {
+  font-family: var(--bo-font-body);
+  font-weight: 500;
+  color: var(--bo-forest);
+  font-size: 13px;
+}
+
+/* Field description (property.description) under form labels */
+[class*='FormGroup'] small,
+[class*='FormGroup'] [class*='Description'] {
+  color: var(--bo-ink-mute);
+  font-size: 12.5px;
+  line-height: 1.5;
+  margin-top: 4px;
+}
+
+/* ── Filters drawer ────────────────────────────────────────────────── */
+
+[class*='FilterDrawer'],
+section[data-css='filter-drawer'] {
+  background: var(--bo-paper);
+  border-left: 1px solid var(--bo-line);
+  box-shadow: var(--bo-shadow-lg);
+}
+
+[class*='FilterDrawer'] h2 {
+  font-family: var(--bo-font-display);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--bo-forest-deep);
+}
+
+/* ── Notices / flashes ─────────────────────────────────────────────── */
+
+[class*='Notice'],
+[role='alert'][data-css*='notice'] {
+  border-radius: var(--bo-radius-md);
+  font-family: var(--bo-font-body);
+  box-shadow: var(--bo-shadow-md);
+}
+
+[class*='Notice'][data-css*='success'],
+[class*='Notice'].success {
+  background: var(--bo-sage);
+  color: var(--bo-forest-deep);
+  border: 1px solid var(--bo-olive);
+}
+
+[class*='Notice'][data-css*='error'],
+[class*='Notice'].error {
+  background: var(--bo-accent-soft);
+  color: #6E2D1C;
+  border: 1px solid var(--bo-accent);
+}
+
+/* ── Cards / sections ──────────────────────────────────────────────── */
+
+section[data-css^='resource'],
+[class*='Wrapper'][data-css*='show'],
+[class*='Wrapper'][data-css*='edit'] {
+  background: transparent;
+}
+
+/* ── Login page polish ─────────────────────────────────────────────── */
+
+[class*='LoggedIn'],
+section[data-css='login'] {
+  background: linear-gradient(135deg, var(--bo-cream) 0%, var(--bo-sage) 100%);
+}
+
+[class*='LoggedIn'] form,
+section[data-css='login'] form {
+  background: var(--bo-paper);
+  border-radius: var(--bo-radius-lg);
+  box-shadow: var(--bo-shadow-lg);
+  padding: 36px;
+}
+
+/* ── Reusable BloomOulu primitive classes ──────────────────────────── */
+
+.bo-page {
+  padding: clamp(20px, 3vw, 36px);
+  max-width: 1280px;
+  margin: 0 auto;
+  font-family: var(--bo-font-body);
+  color: var(--bo-ink);
+}
+
+.bo-page--narrow {
+  max-width: 980px;
+}
+
+.bo-page__kicker {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--bo-moss);
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.bo-page__title {
+  font-family: var(--bo-font-display);
+  font-size: clamp(28px, 3.5vw, 38px);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--bo-forest-deep);
+  margin: 0 0 8px;
+  line-height: 1.1;
+}
+
+.bo-page__lede {
+  color: var(--bo-ink-mute);
+  font-size: 15px;
+  line-height: 1.55;
+  max-width: 720px;
+  margin: 0;
+}
+
+.bo-card {
+  background: var(--bo-paper);
+  border: 1px solid var(--bo-line);
+  border-radius: var(--bo-radius-lg);
+  box-shadow: var(--bo-shadow-sm);
+  padding: 22px 24px;
+  transition: box-shadow 180ms ease;
+}
+
+.bo-card:hover {
+  box-shadow: var(--bo-shadow-md);
+}
+
+.bo-card--flush {
+  padding: 0;
+  overflow: hidden;
+}
+
+.bo-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: var(--bo-font-body);
+  border: 1px solid transparent;
+  line-height: 1.4;
+}
+
+.bo-pill--success {
+  background: var(--bo-sage);
+  color: var(--bo-forest-deep);
+  border-color: var(--bo-olive);
+}
+
+.bo-pill--warn {
+  background: #FCF1D8;
+  color: #7A5A1A;
+  border-color: #E8C66A;
+}
+
+.bo-pill--danger {
+  background: var(--bo-accent-soft);
+  color: #8A3A28;
+  border-color: var(--bo-accent);
+}
+
+.bo-pill--info {
+  background: #E1F0EE;
+  color: #1F584F;
+  border-color: var(--bo-teal);
+}
+
+.bo-pill--neutral {
+  background: var(--bo-whisper);
+  color: var(--bo-ink-mute);
+  border-color: var(--bo-line);
+}
+
+/* Accessibility helpers */
+.bo-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@keyframes bo-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes bo-shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+.bo-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--bo-whisper) 0%,
+    var(--bo-sage-pale) 50%,
+    var(--bo-whisper) 100%
+  );
+  background-size: 800px 100%;
+  animation: bo-shimmer 1.4s linear infinite;
+  border-radius: var(--bo-radius-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* Print — keep label print pages readable */
+@media print {
+  section[data-css='sidebar'],
+  [class*='TopBar'] {
+    display: none;
+  }
+}

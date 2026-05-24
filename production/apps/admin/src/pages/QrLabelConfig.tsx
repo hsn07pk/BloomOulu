@@ -24,10 +24,21 @@ const Preview: React.FC<{ values: Record<string, unknown> }> = ({ values }) => {
   );
 };
 
-const schema: ConfigSchema = {
+export const schema: ConfigSchema = {
   title: 'QR labels',
+  kicker: 'Print configuration',
   intro:
     'Controls every printed plant tag — size, which fields appear next to the QR, and whether the encoded URL carries a kiosk-tracking tag. Changes apply to the very next print.',
+  helpBannerId: 'qr-label-config-intro',
+  helpBannerTitle: 'Test on real label paper',
+  helpBanner: (
+    <>
+      Browsers vary in how they honour <code>@page</code> sizing. Always do a one-label test print
+      on the exact sticker stock you’ll use, then measure with a ruler. If the QR is even a
+      millimetre clipped, scanners may fail outdoors — error-correction level&nbsp;H needs a
+      minimum 25&nbsp;mm side at typical reader distances.
+    </>
+  ),
   Preview,
   sections: [
     {
@@ -53,6 +64,45 @@ const schema: ConfigSchema = {
           help: 'Must fit inside the label minus padding. We use error-correction level H so 25mm is the practical floor for outdoor signage.',
           type: { kind: 'number', min: 15, max: 200, step: 1 },
           default: 35,
+        },
+      ],
+    },
+    {
+      title: 'Page format for the PDF download',
+      description:
+        '"Match label size" makes the single-plant print page one label per page (no waste). Pick A4, Letter, etc. for sheet stock with multiple labels. The bulk-print page always uses the configured sheet size unless overridden.',
+      fields: [
+        {
+          key: 'qrLabel.pageFormat',
+          label: 'Default page format',
+          help: 'Curators can still override on the print page itself. "Custom" uses the W×H below.',
+          type: {
+            kind: 'select',
+            options: [
+              { value: 'label', label: 'Match label size (single label per page)' },
+              { value: 'a4', label: 'A4 (210 × 297 mm)' },
+              { value: 'a3', label: 'A3 (297 × 420 mm)' },
+              { value: 'a5', label: 'A5 (148 × 210 mm)' },
+              { value: 'letter', label: 'US Letter (216 × 279 mm)' },
+              { value: 'legal', label: 'US Legal (216 × 356 mm)' },
+              { value: 'tabloid', label: 'Tabloid (279 × 432 mm)' },
+              { value: 'custom', label: 'Custom dimensions (W × H below)' },
+            ],
+          },
+          default: 'label',
+        },
+        {
+          key: 'qrLabel.pageCustomWidthMm',
+          label: 'Custom width (mm)',
+          help: 'Used only when "Custom" is selected above.',
+          type: { kind: 'number', min: 20, max: 2000, step: 1 },
+          default: 80,
+        },
+        {
+          key: 'qrLabel.pageCustomHeightMm',
+          label: 'Custom height (mm)',
+          type: { kind: 'number', min: 20, max: 2000, step: 1 },
+          default: 50,
         },
       ],
     },

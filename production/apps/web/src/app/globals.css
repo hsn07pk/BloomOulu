@@ -340,3 +340,20 @@ body.bloom-high-contrast .card { border: 1.5px solid #000 !important; }
 
 .legal-page { font-family: var(--f-body); }
 .legal-page pre { font-family: inherit !important; }
+
+/* AskTheGarden chat — per-plant image card under an assistant turn. */
+.bo-plant-card:hover,
+.bo-plant-card:focus-visible {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(31, 60, 45, 0.12);
+  border-color: var(--forest-mid);
+  outline: none;
+}
+.bo-plant-card:hover .bo-plant-card__img,
+.bo-plant-card:focus-visible .bo-plant-card__img {
+  transform: scale(1.04);
+}
+@media (prefers-reduced-motion: reduce) {
+  .bo-plant-card,
+  .bo-plant-card__img { transition: none !important; transform: none !important; }
+}

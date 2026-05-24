@@ -20,10 +20,21 @@ const Preview: React.FC<{ values: Record<string, unknown> }> = ({ values }) => {
   );
 };
 
-const schema: ConfigSchema = {
+export const schema: ConfigSchema = {
   title: 'Garden Identity',
+  kicker: 'Identity & banking',
   intro:
     'Who the Garden is, in the donor’s eyes. These values appear on the bank-transfer page, the receipt PDF, the tax certificate, and anywhere we sign off as the Garden. Changes are live the moment you save — refresh any open donor page to verify.',
+  helpBannerId: 'garden-identity-intro',
+  helpBannerTitle: 'Verify with your accountant before saving',
+  helpBanner: (
+    <>
+      A typo in the <strong>IBAN</strong> here will silently drop donations — the bank will receive
+      transfers and bounce them back. Same for the VAT&nbsp;ID, which the donor needs to claim the
+      gift in their tax return. When in doubt, copy the values from a recent bank statement and
+      a receipt PDF rather than from memory.
+    </>
+  ),
   Preview,
   sections: [
     {

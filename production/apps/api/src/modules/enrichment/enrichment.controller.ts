@@ -102,19 +102,31 @@ export class EnrichmentController {
     if (row.status !== 'pending') {
       throw new BadRequestException(`already ${row.status}`);
     }
-    const ok = await applyEnrichmentValue(
+    const apply = await applyEnrichmentValue(
       this.prisma as any,
       row.plantId,
       row.field as EnrichField,
       row.proposed,
     );
-    if (!ok) throw new BadRequestException('failed to apply value');
+    if (!apply.ok) {
+      // Stash the diagnostic on the suggestion row so the curator can
+      // see why the apply failed without trawling server logs, and so
+      // the UI can offer a "Retry" that re-runs the exact value.
+      await this.prisma.enrichmentSuggestion
+        .update({
+          where: { id },
+          data: { reviewNote: `apply-failed: ${apply.reason ?? 'unknown'}` },
+        })
+        .catch(() => {});
+      throw new BadRequestException(apply.reason ?? 'failed to apply value');
+    }
     await this.prisma.enrichmentSuggestion.update({
       where: { id },
       data: {
         status: 'applied',
         appliedAt: new Date(),
         reviewedAt: new Date(),
+        reviewNote: null,
       },
     });
     return { ok: true };

@@ -9,6 +9,13 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import qrcode from 'qrcode-generator';
+import {
+  buildBulkSheetPdf,
+  downloadPdf,
+  pageSizeMm,
+  PAGE_FORMAT_OPTIONS,
+  type PageFormat,
+} from '@/lib/qr-pdf';
 
 export interface BulkPlant {
   slug: string;
@@ -75,6 +82,25 @@ export function BulkQrSheet({
   cells: Cell[];
   missingCount: number;
 }) {
+  // Pre-compute QR data URLs so the print render is synchronous.
+  const dataUrls = useMemo(() => cells.map((c) => makeQrDataUrl(c.qrUrl)), [cells]);
+
+  const [autoPrintHandled, setAutoPrintHandled] = useState(false);
+  const [pageFormat, setPageFormat] = useState<PageFormat>('custom');
+  const [customW, setCustomW] = useState(config.sheetW);
+  const [customH, setCustomH] = useState(config.sheetH);
+
+  // Effective sheet dimensions, derived from the dropdown selection.
+  // When the user picks A4 / Letter / etc. the on-screen preview
+  // re-flows to the new size and the cell grid recomputes so each
+  // page in the preview matches what the PDF download will produce.
+  const sheetDims = useMemo(() => {
+    return pageSizeMm(pageFormat, {
+      w: pageFormat === 'custom' ? customW : config.sheetW,
+      h: pageFormat === 'custom' ? customH : config.sheetH,
+    });
+  }, [pageFormat, customW, customH, config.sheetW, config.sheetH]);
+
   // Pages: split cells into chunks of cols*rows so the layout pages
   // naturally. CSS `page-break-after` on each page wrapper makes the
   // browser respect them in print.
@@ -86,11 +112,6 @@ export function BulkQrSheet({
     }
     return chunks;
   }, [cells, perPage]);
-
-  // Pre-compute QR data URLs so the print render is synchronous.
-  const dataUrls = useMemo(() => cells.map((c) => makeQrDataUrl(c.qrUrl)), [cells]);
-
-  const [autoPrintHandled, setAutoPrintHandled] = useState(false);
   useEffect(() => {
     if (autoPrintHandled) return;
     const sp = new URLSearchParams(window.location.search);
@@ -100,6 +121,55 @@ export function BulkQrSheet({
       return () => clearTimeout(t);
     }
   }, [autoPrintHandled]);
+
+  const downloadAsPdf = () => {
+    const pdfCells = cells.map((c, i) => ({
+      plant: {
+        slug: c.plant.slug,
+        commonName: localisedName(c.plant, locale),
+        latin: c.plant.latinName,
+        redListStatus: c.plant.redListStatus,
+        gardenZone: c.plant.gardenZone ?? null,
+      },
+      qrDataUrl: dataUrls[i] ?? '',
+    }));
+    const cfg = {
+      sheetW: config.sheetW,
+      sheetH: config.sheetH,
+      marginT: config.marginT,
+      marginR: config.marginR,
+      marginB: config.marginB,
+      marginL: config.marginL,
+      cols: config.cols,
+      rows: config.rows,
+      gutterX: config.gutterX,
+      gutterY: config.gutterY,
+      labelWidthMm: config.labelW,
+      labelHeightMm: config.labelH,
+      sizeMm: config.qrSize,
+      showLatin: config.showLatin,
+      showCommon: config.showCommon,
+      showRedList: config.showRedList,
+      showGardenZone: config.showZone,
+      showSlug: config.showSlug,
+      cutMarks: config.cutMarks,
+      title:
+        config.title ||
+        (locale === 'fi'
+          ? 'QR-koodien massapainatus'
+          : locale === 'sv'
+            ? 'Massutskrift av QR-koder'
+            : 'Bulk QR print'),
+    };
+    const doc = buildBulkSheetPdf(
+      pdfCells,
+      cfg,
+      pageFormat,
+      pageFormat === 'custom' ? { w: customW, h: customH } : undefined,
+    );
+    const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
+    downloadPdf(doc, `bloomoulu-qr-labels-${stamp}.pdf`);
+  };
 
   const totalLabels = cells.length;
   const materialLabel =
@@ -125,7 +195,7 @@ export function BulkQrSheet({
     <>
       <style>{`
         @page {
-          size: ${config.sheetW}mm ${config.sheetH}mm;
+          size: ${sheetDims.w}mm ${sheetDims.h}mm;
           margin: 0;
         }
         @media print {
@@ -173,7 +243,7 @@ export function BulkQrSheet({
             </strong>
             <button
               type="button"
-              onClick={() => window.print()}
+              onClick={downloadAsPdf}
               style={{
                 background: '#1F3A2C',
                 color: '#fff',
@@ -182,19 +252,113 @@ export function BulkQrSheet({
                 padding: '8px 18px',
                 fontSize: 14,
                 cursor: 'pointer',
+                fontWeight: 500,
               }}
             >
-              🖨️ {locale === 'fi' ? 'Tulosta' : locale === 'sv' ? 'Skriv ut' : 'Print'}
+              ⬇{' '}
+              {locale === 'fi'
+                ? 'Lataa PDF'
+                : locale === 'sv'
+                  ? 'Ladda ner PDF'
+                  : 'Download print-ready PDF'}
             </button>
             <button
               type="button"
-              onClick={() => window.close()}
+              onClick={() => window.print()}
+              title={
+                locale === 'fi'
+                  ? 'Käytä selaimen tulostusta — koko voi muuttua hieman.'
+                  : locale === 'sv'
+                    ? 'Använd webbläsarens utskrift — storleken kan ändras något.'
+                    : 'Use the browser print dialog — sizing may drift slightly.'
+              }
               style={{
                 background: 'transparent',
                 color: '#1F3A2C',
                 border: '1px solid #1F3A2C',
                 borderRadius: 999,
                 padding: '7px 16px',
+                fontSize: 13,
+                cursor: 'pointer',
+              }}
+            >
+              🖨️{' '}
+              {locale === 'fi'
+                ? 'Selain'
+                : locale === 'sv'
+                  ? 'Webbläsare'
+                  : 'Browser print'}
+            </button>
+            <select
+              value={pageFormat}
+              onChange={(e) => setPageFormat(e.target.value as PageFormat)}
+              aria-label={
+                locale === 'fi'
+                  ? 'Sivukoko'
+                  : locale === 'sv'
+                    ? 'Pappersstorlek'
+                    : 'Page size'
+              }
+              style={{
+                padding: '6px 10px',
+                borderRadius: 999,
+                border: '1px solid #d9d2bb',
+                fontSize: 12,
+                background: '#fff',
+                cursor: 'pointer',
+              }}
+            >
+              {PAGE_FORMAT_OPTIONS.filter((o) => o.value !== 'label').map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            {pageFormat === 'custom' && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
+                <input
+                  type="number"
+                  value={customW}
+                  min={20}
+                  max={2000}
+                  step={1}
+                  onChange={(e) => setCustomW(Number(e.target.value) || 0)}
+                  style={{
+                    width: 64,
+                    padding: '4px 6px',
+                    borderRadius: 8,
+                    border: '1px solid #d9d2bb',
+                    fontSize: 12,
+                  }}
+                />
+                <span aria-hidden="true">×</span>
+                <input
+                  type="number"
+                  value={customH}
+                  min={20}
+                  max={2000}
+                  step={1}
+                  onChange={(e) => setCustomH(Number(e.target.value) || 0)}
+                  style={{
+                    width: 64,
+                    padding: '4px 6px',
+                    borderRadius: 8,
+                    border: '1px solid #d9d2bb',
+                    fontSize: 12,
+                  }}
+                />
+                <span style={{ color: '#666' }}>mm</span>
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => window.close()}
+              style={{
+                background: 'transparent',
+                color: '#666',
+                border: '1px solid #ddd',
+                borderRadius: 999,
+                padding: '7px 14px',
                 fontSize: 13,
                 cursor: 'pointer',
               }}
@@ -229,11 +393,14 @@ export function BulkQrSheet({
         </div>
 
         {pages.map((pageCells, pageIdx) => {
-          const usableW = config.sheetW - config.marginL - config.marginR;
-          const usableH = config.sheetH - config.marginT - config.marginB;
+          // Effective sheet — sheetDims overrides config when the
+          // user changed the page-format dropdown.
+          const usableW = sheetDims.w - config.marginL - config.marginR;
+          const usableH = sheetDims.h - config.marginT - config.marginB;
           // Auto-fit: shrink cell width if the configured cols × labelW
           // (+ gutters) overflows the usable area. Keeps layout clean
-          // even if the curator mis-types a dimension.
+          // even if the curator mis-types a dimension or picks a
+          // smaller sheet (e.g. A5) than the labels were designed for.
           const fitLabelW = Math.min(
             config.labelW,
             (usableW - (config.cols - 1) * config.gutterX) / config.cols,
@@ -247,8 +414,8 @@ export function BulkQrSheet({
               key={pageIdx}
               className="bulk-page"
               style={{
-                width: `${config.sheetW}mm`,
-                height: `${config.sheetH}mm`,
+                width: `${sheetDims.w}mm`,
+                height: `${sheetDims.h}mm`,
                 background: '#fff',
                 border: '1px dashed #d9d2bb',
                 boxShadow: '0 2px 12px rgba(0,0,0,.05)',

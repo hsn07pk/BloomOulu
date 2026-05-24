@@ -17,7 +17,19 @@ import {
 import { setTimeout as sleep } from 'node:timers/promises';
 import { ENRICH_UA, retryAfterMs } from './http.js';
 
+// Internal endpoint — used to PUT objects from inside the API container.
+// In compose dev this is `http://minio:9000` (the docker-network hostname).
 const S3_ENDPOINT = (process.env.S3_ENDPOINT ?? 'http://localhost:9000').replace(/\/+$/, '');
+// Public endpoint — what browsers can reach. In compose dev this is
+// `http://localhost:9000` (MinIO's host-mapped port); in prod it's the
+// CDN/storage subdomain. Falls back to S3_ENDPOINT for backward compat
+// when only one URL is set (e.g. local-host scripts).
+const S3_PUBLIC_ENDPOINT = (
+  process.env.S3_PUBLIC_ENDPOINT
+  ?? process.env.NEXT_PUBLIC_S3_ENDPOINT
+  ?? process.env.S3_ENDPOINT
+  ?? 'http://localhost:9000'
+).replace(/\/+$/, '');
 const S3_REGION = process.env.S3_REGION ?? 'eu-north-1';
 const S3_FORCE_PATH_STYLE = (process.env.S3_FORCE_PATH_STYLE ?? 'true') === 'true';
 const PUBLIC_BUCKET = process.env.S3_PUBLIC_BUCKET ?? 'bloomoulu-public';
@@ -110,6 +122,28 @@ function extensionFor(contentType: string, url: string): string {
  * plant-images/<plantImageId>.<ext>. Returns the public URL of the hosted
  * copy, or null if the image could not be fetched.
  */
+/**
+ * Failure causes we surface back to the caller. Helps the operator
+ * understand why a photo apply failed instead of a generic null.
+ */
+export class ImageHostError extends Error {
+  constructor(
+    public reason:
+      | 'not-found'
+      | 'rate-limited'
+      | 'upstream-5xx'
+      | 'non-image-content'
+      | 'too-small'
+      | 'too-large'
+      | 'network-error'
+      | 's3-error',
+    public detail: string,
+  ) {
+    super(`${reason}: ${detail}`);
+    this.name = 'ImageHostError';
+  }
+}
+
 export async function hostPlantImage(
   sourceUrl: string,
   plantImageId: string,
@@ -117,38 +151,82 @@ export async function hostPlantImage(
   const fetchUrl = toFetchableUrl(sourceUrl);
   let body: Buffer | null = null;
   let contentType = '';
-  for (let attempt = 0; attempt <= 3; attempt++) {
+  // 6 attempts × exponential back-off (1.5s, 3s, 6s, 12s, 24s) ≈ 45s
+  // total retry budget. Earlier code only tried 4 times which was too
+  // aggressive when Wikimedia was rate-limiting a bulk-approve burst.
+  const MAX_ATTEMPTS = 6;
+  let lastErr: ImageHostError | null = null;
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     try {
       const res = await fetch(fetchUrl, {
         headers: { 'user-agent': ENRICH_UA },
-        signal: AbortSignal.timeout(30_000),
+        // 60s — Wikimedia originals routed through /thumb can take
+        // 30-50s on first request when the cache is cold.
+        signal: AbortSignal.timeout(60_000),
         redirect: 'follow',
       });
-      if (res.status === 404 || res.status === 410) return null;
+      if (res.status === 404 || res.status === 410) {
+        lastErr = new ImageHostError('not-found', `HTTP ${res.status} from ${fetchUrl}`);
+        return null;
+      }
       if (res.status === 429 || res.status >= 500) {
-        if (attempt < 3) {
-          await sleep(retryAfterMs(res) ?? 1500 * (attempt + 1));
+        lastErr = new ImageHostError(
+          res.status === 429 ? 'rate-limited' : 'upstream-5xx',
+          `HTTP ${res.status} from ${fetchUrl}`,
+        );
+        if (attempt < MAX_ATTEMPTS - 1) {
+          // Honour Retry-After if the server gave one, otherwise an
+          // exponential back-off with jitter so a burst of 100 parallel
+          // approvals doesn't all retry at the same instant.
+          const baseDelay = retryAfterMs(res) ?? 1500 * 2 ** attempt;
+          const jitter = Math.floor(Math.random() * 500);
+          await sleep(baseDelay + jitter);
           continue;
         }
         return null;
       }
-      if (!res.ok) return null;
+      if (!res.ok) {
+        lastErr = new ImageHostError(
+          'upstream-5xx',
+          `HTTP ${res.status} from ${fetchUrl}`,
+        );
+        return null;
+      }
       const ct = (res.headers.get('content-type') ?? '').split(';')[0]!.trim().toLowerCase();
-      if (!ct.startsWith('image/')) return null; // an HTML error page, etc.
+      if (!ct.startsWith('image/')) {
+        lastErr = new ImageHostError('non-image-content', `content-type ${ct}`);
+        return null;
+      }
       const buf = Buffer.from(await res.arrayBuffer());
-      if (buf.length < MIN_BYTES || buf.length > MAX_BYTES) return null;
+      if (buf.length < MIN_BYTES) {
+        lastErr = new ImageHostError('too-small', `${buf.length} bytes`);
+        return null;
+      }
+      if (buf.length > MAX_BYTES) {
+        lastErr = new ImageHostError('too-large', `${buf.length} bytes`);
+        return null;
+      }
       body = buf;
       contentType = ct;
       break;
-    } catch {
-      if (attempt < 3) {
-        await sleep(1000 * (attempt + 1));
+    } catch (err) {
+      lastErr = new ImageHostError('network-error', (err as Error).message);
+      if (attempt < MAX_ATTEMPTS - 1) {
+        await sleep(1500 * 2 ** attempt + Math.floor(Math.random() * 500));
         continue;
       }
       return null;
     }
   }
-  if (!body) return null;
+  if (!body) {
+    // Last-chance log so the operator can see the real cause in the
+    // server stdout / observability stream rather than a flat "null".
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[hostPlantImage] giving up on ${sourceUrl}: ${lastErr?.reason ?? 'unknown'}: ${lastErr?.detail ?? ''}`,
+    );
+    return null;
+  }
 
   await ensureBucket();
   const key = `${KEY_PREFIX}/${plantImageId}.${extensionFor(contentType, sourceUrl)}`;
@@ -162,5 +240,9 @@ export async function hostPlantImage(
       CacheControl: 'public, max-age=31536000, immutable',
     }),
   );
-  return `${S3_ENDPOINT}/${PUBLIC_BUCKET}/${key}`;
+  // Browser-facing URL, NOT the internal docker hostname. Without this
+  // split, the row in PlantImage points at `http://minio:9000/…` which
+  // resolves only inside the docker network and the public site falls
+  // back to the 🌿 placeholder.
+  return `${S3_PUBLIC_ENDPOINT}/${PUBLIC_BUCKET}/${key}`;
 }

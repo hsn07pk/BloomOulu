@@ -31,6 +31,10 @@
 import { PrismaClient } from '@prisma/client';
 import { request } from 'undici';
 import { setTimeout as sleep } from 'node:timers/promises';
+// Reuse the API's image-hosting helper. Wikidata only gives us a URL;
+// we download + store it ourselves so nothing in the system ends up
+// pointing at upload.wikimedia.org at runtime.
+import { hostPlantImage } from '../apps/api/src/modules/enrichment/image-store.js';
 
 const prisma = new PrismaClient();
 const GBIF = 'https://api.gbif.org/v1';
@@ -160,7 +164,11 @@ async function upsertPlant(sp: GbifSpecies, args: CliArgs) {
     },
   });
   if (wd?.image) {
-    await prisma.plantImage.create({
+    // Two-step: create the row to get a stable id, host the image into
+    // our public bucket, then either swap the URL to the hosted copy
+    // or roll the row back. We never store a row that points at an
+    // external URL — at runtime everything reads from local MinIO.
+    const draft = await prisma.plantImage.create({
       data: {
         plantId: plant.id,
         url: wd.image,
@@ -171,6 +179,14 @@ async function upsertPlant(sp: GbifSpecies, args: CliArgs) {
         licenseSpdx: 'CC-BY-SA-4.0',
       },
     });
+    const hosted = await hostPlantImage(wd.image, draft.id);
+    if (hosted) {
+      await prisma.plantImage.update({ where: { id: draft.id }, data: { url: hosted } });
+    } else {
+      // Upstream is dead — don't leave a broken row.
+      await prisma.plantImage.delete({ where: { id: draft.id } });
+      console.warn(`  × ${latin} — image host failed, leaving plant imageless`);
+    }
   }
   console.log(`+ ${latin}  ${plant.slug}`);
 }

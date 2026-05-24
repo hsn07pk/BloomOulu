@@ -12,6 +12,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import qrcode from 'qrcode-generator';
+import {
+  buildLabelPdf,
+  downloadPdf,
+  pageSizeMm,
+  PAGE_FORMAT_OPTIONS,
+  type PageFormat,
+} from '@/lib/qr-pdf';
 
 interface PlantSummary {
   slug: string;
@@ -34,6 +41,11 @@ interface QrLabelSettings {
   showSlug: boolean;
   embedKioskId: boolean;
   defaultKioskId: string;
+  /** Default page format (admin-configurable). Falls back to "label". */
+  pageFormat?: PageFormat;
+  /** Custom page dimensions used when pageFormat === 'custom'. */
+  pageCustomWidthMm?: number;
+  pageCustomHeightMm?: number;
 }
 
 function localisedName(p: PlantSummary, locale: 'en' | 'fi' | 'sv'): string {
@@ -65,6 +77,37 @@ export function PrintQrLabel({
 }) {
   const dataUrl = useMemo(() => makeQrDataUrl(qrUrl), [qrUrl]);
   const [autoPrintHandled, setAutoPrintHandled] = useState(false);
+  const [pageFormat, setPageFormat] = useState<PageFormat>(settings.pageFormat ?? 'label');
+  const [customW, setCustomW] = useState(settings.pageCustomWidthMm ?? settings.labelWidthMm);
+  const [customH, setCustomH] = useState(settings.pageCustomHeightMm ?? settings.labelHeightMm);
+
+  const downloadAsPdf = () => {
+    const labelPlant = {
+      slug: plant.slug,
+      commonName,
+      latin,
+      redListStatus: plant.redListStatus,
+      gardenZone: plant.gardenZone ?? null,
+    };
+    const cfg = {
+      labelWidthMm: settings.labelWidthMm,
+      labelHeightMm: settings.labelHeightMm,
+      sizeMm: settings.sizeMm,
+      showLatin: settings.showLatin,
+      showCommon: settings.showCommonName,
+      showRedList: settings.showRedList,
+      showGardenZone: settings.showGardenZone,
+      showSlug: settings.showSlug,
+    };
+    const doc = buildLabelPdf(
+      labelPlant,
+      dataUrl,
+      cfg,
+      pageFormat,
+      pageFormat === 'custom' ? { w: customW, h: customH } : undefined,
+    );
+    downloadPdf(doc, `qr-${plant.slug}.pdf`);
+  };
 
   // Auto-fire print dialog on first render if ?autoprint=1.
   useEffect(() => {
@@ -83,15 +126,24 @@ export function PrintQrLabel({
     width: `${settings.labelWidthMm}mm`,
     height: `${settings.labelHeightMm}mm`,
   };
+  // Effective page dimensions for the on-screen preview. "label" means
+  // the page IS the label; any other format puts the label on a larger
+  // sheet (A4, Letter, custom W×H) so the curator sees exactly what the
+  // PDF will produce.
+  const pageDims = pageSizeMm(pageFormat, {
+    w: pageFormat === 'custom' ? customW : settings.labelWidthMm,
+    h: pageFormat === 'custom' ? customH : settings.labelHeightMm,
+  });
+  const labelOnPage = pageFormat !== 'label';
 
   return (
     <>
       <style>{`
-        @page { size: ${settings.labelWidthMm}mm ${settings.labelHeightMm}mm; margin: 0; }
+        @page { size: ${pageDims.w}mm ${pageDims.h}mm; margin: 0; }
         @media print {
           html, body { margin: 0; padding: 0; background: #fff; }
           .print-toolbar, .print-toolbar * { display: none !important; }
-          .print-label {
+          .print-label, .print-page {
             box-shadow: none !important;
             border: none !important;
             page-break-after: always;
@@ -132,7 +184,7 @@ export function PrintQrLabel({
           <span style={{ color: '#888', fontSize: 12 }}>·</span>
           <button
             type="button"
-            onClick={() => window.print()}
+            onClick={downloadAsPdf}
             style={{
               background: '#1F3A2C',
               color: '#fff',
@@ -141,16 +193,121 @@ export function PrintQrLabel({
               padding: '8px 18px',
               fontSize: 14,
               cursor: 'pointer',
+              fontWeight: 500,
             }}
           >
-            🖨️ {locale === 'fi' ? 'Tulosta' : locale === 'sv' ? 'Skriv ut' : 'Print'}
+            ⬇{' '}
+            {locale === 'fi'
+              ? 'Lataa PDF'
+              : locale === 'sv'
+                ? 'Ladda ner PDF'
+                : 'Download print-ready PDF'}
           </button>
+          <button
+            type="button"
+            onClick={() => window.print()}
+            title={
+              locale === 'fi'
+                ? 'Käytä selaimen tulostusta — koko voi muuttua hieman.'
+                : locale === 'sv'
+                  ? 'Använd webbläsarens utskrift — storleken kan ändras något.'
+                  : 'Use the browser print dialog — sizing may drift slightly.'
+            }
+            style={{
+              background: 'transparent',
+              color: '#1F3A2C',
+              border: '1px solid #1F3A2C',
+              borderRadius: 999,
+              padding: '8px 18px',
+              fontSize: 14,
+              cursor: 'pointer',
+            }}
+          >
+            🖨️{' '}
+            {locale === 'fi'
+              ? 'Tulosta selaimesta'
+              : locale === 'sv'
+                ? 'Skriv ut'
+                : 'Print via browser'}
+          </button>
+          <select
+            value={pageFormat}
+            onChange={(e) => setPageFormat(e.target.value as PageFormat)}
+            aria-label={
+              locale === 'fi' ? 'Sivukoko' : locale === 'sv' ? 'Pappersstorlek' : 'Page size'
+            }
+            style={{
+              padding: '6px 10px',
+              borderRadius: 999,
+              border: '1px solid #d9d2bb',
+              fontSize: 12,
+              background: '#fff',
+              cursor: 'pointer',
+            }}
+          >
+            {PAGE_FORMAT_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+          {pageFormat === 'custom' && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
+              <input
+                type="number"
+                value={customW}
+                min={20}
+                max={1000}
+                step={1}
+                onChange={(e) => setCustomW(Number(e.target.value) || 0)}
+                style={{
+                  width: 64,
+                  padding: '4px 6px',
+                  borderRadius: 8,
+                  border: '1px solid #d9d2bb',
+                  fontSize: 12,
+                }}
+              />
+              <span aria-hidden="true">×</span>
+              <input
+                type="number"
+                value={customH}
+                min={20}
+                max={1000}
+                step={1}
+                onChange={(e) => setCustomH(Number(e.target.value) || 0)}
+                style={{
+                  width: 64,
+                  padding: '4px 6px',
+                  borderRadius: 8,
+                  border: '1px solid #d9d2bb',
+                  fontSize: 12,
+                }}
+              />
+              <span style={{ color: '#666' }}>mm</span>
+            </span>
+          )}
           <span style={{ color: '#666', fontSize: 12 }}>
             {settings.labelWidthMm}×{settings.labelHeightMm}mm · QR {settings.sizeMm}mm
             {kioskId ? ` · kiosk: ${kioskId}` : ''}
           </span>
         </div>
 
+        <div
+          className="print-page"
+          style={{
+            width: `${pageDims.w}mm`,
+            height: `${pageDims.h}mm`,
+            background: labelOnPage ? '#fff' : 'transparent',
+            border: labelOnPage ? '1px dashed #d9d2bb' : 'none',
+            boxShadow: labelOnPage ? '0 2px 12px rgba(0,0,0,.05)' : 'none',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxSizing: 'border-box',
+            position: 'relative',
+          }}
+        >
         <div
           className="print-label"
           style={{
@@ -254,6 +411,7 @@ export function PrintQrLabel({
               </div>
             )}
           </div>
+        </div>
         </div>
 
         <div

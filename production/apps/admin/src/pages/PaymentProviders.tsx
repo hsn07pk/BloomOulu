@@ -34,10 +34,20 @@ const Preview: React.FC<{ values: Record<string, unknown> }> = ({ values }) => {
   );
 };
 
-const schema: ConfigSchema = {
+export const schema: ConfigSchema = {
   title: 'Payment Providers',
+  kicker: 'Donor checkout',
   intro:
     'Turn each payment method on or off, and paste the merchant credentials you got from the provider portal. Changes apply within a minute (or sooner — admin saves invalidate the cache immediately).',
+  helpBannerId: 'payments-intro',
+  helpBannerTitle: 'Test before flipping anything live',
+  helpBanner: (
+    <>
+      Test merchants and live merchants use different credentials. Mixing them up sends real money
+      to a sandbox that nobody monitors. After every change, open <code>/donate</code> in a private
+      window and confirm at least one method completes a 1&nbsp;€ test charge before going home.
+    </>
+  ),
   Preview,
   sections: [
     {

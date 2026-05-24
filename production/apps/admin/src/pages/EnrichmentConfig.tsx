@@ -24,10 +24,22 @@ const Preview: React.FC<{ values: Record<string, unknown> }> = ({ values }) => {
   );
 };
 
-const schema: ConfigSchema = {
+export const schema: ConfigSchema = {
   title: 'Plant Enrichment',
+  kicker: 'Open-data backfill',
   intro:
     "Open-data enrichment fetches story / origin / conservation status / photo from Wikipedia, GBIF, laji.fi, Wikimedia Commons. The worker runs continuously; per-field, decide whether new values land on the Plant row directly or wait for human review.",
+  helpBannerId: 'enrichment-config-intro',
+  helpBannerTitle: 'Auto-apply vs. human review',
+  helpBanner: (
+    <>
+      Short factual fields (<strong>origin</strong>, <strong>Red List status</strong>) come from
+      authoritative databases — safe to auto-apply. Free-form fields (<strong>story</strong>,
+      <strong> photo</strong>) get more variable and benefit from a curator’s eye. Toggle
+      auto-apply per field; everything still records a suggestion in <em>Enrichment review</em>
+      for audit, even when auto-applied.
+    </>
+  ),
   Preview,
   sections: [
     {

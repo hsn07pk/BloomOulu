@@ -1049,6 +1049,65 @@ model QuizQuestion {
   @@index([plantId, locale, difficulty, orderIndex])
 }
 
+// Observability event log. Every meaningful event the system produces
+// — HTTP request, job run, DB write side-effect, external API call,
+// enrichment fetch, RAG ingest, payment webhook, fatal/error/warn from
+// pino logs — is persisted here so a technical operator can search,
+// trace, and replay the full system history from one screen.
+//
+// Severity is mirrored on pino's standard scale (trace/debug/info/warn/
+// error/fatal). traceId groups events that belong to the same logical
+// operation (one HTTP request fans out into N DB writes + an external
+// call → all share the request's traceId).
+//
+// details is a free-form JSON payload — for HTTP events it includes
+// {method,url,status,reqHeaders,resHeaders,bodyPreview}; for job
+// events {queue,jobId,jobName,result,errorStack}; for external calls
+// {host,latencyMs,upstreamStatus}.
+//
+// Retention is handled by a periodic delete-where-ts-older-than cron
+// (configurable in SystemSetting `observability.retentionDays`).
+model ObservabilityEvent {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ts          DateTime @default(now())
+  severity    String   // trace | debug | info | warn | error | fatal
+  source      String   // http | job | rag | enrich | payment | admin | system | external
+  message     String
+  traceId     String?
+  userId      String?
+  durationMs  Int?
+  details     Json     @default("{}")
+
+  @@index([ts(sort: Desc)])
+  @@index([severity, ts(sort: Desc)])
+  @@index([source, ts(sort: Desc)])
+  @@index([traceId])
+}
+
+// Persistent bulk-add plant job. The curator submits a list of Latin
+// names (via paste or Excel upload) and the admin server processes them
+// in the background — fetching enrichment in parallel, then batch-
+// creating Plant rows. The full per-row state is stored as JSON so the
+// curator can leave the page / close the browser / come back later and
+// pick up exactly where they left off. Status transitions:
+//   running   → enrichment / creation actively in flight
+//   awaiting_review → enrichment done, curator must approve before create
+//   completed → done (some rows may have failed; details in `items`)
+//   cancelled → curator stopped it
+model BulkAddJob {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdByUser  String?  // admin email (session id)
+  status         String   @default("running")
+  phase          String   @default("enrich")  // enrich | create | done
+  items          Json     // [{ id, latinName, nameEn?, nameFi?, nameSv?, family?, status, preview?, keep, error?, createdId?, createdSlug? }, …]
+  totals         Json     @default("{}")       // denormalised counters {queued,fetching,ready,failed,creating,created}
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([createdAt(sort: Desc)])
+  @@index([status, createdAt(sort: Desc)])
+}
+
 // Anonymised quiz attempts so we can see "which questions confuse visitors
 // the most" without retaining PII. Anonymous attempts use a session UUID;
 // signed-in attempts also store userId so the donor can see history in /garden.

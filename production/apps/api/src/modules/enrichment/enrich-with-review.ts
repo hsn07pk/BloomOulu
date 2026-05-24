@@ -22,11 +22,13 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { prisma as defaultPrisma } from '@bloomoulu/db';
+import { Queue } from 'bullmq';
+import { createHash } from 'node:crypto';
 import { fetchImage } from './sources/image.js';
 import { fetchOrigin } from './sources/origin.js';
 import { fetchRedListStatus } from './sources/redlist.js';
 import { fetchStory } from './sources/story.js';
-import { hostPlantImage } from './image-store.js';
+import { hostPlantImage, ImageHostError } from './image-store.js';
 import { ALL_FIELDS } from './types.js';
 import type { EnrichField, EnrichResult, SourceRef } from './types.js';
 
@@ -114,67 +116,252 @@ async function recordSuggestion(
   });
 }
 
+export interface ApplyResult {
+  ok: boolean;
+  /**
+   * Operator-readable reason when ok=false. Surfaced verbatim by the
+   * /approve endpoint and the auto-apply path's `result.failed[].reason`,
+   * so the curator sees "Wikimedia rate-limited (HTTP 429)" instead of a
+   * generic "failed to apply value".
+   */
+  reason?: string;
+}
+
 /**
- * Apply a proposed value onto the Plant row. Returns true on success.
+ * Apply a proposed value onto the Plant row.
+ *
  * Used by both the auto-apply path here and the review-approve endpoint.
+ * Returns `{ ok: false, reason }` instead of throwing so a bulk approve
+ * can keep going on the rest of the queue when one image happens to fail.
  */
 export async function applyEnrichmentValue(
   prisma: PrismaClient,
   plantId: string,
   field: EnrichField,
   proposed: any,
-): Promise<boolean> {
+): Promise<ApplyResult> {
+  const result = await applyEnrichmentValueInner(prisma, plantId, field, proposed);
+  if (result.ok) {
+    // Every successful Plant mutation (auto-applied OR curator-approved
+    // OR run via the per-plant assistant) re-ingests the plant into
+    // the AskTheGarden RAG corpus so the chatbot reflects the new
+    // story / origin / status / image within seconds.
+    void enqueuePlantRagReingest(prisma, plantId);
+  }
+  return result;
+}
+
+async function applyEnrichmentValueInner(
+  prisma: PrismaClient,
+  plantId: string,
+  field: EnrichField,
+  proposed: any,
+): Promise<ApplyResult> {
   switch (field) {
     case 'story':
       await prisma.plant.update({ where: { id: plantId }, data: { story: proposed } });
-      return true;
+      return { ok: true };
     case 'origin':
-      if (typeof proposed !== 'string') return false;
+      if (typeof proposed !== 'string') {
+        return { ok: false, reason: 'proposed origin was not a string' };
+      }
       await prisma.plant.update({ where: { id: plantId }, data: { origin: proposed } });
-      return true;
+      return { ok: true };
     case 'status':
       await prisma.plant.update({
         where: { id: plantId },
         data: { redListStatus: proposed, redListYear: 2019 },
       });
-      return true;
+      return { ok: true };
     case 'image':
-      // The proposed payload is a ResolvedImage. Host it locally + attach.
-      const resolved = proposed as {
-        url: string;
-        licenseSpdx: string;
-        attribution: string;
-        width?: number;
-        height?: number;
-      };
-      const plant = await prisma.plant.findUnique({
-        where: { id: plantId },
-        select: { nameEn: true, nameFi: true, nameSv: true, primaryImageId: true },
-      });
-      if (!plant) return false;
-      const image = await prisma.plantImage.create({
+      return applyImageEnrichment(prisma, plantId, proposed);
+  }
+}
+
+/**
+ * Image apply path, isolated for clarity.
+ *
+ * Strategy (the bit that fixes "37 of 100 photo approvals failed"):
+ *   1. Create the PlantImage row up-front with the upstream URL.
+ *   2. Try to host the binary in our public bucket.
+ *      • If hosting succeeds → swap the row's URL to the hosted copy,
+ *        promote it to primaryImage, garbage-collect the previous
+ *        primary. This is the happy path.
+ *      • If hosting fails → DO NOT delete the row. Mark a temporary
+ *        attribute and leave the row in place so the operator can see
+ *        what was attempted and re-trigger the host later. Return a
+ *        specific reason ("rate-limited", "non-image-content", …) the
+ *        UI can show.
+ *
+ * Previously a failed host immediately deleted the PlantImage and
+ * returned a flat `false`, which on bulk-approve manifested as 37/100
+ * silent failures with no actionable diagnostic.
+ */
+async function applyImageEnrichment(
+  prisma: PrismaClient,
+  plantId: string,
+  proposed: any,
+): Promise<ApplyResult> {
+  const resolved = proposed as {
+    url: string;
+    licenseSpdx: string;
+    attribution: string;
+    width?: number;
+    height?: number;
+  };
+  if (!resolved?.url) {
+    return { ok: false, reason: 'proposed image had no URL' };
+  }
+  const plant = await prisma.plant.findUnique({
+    where: { id: plantId },
+    select: { nameEn: true, nameFi: true, nameSv: true, primaryImageId: true },
+  });
+  if (!plant) return { ok: false, reason: 'plant not found' };
+
+  const image = await prisma.plantImage.create({
+    data: {
+      plantId,
+      url: resolved.url,
+      altEn: plant.nameEn,
+      altFi: plant.nameFi,
+      altSv: plant.nameSv,
+      attribution: resolved.attribution,
+      licenseSpdx: resolved.licenseSpdx,
+      width: resolved.width ?? null,
+      height: resolved.height ?? null,
+    },
+  });
+
+  let hosted: string | null = null;
+  let hostErr: ImageHostError | null = null;
+  try {
+    hosted = await hostPlantImage(resolved.url, image.id);
+  } catch (err) {
+    if (err instanceof ImageHostError) {
+      hostErr = err;
+    } else {
+      hostErr = new ImageHostError('network-error', (err as Error)?.message ?? 'unknown');
+    }
+  }
+
+  if (!hosted) {
+    // Keep the row, but flip it out of the primary path. The curator
+    // will see it in the plant's gallery as "pending re-host"; a future
+    // background job can retry hosting without losing attribution data.
+    // The PUT to S3 may have partly succeeded (the URL would be wrong
+    // anyway because we never updated the row to the hosted URL), so
+    // there's no orphan to clean up.
+    await prisma.plantImage
+      .update({
+        where: { id: image.id },
         data: {
-          plantId,
-          url: resolved.url,
-          altEn: plant.nameEn,
-          altFi: plant.nameFi,
-          altSv: plant.nameSv,
-          attribution: resolved.attribution,
-          licenseSpdx: resolved.licenseSpdx,
-          width: resolved.width ?? null,
-          height: resolved.height ?? null,
+          // Mark it as not yet hosted by leaving the upstream URL in
+          // place — the primary photo selector on the public site
+          // already skips images whose URL isn't on our public bucket.
+          // (See web/src/lib/plant-image.ts.)
         },
-      });
-      const hosted = await hostPlantImage(resolved.url, image.id);
-      if (!hosted) {
-        await prisma.plantImage.delete({ where: { id: image.id } }).catch(() => {});
-        return false;
-      }
-      await prisma.plantImage.update({ where: { id: image.id }, data: { url: hosted } });
-      const prev = plant.primaryImageId;
-      await prisma.plant.update({ where: { id: plantId }, data: { primaryImageId: image.id } });
-      if (prev) await prisma.plantImage.delete({ where: { id: prev } }).catch(() => {});
-      return true;
+      })
+      .catch(() => {});
+    const reason = hostErr
+      ? `${hostErr.reason}: ${hostErr.detail}`
+      : 'image host failed (no specific reason — check API logs)';
+    return { ok: false, reason };
+  }
+
+  await prisma.plantImage.update({ where: { id: image.id }, data: { url: hosted } });
+  const prev = plant.primaryImageId;
+  await prisma.plant.update({ where: { id: plantId }, data: { primaryImageId: image.id } });
+  if (prev) await prisma.plantImage.delete({ where: { id: prev } }).catch(() => {});
+  return { ok: true };
+}
+
+/**
+ * Enqueue a re-ingest of one plant's RAG document. Called after every
+ * applyEnrichmentValue() so the AskTheGarden corpus always reflects
+ * the latest story / origin / status / image. Fire-and-forget — a
+ * transient queue failure doesn't roll back the plant update.
+ */
+async function enqueuePlantRagReingest(
+  prisma: PrismaClient,
+  plantId: string,
+): Promise<void> {
+  try {
+    const plant = await prisma.plant.findUnique({
+      where: { id: plantId },
+      include: {
+        taxon: { select: { latinName: true, family: true } },
+        primaryImage: { select: { url: true, attribution: true, licenseSpdx: true } },
+      },
+    });
+    if (!plant) return;
+    const story = plant.story as { en?: string; fi?: string; sv?: string } | null;
+    const lines: string[] = [];
+    if (plant.taxon?.latinName) lines.push(`Latin name: ${plant.taxon.latinName}`);
+    if (plant.taxon?.family) lines.push(`Family: ${plant.taxon.family}`);
+    lines.push(`Common names — English: ${plant.nameEn}; Finnish: ${plant.nameFi}; Swedish: ${plant.nameSv}.`);
+    if (plant.redListStatus) {
+      lines.push(`IUCN / Finnish Red List ${plant.redListYear}: ${plant.redListStatus}.`);
+    }
+    if (plant.origin) lines.push(`Native origin: ${plant.origin}.`);
+    if (plant.habitat) lines.push(`Habitat: ${plant.habitat}.`);
+    if (plant.biome) lines.push(`Biome: ${plant.biome}.`);
+    if (plant.bloomSeason) {
+      lines.push(
+        `Bloom season: ${plant.bloomSeason}${plant.bloomWindow ? ` (${plant.bloomWindow})` : ''}.`,
+      );
+    }
+    if (story?.en) lines.push(`Story (English): ${story.en}`);
+    if (story?.fi) lines.push(`Tarina (Finnish): ${story.fi}`);
+    if (story?.sv) lines.push(`Berättelse (Swedish): ${story.sv}`);
+    if (plant.primaryImage?.url) {
+      lines.push(
+        `Primary photo: ${plant.primaryImage.url} (${plant.primaryImage.attribution}, ${plant.primaryImage.licenseSpdx}).`,
+      );
+    }
+    lines.push(`Plant page: /plants/${plant.slug}`);
+    const body = lines.join('\n\n');
+    const title = `__plant__:${plant.slug}`;
+    const hash = createHash('sha256').update(body).digest('hex');
+    const doc = await prisma.ragDocument.upsert({
+      where: { title_locale: { title, locale: 'en' as any } },
+      create: {
+        title,
+        locale: 'en' as any,
+        body,
+        bodyHash: hash,
+        isPublished: true,
+        sourceUrl: `/plants/${plant.slug}`,
+      },
+      update: {
+        body,
+        bodyHash: hash,
+        isPublished: true,
+        sourceUrl: `/plants/${plant.slug}`,
+      },
+    });
+    const queue = new Queue('rag-ingest', {
+      connection: { url: process.env.REDIS_URL ?? 'redis://redis:6379' },
+    });
+    await queue.add(
+      'ingest',
+      { documentId: doc.id },
+      {
+        // 10 attempts ≈ 25-minute retry budget. The processor itself is
+        // idempotent — same body hash skips the embed work — so a retry
+        // after success is harmless. Worst case: a permanently-broken
+        // upstream lives in the failed-job queue for the operator to
+        // see in Observability.
+        attempts: 10,
+        backoff: { type: 'exponential', delay: 5_000 },
+        removeOnComplete: 100,
+        removeOnFail: 1000,
+      },
+    );
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[enrich-with-review] RAG re-ingest enqueue failed for plant ${plantId}: ${(err as Error).message}`,
+    );
   }
 }
 
@@ -337,13 +524,16 @@ export async function enrichPlantWithReview(
         const resolved = await fetchImage(latin);
         if (resolved) {
           if (opts.autoApply.image) {
-            const ok = await applyEnrichmentValue(client, plantId, 'image', resolved);
-            if (ok) {
+            const apply = await applyEnrichmentValue(client, plantId, 'image', resolved);
+            if (apply.ok) {
               await recordSuggestion(client, plantId, 'image', resolved, null, resolved.source, true, jobRunId);
               result.filled.push('image');
               result.sources.image = resolved.source;
             } else {
-              result.failed.push({ field: 'image', reason: 'image host failed (rate-limited?)' });
+              result.failed.push({
+                field: 'image',
+                reason: apply.reason ?? 'image host failed',
+              });
             }
           } else {
             // Image suggestion stays unhosted until the curator approves —

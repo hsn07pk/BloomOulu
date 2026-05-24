@@ -21,10 +21,20 @@ const Preview: React.FC<{ values: Record<string, unknown> }> = ({ values }) => {
   );
 };
 
-const schema: ConfigSchema = {
+export const schema: ConfigSchema = {
   title: 'Adoption Knobs',
+  kicker: 'Donor adopt flow',
   intro:
     'Tune what donors see in the adopt flow. All changes are live immediately for new sessions — open a fresh /cart/checkout tab to verify.',
+  helpBannerId: 'adoption-config-intro',
+  helpBannerTitle: 'New billing intervals affect new adoptions only',
+  helpBanner: (
+    <>
+      Donors with an active subscription keep the interval they signed up with — disabling Monthly
+      here doesn’t cancel anyone, it just hides the option from the next visitor. To migrate
+      existing monthly donors, send them a personal note from the Donors page first.
+    </>
+  ),
   Preview,
   sections: [
     {

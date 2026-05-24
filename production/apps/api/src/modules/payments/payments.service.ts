@@ -17,6 +17,7 @@ import { v7 as uuidv7 } from 'uuid';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AuditService } from '../audit/audit.service.js';
 import { SettingsService } from '../settings/settings.service.js';
+import { AdoptionLifecycleService } from '../adoptions/adoption-lifecycle.service.js';
 import { PaymentGatewayFactory } from './payment-gateway.factory.js';
 import { enqueueReceipt, enqueuePaymentRetry } from '../jobs/enqueue.js';
 
@@ -52,6 +53,7 @@ export class PaymentsService {
     private readonly audit: AuditService,
     private readonly settings: SettingsService,
     private readonly gateways: PaymentGatewayFactory,
+    private readonly lifecycle: AdoptionLifecycleService,
   ) {}
 
   /** Initiate a payment. Always idempotent by orderId. */
@@ -212,18 +214,18 @@ export class PaymentsService {
             },
           });
           if (payment.adoptionId) {
-            const adoption = await tx.adoption.update({
+            await this.lifecycle.activate(tx, payment.adoptionId, event.paidAt);
+            const adoption = await tx.adoption.findUniqueOrThrow({
               where: { id: payment.adoptionId },
-              data: { status: 'active', startedAt: event.paidAt },
               include: {
                 tier: true,
                 donor: { select: { name: true, email: true } },
               },
             });
-            // Bundle: if the head adoption belongs to a bundle, flip every
-            // sibling Adoption to 'active' on the same paidAt timestamp.
-            // We do this BEFORE the plaque check below so each sibling
-            // gets its own plaque check too.
+            // Bundle: if the head adoption belongs to a bundle, activate
+            // every sibling Adoption too. Per-row activation (vs the prior
+            // updateMany) is required so each sibling's plant counter gets
+            // bumped via AdoptionLifecycleService.
             const siblings = adoption.bundleId
               ? await tx.adoption.findMany({
                   where: {
@@ -237,10 +239,9 @@ export class PaymentsService {
                 })
               : [];
             if (siblings.length > 0) {
-              await tx.adoption.updateMany({
-                where: { bundleId: adoption.bundleId!, status: 'pending' },
-                data: { status: 'active', startedAt: event.paidAt },
-              });
+              for (const s of siblings) {
+                await this.lifecycle.activate(tx, s.id, event.paidAt);
+              }
               await this.audit.log(tx, {
                 action: 'adoption.bundle.activated',
                 resource: `Bundle/${adoption.bundleId}`,
@@ -309,11 +310,9 @@ export class PaymentsService {
             if (adoption?.recurring && adoption.status === 'active') {
               // Pause the adoption immediately on the first failure — the
               // donor sees "paused, retrying" in My Garden; dunning will
-              // attempt to recover automatically.
-              await tx.adoption.update({
-                where: { id: payment.adoptionId },
-                data: { status: 'paused' },
-              });
+              // attempt to recover automatically. Counters are unchanged:
+              // paused adoptions still count toward the plant total.
+              await this.lifecycle.pause(tx, payment.adoptionId, event.failureCode ?? 'unknown');
               await this.audit.log(tx, {
                 action: 'adoption.dunning.started',
                 resource: `Adoption/${payment.adoptionId}`,
@@ -335,10 +334,7 @@ export class PaymentsService {
             where: { id: event.orderId },
           });
           if (adoption) {
-            await tx.adoption.update({
-              where: { id: adoption.id },
-              data: { status: 'active', startedAt: new Date() },
-            });
+            await this.lifecycle.activate(tx, adoption.id, new Date());
           }
           break;
         }
@@ -347,13 +343,9 @@ export class PaymentsService {
             where: { id: event.orderId },
           });
           if (adoption) {
-            await tx.adoption.update({
-              where: { id: adoption.id },
-              data: {
-                status: 'cancelled',
-                cancelledAt: event.cancelledAt,
-                cancellationReason: event.cancelReason,
-              },
+            await this.lifecycle.cancel(tx, adoption.id, {
+              reason: event.cancelReason ?? 'agreement_cancelled',
+              cancelledAt: event.cancelledAt,
             });
           }
           break;

@@ -5,13 +5,26 @@
  * work: collection counts, recent donations, recent curator
  * escalations, recent emails sent, and a few quick-action shortcuts.
  *
- * Polled every 30 seconds. Components fetch via the AdminJS ApiClient
- * which carries the session cookie automatically.
+ * Polled every 30 seconds (paused while the tab is hidden so we don't
+ * burn the API at night). Stats are split by domain so a curator can
+ * see at a glance whether the catalogue, donor flow, or RAG layer
+ * needs attention.
  */
 import React, { useEffect, useState } from 'react';
-// AdminJS design system isn't a direct dep — render with plain HTML/CSS.
-// This keeps the component working without adding @adminjs/design-system
-// to apps/admin's package.json.
+import {
+  Button,
+  Card,
+  EmptyState,
+  HelpBanner,
+  Notice,
+  Page,
+  PageHeader,
+  Skeleton,
+  StatGrid,
+  StatTile,
+  StatusPill,
+} from './shared/ui';
+import { colors, font, fontSize, radius, space } from './shared/tokens';
 
 interface DashStats {
   plants: number;
@@ -35,122 +48,342 @@ const Dashboard: React.FC = () => {
   const [stats, setStats] = useState<DashStats | null>(null);
   const [escalations, setEscalations] = useState<Escalation[]>([]);
   const [err, setErr] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   useEffect(() => {
     let alive = true;
     async function load() {
+      if (typeof document !== 'undefined' && document.hidden) return;
       try {
-        // Lightweight admin dashboard endpoint on the API.
         const res = await fetch('/admin/dashboard-stats', { credentials: 'include' });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
+        const data = (await res.json()) as { stats: DashStats; recentEscalations?: Escalation[] };
         if (!alive) return;
         setStats(data.stats);
         setEscalations(data.recentEscalations ?? []);
         setErr(null);
+        setLastUpdated(new Date());
       } catch (e) {
         if (!alive) return;
         setErr((e as Error).message);
       }
     }
-    load();
-    const id = setInterval(load, 30_000);
+    void load();
+    const id = window.setInterval(load, 30_000);
     return () => {
       alive = false;
-      clearInterval(id);
+      window.clearInterval(id);
     };
   }, []);
 
-  const wrap: React.CSSProperties = { padding: 24, fontFamily: 'system-ui, -apple-system, sans-serif' };
-  const h2: React.CSSProperties = { fontSize: 32, fontWeight: 600, margin: '0 0 8px', color: '#1F3C2D' };
-  const lead: React.CSSProperties = { color: '#6B7560', marginBottom: 24 };
+  const moneyEur = (cents: number | undefined) =>
+    cents == null ? '—' : `€${Math.round(cents / 100).toLocaleString('en-FI')}`;
+
+  const queueAttention = (stats?.curatorEscalationsOpen ?? 0) > 0;
+  const monthLabel = new Date().toLocaleString('en-FI', { month: 'long', year: 'numeric' });
 
   return (
-    <div style={wrap}>
-      <h1 style={h2}>BloomOulu</h1>
-      <p style={lead}>Welcome back — here's a snapshot of the platform right now.</p>
+    <Page>
+      <PageHeader
+        kicker="Operations overview"
+        title="BloomOulu admin"
+        lede="Welcome back — here’s a snapshot of the platform right now. Stats refresh every 30 seconds while this tab is visible."
+        actions={
+          lastUpdated ? (
+            <span
+              style={{
+                fontSize: fontSize.sm,
+                color: colors.inkMute,
+                fontFamily: font.body,
+              }}
+              title={`Last updated: ${lastUpdated.toLocaleString()}`}
+            >
+              <StatusPill tone="success" dot>
+                Live · {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </StatusPill>
+            </span>
+          ) : (
+            <Skeleton width={120} height={26} radius={999} />
+          )
+        }
+      />
 
       {err && (
-        <div style={{ padding: 12, background: '#FFF3EE', border: '1px solid #B8513A', borderRadius: 8, marginBottom: 16, color: '#B8513A' }}>
-          Couldn't load dashboard stats: {err}
-        </div>
+        <Notice tone="danger" title="Couldn't refresh stats" onDismiss={() => setErr(null)}>
+          {err}. The numbers below show the last successful snapshot.
+        </Notice>
       )}
 
-      {/* ── Stats tiles ───────────────────────────────────────────── */}
-      <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 16 }}>
-        <StatTile label="Plants in catalogue" value={stats?.plants ?? '—'} accent="#2D5440" />
-        <StatTile label="Donors" value={stats?.donors ?? '—'} accent="#5FB0A0" />
-        <StatTile label="Active adoptions" value={stats?.adoptionsActive ?? '—'} accent="#A8C060" />
-        <StatTile label="MTD donations" value={stats ? `€${(stats.donationsMtdCents / 100).toFixed(0)}` : '—'} accent="#B8513A" />
-        <StatTile label="RAG docs" value={stats?.ragDocs ?? '—'} accent="#88A050" />
-        <StatTile label="Cached web entries" value={stats?.webCacheDocs ?? '—'} accent="#5FB0A0" />
-        <StatTile label="Open curator queue" value={stats?.curatorEscalationsOpen ?? '—'} accent={(stats?.curatorEscalationsOpen ?? 0) > 0 ? '#B8513A' : '#88A050'} />
-        <StatTile label="Ask messages 7d" value={stats?.askMessages7d ?? '—'} accent="#3D6A52" />
-      </div>
+      <HelpBanner
+        id="dashboard-intro"
+        title="What you’re looking at"
+      >
+        The tiles below summarise the live platform. Numbers in <strong>terra</strong> mean
+        something needs attention (e.g. open curator queue). Click any tile to jump straight to
+        the matching list. Use the quick links lower down for tasks you run weekly.
+      </HelpBanner>
 
-      {/* ── Recent escalations ────────────────────────────────────── */}
-      <h3 style={{ fontSize: 20, fontWeight: 500, marginTop: 32, marginBottom: 8, color: '#1F3C2D' }}>
-        Recent curator escalations
-      </h3>
-      <div style={{ background: 'white', border: '1px solid #E5E2D8', borderRadius: 8, overflow: 'hidden' }}>
-        {escalations.length === 0 ? (
-          <div style={{ padding: 16, color: '#88897C' }}>No open escalations.</div>
+      {/* ── Donor & adoption metrics ───────────────────────────────── */}
+      <Card
+        kicker="Donor activity"
+        title="This month in donations"
+        description={`Live counts as of ${monthLabel}. The MTD figure is paid donations only — see Finance → Payments for full breakdown.`}
+      >
+        <StatGrid min={180}>
+          <StatTile
+            label="Donors (lifetime)"
+            value={stats?.donors ?? <Skeleton width={64} height={28} />}
+            hint="Unique email addresses on the User table with at least one adoption attached."
+            accent={colors.moss}
+            href="/admin/resources/User"
+          />
+          <StatTile
+            label="Active adoptions"
+            value={stats?.adoptionsActive ?? <Skeleton width={64} height={28} />}
+            hint="Adoptions in status `active`. Excludes pending, paused, cancelled, ended."
+            accent={colors.olive}
+            href="/admin/resources/Adoption?filters.status=active"
+          />
+          <StatTile
+            label="MTD donations"
+            value={stats ? moneyEur(stats.donationsMtdCents) : <Skeleton width={80} height={28} />}
+            hint="Sum of paid donation amounts in the current calendar month (in cents, rendered as euros)."
+            accent={colors.accent}
+            href={`/admin/resources/Payment?filters.status=paid`}
+          />
+          <StatTile
+            label="Plants in catalogue"
+            value={stats?.plants ?? <Skeleton width={64} height={28} />}
+            hint="Plant rows with status `active`. Hidden plants are excluded."
+            accent={colors.forestMid}
+            href="/admin/resources/Plant"
+          />
+        </StatGrid>
+      </Card>
+
+      {/* ── RAG & AskTheGarden ─────────────────────────────────────── */}
+      <Card
+        kicker="AskTheGarden health"
+        title="Knowledge corpus & curator queue"
+        description="The retrieval pipeline that powers donor questions. Watch the open queue — every unanswered escalation is a donor waiting."
+      >
+        <StatGrid min={180}>
+          <StatTile
+            label="Open curator queue"
+            value={
+              stats ? (
+                stats.curatorEscalationsOpen
+              ) : (
+                <Skeleton width={64} height={28} />
+              )
+            }
+            hint="AskAnswers with reaction=`escalated` and no curator reply yet."
+            emphasis={queueAttention ? 'attention' : 'normal'}
+            accent={queueAttention ? colors.accent : colors.olive}
+            href="/admin/resources/AskAnswer?filters.reaction=escalated"
+          />
+          <StatTile
+            label="Ask messages (7d)"
+            value={stats?.askMessages7d ?? <Skeleton width={64} height={28} />}
+            hint="Total donor questions in the past 7 days, including ones the AI answered confidently."
+            accent={colors.moss}
+            href="/admin/resources/AskMessage"
+          />
+          <StatTile
+            label="RAG documents"
+            value={stats?.ragDocs ?? <Skeleton width={64} height={28} />}
+            hint="Indexed long-form documents (per-plant, family, conservation summaries, manual ingest)."
+            accent={colors.teal}
+            href="/admin/resources/RagDocument"
+          />
+          <StatTile
+            label="Cached web pages"
+            value={stats?.webCacheDocs ?? <Skeleton width={64} height={28} />}
+            hint="Wikipedia / GBIF / laji.fi pages fetched once and cached locally."
+            accent={colors.leaf}
+          />
+        </StatGrid>
+      </Card>
+
+      {/* ── Recent escalations ──────────────────────────────────────── */}
+      <Card
+        kicker="Needs a human"
+        title="Recent curator escalations"
+        description="The five most recent questions where the AI handed off to a curator. Reply in /admin → Ask answers."
+        actions={
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() =>
+              (window.location.href = '/admin/resources/AskAnswer?filters.reaction=escalated')
+            }
+          >
+            Open queue →
+          </Button>
+        }
+      >
+        {!stats ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {[0, 1, 2].map((i) => (
+              <Skeleton key={i} height={48} />
+            ))}
+          </div>
+        ) : escalations.length === 0 ? (
+          <EmptyState
+            variant="all-done"
+            title="Inbox zero — no open escalations."
+            description="When a donor question stumps the AI, it lands here for human review. You’re caught up."
+          />
         ) : (
-          escalations.map((e) => (
-            <div key={e.id} style={{ padding: 14, borderBottom: '1px solid #F2F0E8' }}>
-              <div style={{ fontSize: 12, color: '#88897C' }}>
-                {new Date(e.createdAt).toLocaleString()} · {e.email || 'anonymous'}
-              </div>
-              <div style={{ marginTop: 4, color: '#1F3C2D' }}>{e.question}</div>
-            </div>
-          ))
+          <ul
+            style={{
+              listStyle: 'none',
+              padding: 0,
+              margin: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 2,
+            }}
+          >
+            {escalations.map((e) => (
+              <li
+                key={e.id}
+                style={{
+                  padding: `${space[3]} ${space[4]}`,
+                  borderRadius: radius.md,
+                  background: 'transparent',
+                  transition: 'background 150ms ease',
+                  cursor: 'pointer',
+                }}
+                onClick={() => (window.location.href = `/admin/resources/AskAnswer/records/${e.id}/show`)}
+                onMouseEnter={(ev) => {
+                  (ev.currentTarget as HTMLLIElement).style.background = colors.sagePale;
+                }}
+                onMouseLeave={(ev) => {
+                  (ev.currentTarget as HTMLLIElement).style.background = 'transparent';
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    gap: 8,
+                    alignItems: 'center',
+                    fontSize: fontSize.sm,
+                    color: colors.inkMute,
+                    marginBottom: 4,
+                  }}
+                >
+                  <StatusPill tone="warn" dot>
+                    Open
+                  </StatusPill>
+                  <span>{new Date(e.createdAt).toLocaleString()}</span>
+                  <span aria-hidden="true">·</span>
+                  <span>{e.email || 'anonymous donor'}</span>
+                </div>
+                <div
+                  style={{
+                    color: colors.forestDeep,
+                    fontSize: fontSize.base,
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {e.question}
+                </div>
+              </li>
+            ))}
+          </ul>
         )}
-      </div>
+      </Card>
 
-      {/* ── Quick links ───────────────────────────────────────────── */}
-      <h4 style={{ fontSize: 16, fontWeight: 500, marginTop: 32, marginBottom: 12, color: '#1F3C2D' }}>
-        Quick actions
-      </h4>
-      <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-        <QuickLink href="/admin/resources/Plant">Plants</QuickLink>
-        <QuickLink href="/admin/resources/Adoption">Adoptions</QuickLink>
-        <QuickLink href="/admin/resources/AskAnswer?filters.reaction=escalated">Curator queue</QuickLink>
-        <QuickLink href="/admin/resources/RagDocument">RAG documents</QuickLink>
-        <QuickLink href="/admin/resources/Tier">Tier prices</QuickLink>
-        <QuickLink href="/admin/pages/Settings">Settings</QuickLink>
-        <QuickLink href="/admin/pages/Reconciliation">Reconciliation</QuickLink>
-        <QuickLink href="http://localhost:8025" external>MailHog inbox</QuickLink>
-        <QuickLink href="http://localhost:3300" external>Grafana dashboards</QuickLink>
-      </div>
+      {/* ── Quick actions ──────────────────────────────────────────── */}
+      <Card
+        kicker="Shortcuts"
+        title="Quick actions"
+        description="The pages staff visit most often. Use the sidebar for the full navigation tree."
+      >
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+            gap: 10,
+          }}
+        >
+          <QuickLink href="/admin/resources/Plant" icon="❀">
+            Plants
+            <small>Catalogue + Red List</small>
+          </QuickLink>
+          <QuickLink href="/admin/resources/Adoption" icon="♥">
+            Adoptions
+            <small>Donor list + cancellations</small>
+          </QuickLink>
+          <QuickLink href="/admin/resources/AskAnswer?filters.reaction=escalated" icon="✎">
+            Curator queue
+            <small>Open escalations</small>
+          </QuickLink>
+          <QuickLink href="/admin/resources/RagDocument" icon="◉">
+            RAG documents
+            <small>Knowledge corpus</small>
+          </QuickLink>
+          <QuickLink href="/admin/resources/Tier" icon="¥">
+            Tier prices
+            <small>Pricing ladder</small>
+          </QuickLink>
+          <QuickLink href="/admin/pages/configure#identity" icon="⚙">
+            Configure
+            <small>All settings in one place</small>
+          </QuickLink>
+          <QuickLink href="/admin/pages/configure#translations" icon="🌐">
+            Translations
+            <small>EN / FI / SV editor</small>
+          </QuickLink>
+          <QuickLink href="/admin/pages/operations#reconciliation" icon="✓">
+            Reconciliation
+            <small>Match bank CSV</small>
+          </QuickLink>
+          <QuickLink href="/admin/pages/operations#backups" icon="⛁">
+            Backups
+            <small>Snapshot & restore</small>
+          </QuickLink>
+          <QuickLink href="/admin/pages/plantTools#add" icon="✿">
+            Add plant
+            <small>Open-data assistant</small>
+          </QuickLink>
+          <QuickLink href="/admin/pages/plantTools#review" icon="✓">
+            Enrichment review
+            <small>Approve worker suggestions</small>
+          </QuickLink>
+          <QuickLink href="http://localhost:8025" icon="✉" external>
+            MailHog inbox
+            <small>Outbound mail in dev</small>
+          </QuickLink>
+        </div>
+      </Card>
 
-      {/* ── RAG maintenance ───────────────────────────────────────── */}
-      <h4 style={{ fontSize: 16, fontWeight: 500, marginTop: 32, marginBottom: 12, color: '#1F3C2D' }}>
-        RAG corpus maintenance
-      </h4>
-      <RebuildButton />
-      <p style={{ fontSize: 12, color: '#88897C', marginTop: 8, maxWidth: 640 }}>
-        Drops the cached family + conservation summary chunks so the
-        next `pnpm tsx scripts/build-family-summary-corpus.ts` and
-        `…/build-conservation-summary.ts` rebuild from scratch. Use
-        this after editing the family-biology table in the build
-        scripts, or after adding new species the summaries should now
-        cover. Per-plant chunks are not affected — those are
-        rebuilt by `scripts/build-plant-rag-corpus.ts`.
-      </p>
-    </div>
+      {/* ── RAG maintenance ──────────────────────────────────────────── */}
+      <Card
+        kicker="Maintenance"
+        title="RAG corpus rebuild"
+        description="Forces the next cron tick (or the build scripts) to repopulate the family + conservation summary chunks from scratch. Use this after editing the family-biology source table or adding new species the summaries should cover. Per-plant chunks are not affected."
+      >
+        <RebuildButton />
+      </Card>
+    </Page>
   );
 };
 
 const RebuildButton: React.FC = () => {
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
   return (
     <div>
-      <button
-        type="button"
-        disabled={busy}
+      <Button
+        variant="danger"
+        loading={busy}
         onClick={async () => {
-          if (!confirm('Drop family + conservation summary RagDocs? They\'ll be empty until the rebuild scripts run.')) return;
+          const confirmed = window.confirm(
+            'Drop family + conservation summary RAG documents? They’ll be empty until the rebuild scripts run again.',
+          );
+          if (!confirmed) return;
           setBusy(true);
           setMsg(null);
           try {
@@ -158,81 +391,95 @@ const RebuildButton: React.FC = () => {
               method: 'POST',
               credentials: 'include',
             });
-            const data = await res.json();
-            setMsg(data.ok ? '✓ Queued. Run the rebuild scripts to refill.' : `Error: ${data.error ?? '?'}`);
+            const data = (await res.json()) as { ok?: boolean; error?: string };
+            setMsg(
+              data.ok
+                ? { kind: 'ok', text: 'Queued. Run the rebuild scripts to refill the corpus.' }
+                : { kind: 'err', text: data.error ?? 'Unknown error' },
+            );
           } catch (e) {
-            setMsg(`Failed: ${(e as Error).message}`);
+            setMsg({ kind: 'err', text: (e as Error).message });
           } finally {
             setBusy(false);
           }
         }}
-        style={{
-          padding: '10px 16px',
-          background: busy ? '#88897C' : '#B8513A',
-          color: 'white',
-          border: 'none',
-          borderRadius: 8,
-          fontSize: 14,
-          cursor: busy ? 'wait' : 'pointer',
-        }}
       >
-        {busy ? 'Working…' : 'Drop summary chunks (force rebuild on next run)'}
-      </button>
+        {busy ? 'Working…' : 'Drop summary chunks · force rebuild on next run'}
+      </Button>
       {msg && (
-        <div style={{ marginTop: 8, fontSize: 13, color: msg.startsWith('✓') ? '#2D5440' : '#B8513A' }}>
-          {msg}
+        <div style={{ marginTop: 12 }}>
+          <Notice tone={msg.kind === 'ok' ? 'success' : 'danger'} onDismiss={() => setMsg(null)} compact>
+            {msg.text}
+          </Notice>
         </div>
       )}
     </div>
   );
 };
 
-const StatTile: React.FC<{ label: string; value: React.ReactNode; accent: string }> = ({
-  label,
-  value,
-  accent,
-}) => (
-  <div
-    style={{
-      flex: '1 1 200px',
-      minWidth: 160,
-      padding: 16,
-      background: 'white',
-      borderLeft: `4px solid ${accent}`,
-      borderRadius: 6,
-      border: '1px solid #E5E2D8',
-    }}
-  >
-    <div style={{ fontSize: 11, color: '#88897C', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-      {label}
-    </div>
-    <div style={{ fontSize: 28, fontWeight: 600, marginTop: 4, color: '#1F3C2D' }}>{value}</div>
-  </div>
-);
-
-const QuickLink: React.FC<{ href: string; external?: boolean; children: React.ReactNode }> = ({
-  href,
-  external,
-  children,
-}) => (
-  <a
-    href={href}
-    target={external ? '_blank' : undefined}
-    rel={external ? 'noopener noreferrer' : undefined}
-    style={{
-      display: 'inline-flex',
-      alignItems: 'center',
-      padding: '8px 14px',
-      borderRadius: 8,
-      background: '#FAF7EE',
-      border: '1px solid #E5E2D8',
-      color: '#1F3C2D',
-      textDecoration: 'none',
-      fontSize: 14,
-    }}
-  >
-    {children}{external ? ' ↗' : ''}
-  </a>
-);
+const QuickLink: React.FC<{
+  href: string;
+  external?: boolean;
+  icon?: React.ReactNode;
+  children: React.ReactNode;
+}> = ({ href, external, icon, children }) => {
+  // Children: first text node + optional <small> subtitle.
+  const arr = React.Children.toArray(children);
+  const main = arr.filter((c) => typeof c === 'string' || (React.isValidElement(c) && c.type !== 'small'));
+  const sub = arr.find((c) => React.isValidElement(c) && c.type === 'small');
+  return (
+    <a
+      href={href}
+      target={external ? '_blank' : undefined}
+      rel={external ? 'noopener noreferrer' : undefined}
+      style={{
+        display: 'flex',
+        gap: 12,
+        padding: '12px 14px',
+        borderRadius: radius.md,
+        background: colors.cream,
+        border: `1px solid ${colors.line}`,
+        color: colors.forest,
+        textDecoration: 'none',
+        transition: 'all 150ms ease',
+        alignItems: 'center',
+      }}
+      onMouseEnter={(e) => {
+        const el = e.currentTarget;
+        el.style.background = colors.sage;
+        el.style.borderColor = colors.olive;
+        el.style.transform = 'translateY(-1px)';
+      }}
+      onMouseLeave={(e) => {
+        const el = e.currentTarget;
+        el.style.background = colors.cream;
+        el.style.borderColor = colors.line;
+        el.style.transform = 'translateY(0)';
+      }}
+    >
+      {icon && (
+        <span
+          aria-hidden="true"
+          style={{
+            fontSize: 18,
+            color: colors.teal,
+            flexShrink: 0,
+            width: 22,
+            textAlign: 'center',
+          }}
+        >
+          {icon}
+        </span>
+      )}
+      <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <span style={{ fontWeight: 600, fontSize: fontSize.base }}>{main}</span>
+        {sub}
+      </span>
+      <span aria-hidden="true" style={{ color: colors.inkFaint, fontSize: 16 }}>
+        {external ? '↗' : '›'}
+      </span>
+    </a>
+  );
+};
 
 export default Dashboard;

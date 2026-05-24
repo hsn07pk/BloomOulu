@@ -23,11 +23,193 @@ import AdminJS, { ComponentLoader } from 'adminjs';
 import AdminJSFastify from '@adminjs/fastify';
 import { Database, Resource, getModelByName } from '@adminjs/prisma';
 import { PrismaClient } from '@prisma/client';
+import { cancelAdoption } from '@bloomoulu/db';
 import { Queue } from 'bullmq';
 import { Redis } from 'ioredis';
 import bcrypt from 'bcryptjs';
 import * as path from 'node:path';
+import * as fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import {
+  cancelJob as cancelBulkAddJob,
+  computeTotals as bulkAddJobTotals,
+  isJobRunning as isBulkAddJobRunning,
+  repairStaleJobs as repairStaleBulkAddJobs,
+  runCreationPhase as runBulkAddCreationPhase,
+  runEnrichmentPhase as runBulkAddEnrichmentPhase,
+  type JobRow as BulkAddJobRow,
+} from './bulk-add-job.js';
+import {
+  ingestPlantIntoRagAsync,
+  ragHookOnPlantWrite,
+  reconcilePlantRagDocuments,
+} from './rag-ingest.js';
+import {
+  initObservability,
+  installHttpHook,
+  obs,
+} from './observability.js';
+
+/**
+ * Loads the BloomOulu admin global stylesheet from disk.
+ *
+ * In dev (tsx) `import.meta.url` points at src/server.ts → reads
+ * src/styles/global.css. In prod the compiled file is dist/server.js
+ * and the build script copies src/styles to dist/styles, so the same
+ * relative resolution works. A third candidate covers the case where
+ * the dist tree was produced without the copy step (e.g. a stale dev
+ * build) — we still ship the design system rather than serve nothing.
+ *
+ * Cached at startup so each request is a header-only response.
+ */
+function loadAdminGlobalCss(): string {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    path.resolve(here, '../styles/global.css'),
+    path.resolve(here, '../../src/styles/global.css'),
+    path.resolve(here, 'styles/global.css'),
+  ];
+  for (const candidate of candidates) {
+    try {
+      return fs.readFileSync(candidate, 'utf8');
+    } catch {
+      continue;
+    }
+  }
+  console.warn('[admin] global.css not found — admin UI will render unstyled');
+  return '/* BloomOulu admin global.css not found at server start */';
+}
+const ADMIN_GLOBAL_CSS = loadAdminGlobalCss();
+
+/**
+ * Shared Plant-create helper used by both the single-shot
+ * /admin/plants/create-from-assistant endpoint AND the bulk-job
+ * processor. Encapsulates: slug normalisation, Taxon upsert, enum
+ * coercion, optional PlantImage attachment, and audit-log entry.
+ */
+interface AssistantPlantDto {
+  latinName?: string;
+  family?: string;
+  slug?: string;
+  nameEn?: string;
+  nameFi?: string;
+  nameSv?: string;
+  redListStatus?: string;
+  origin?: string;
+  storyEn?: string;
+  storyFi?: string;
+  storySv?: string;
+  imageUrl?: string;
+  attribution?: string;
+  licenseSpdx?: string;
+}
+async function createPlantFromAssistantDto(
+  dto: AssistantPlantDto,
+  actorUserId: string | null,
+): Promise<{ id: string; slug: string; alreadyExisted?: boolean }> {
+  const latinName = (dto.latinName ?? '').trim();
+  if (!latinName) throw new Error('latinName is required');
+  const slug =
+    (dto.slug ??
+      latinName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')) ||
+    latinName.toLowerCase();
+  const existing = await prisma.plant.findUnique({ where: { slug } });
+  if (existing) return { id: existing.id, slug: existing.slug, alreadyExisted: true };
+  const taxon = await prisma.taxon.upsert({
+    where: { latinName },
+    update: dto.family ? { family: dto.family } : {},
+    create: { latinName, family: dto.family ?? 'Unknown' },
+  });
+  const story =
+    dto.storyEn || dto.storyFi || dto.storySv
+      ? { en: dto.storyEn ?? '', fi: dto.storyFi ?? '', sv: dto.storySv ?? '' }
+      : { en: '', fi: '', sv: '' };
+  const RED_LIST = new Set(['LC', 'NT', 'VU', 'EN', 'CR', 'EX', 'DD', 'NA']);
+  const incoming = (dto.redListStatus ?? '').toUpperCase();
+  const safeRedList = RED_LIST.has(incoming) ? incoming : 'NA';
+  const plant = await prisma.plant.create({
+    data: {
+      slug,
+      taxonId: taxon.id,
+      nameEn: dto.nameEn ?? latinName,
+      nameFi: dto.nameFi ?? dto.nameEn ?? latinName,
+      nameSv: dto.nameSv ?? dto.nameEn ?? latinName,
+      redListStatus: safeRedList as any,
+      redListYear: 2019,
+      origin: dto.origin ?? '',
+      habitat: '',
+      biome: '',
+      bloomSeason: 'all' as any,
+      story,
+      quickFacts: [],
+      status: 'active',
+    },
+  });
+  if (dto.imageUrl) {
+    const image = await prisma.plantImage.create({
+      data: {
+        plantId: plant.id,
+        url: dto.imageUrl,
+        altEn: plant.nameEn,
+        altFi: plant.nameFi,
+        altSv: plant.nameSv,
+        attribution: dto.attribution ?? '',
+        licenseSpdx: dto.licenseSpdx ?? 'CC-BY-4.0',
+      },
+    });
+    await prisma.plant.update({
+      where: { id: plant.id },
+      data: { primaryImageId: image.id },
+    });
+  }
+  await prisma.auditLog.create({
+    data: {
+      actorUserId,
+      action: 'admin.plant.create-from-assistant',
+      resource: `Plant/${plant.id}`,
+    },
+  });
+  // Auto-ingest into AskTheGarden RAG corpus. Fire-and-forget so a
+  // transient Ollama failure doesn't block the create; the job itself
+  // has 5 retries with exponential back-off.
+  ingestPlantIntoRagAsync(prisma, plant.id);
+  return { id: plant.id, slug: plant.slug };
+}
+
+/** Marshal a JobRow's selected fields into the assistant create DTO. */
+function jobRowToCreateDto(row: BulkAddJobRow): AssistantPlantDto {
+  const dto: AssistantPlantDto = {
+    latinName: row.latinName,
+    family: row.family,
+    nameEn: row.nameEn,
+    nameFi: row.nameFi,
+    nameSv: row.nameSv,
+  };
+  const preview = row.preview as
+    | {
+        story?: { value: { en?: string; fi?: string; sv?: string } } | null;
+        origin?: { value: string } | null;
+        status?: { value: string } | null;
+        image?: { value: { url?: string; attribution?: string; licenseSpdx?: string } } | null;
+      }
+    | undefined;
+  const keep = row.keep ?? { story: true, origin: true, status: true, image: true };
+  if (preview) {
+    if (keep.origin && preview.origin) dto.origin = preview.origin.value;
+    if (keep.status && preview.status) dto.redListStatus = preview.status.value;
+    if (keep.story && preview.story) {
+      dto.storyEn = preview.story.value.en ?? '';
+      dto.storyFi = preview.story.value.fi ?? '';
+      dto.storySv = preview.story.value.sv ?? '';
+    }
+    if (keep.image && preview.image) {
+      dto.imageUrl = preview.image.value.url;
+      dto.attribution = preview.image.value.attribution;
+      dto.licenseSpdx = preview.image.value.licenseSpdx;
+    }
+  }
+  return dto;
+}
 
 const queueConn = { connection: { url: process.env.REDIS_URL ?? 'redis://localhost:6379' } };
 const emailQueue = new Queue('email', queueConn);
@@ -112,6 +294,29 @@ const prisma = basePrisma.$extends({
         if (writes.has(operation)) {
           const id = (result as any)?.id ?? (args as any)?.where?.id ?? undefined;
           void broadcastChange(model, operation as any, id);
+          // Auto-re-ingest into AskTheGarden RAG corpus on any write
+          // that could change a chatbot-visible fact. Idempotent — the
+          // ingest hook hashes the body and skips re-embed when there's
+          // no real change.
+          //
+          // The models below are everything the bot draws on:
+          //   • Plant / PlantImage / Taxon → per-plant doc
+          //   • Accession / AudioNarration / PlantCitation → per-plant
+          //     secondary records embedded in the plant doc body
+          //   • ContentBlock → CMS copy (about page etc.)
+          //   • SystemSetting → garden config doc (hours, curator, etc.)
+          if (
+            model === 'Plant' ||
+            model === 'PlantImage' ||
+            model === 'Taxon' ||
+            model === 'Accession' ||
+            model === 'AudioNarration' ||
+            model === 'PlantCitation' ||
+            model === 'ContentBlock' ||
+            model === 'SystemSetting'
+          ) {
+            void ragHookOnPlantWrite(basePrisma as any, model, operation, args, result);
+          }
         }
         return result;
       },
@@ -216,6 +421,30 @@ const BulkQrPrintPage = componentLoader.add('BulkQrPrint', path.join(here, 'page
 const EnrichmentConfigPage = componentLoader.add('EnrichmentConfig', path.join(here, 'pages/EnrichmentConfig'));
 const EnrichmentReviewPage = componentLoader.add('EnrichmentReview', path.join(here, 'pages/EnrichmentReview'));
 const EnrichmentAssistantPage = componentLoader.add('EnrichmentAssistant', path.join(here, 'pages/EnrichmentAssistant'));
+const BulkAddPlantsPage = componentLoader.add('BulkAddPlants', path.join(here, 'pages/BulkAddPlants'));
+// Sidebar-facing hub pages — these wrap the individual panels in Tabs
+// so the sidebar shows three uncluttered links instead of fifteen.
+const ConfigurePage = componentLoader.add('Configure', path.join(here, 'pages/Configure'));
+const PlantToolsPage = componentLoader.add('PlantTools', path.join(here, 'pages/PlantTools'));
+const OperationsPage = componentLoader.add('Operations', path.join(here, 'pages/Operations'));
+const ObservabilityPage = componentLoader.add('Observability', path.join(here, 'pages/Observability'));
+// Silence unused-locals — the loader still has to bundle these so the
+// hub pages can import them as React components.
+void EnrichmentConfigPage;
+void EnrichmentReviewPage;
+void EnrichmentAssistantPage;
+void BulkAddPlantsPage;
+void GardenIdentityPage;
+void PaymentProvidersPage;
+void CuratorConfigPage;
+void AdoptionConfigPage;
+void QrLabelConfigPage;
+void BulkQrPrintPage;
+void SettingsPage;
+void TranslationsPage;
+void BackupsPage;
+void ReconciliationPage;
+void IngestDocPage;
 
 // AdminJS 7's exported types are looser than its runtime accepts (page `label`,
 // `branding.softwareBrothers`, the static `AdminJS.bundle` helper, action
@@ -246,6 +475,14 @@ const adminConfig = new AdminJS({
       },
     },
   },
+  // Inject the BloomOulu design-system stylesheet on every admin route.
+  // The file is served by the onRequest hook at /admin/static/global.css
+  // from src/styles/global.css (dev) or dist/styles/global.css (prod —
+  // copied by the `build` script). See src/pages/shared/ui.tsx for the
+  // matching React primitives.
+  assets: {
+    styles: ['/admin/static/global.css'],
+  } as any,
   locale: { language: 'en', availableLanguages: ['en', 'fi'] },
   resources: [
     // ── Catalogue ─────────────────────────────────────────────────────
@@ -253,18 +490,70 @@ const adminConfig = new AdminJS({
       resource: { model: getModelByName('Plant'), client: prisma },
       options: {
         navigation: { name: 'Catalogue', icon: 'Plants' },
-        listProperties: ['nameEn', 'nameFi', 'redListStatus', 'bloomSeason', 'status', 'adopterCount'],
+        listProperties: [
+          'nameEn', 'nameFi', 'redListStatus', 'bloomSeason',
+          'gardenZone', 'status', 'adopterCount', 'fundedCents', 'scanCount',
+        ],
+        // Form rendered on /admin/resources/Plant/actions/new and /…/edit.
+        // Every column on the public site (web app PlantCard, kiosk plant
+        // page) and every field the open-data enrichment writes is listed
+        // here so a curator can fill them all without dropping into the
+        // database. Counters (adopterCount, fundedCents, scanCount) are
+        // intentionally read-only — see showProperties + filterProperties.
         editProperties: [
-          'slug', 'taxonId', 'nameEn', 'nameFi', 'nameSv',
-          'redListStatus', 'redListYear', 'origin', 'habitat', 'biome',
-          'bloomSeason', 'bloomWindow', 'story', 'quickFacts',
+          'slug', 'taxonId',
+          'nameEn', 'nameFi', 'nameSv',
+          'redListStatus', 'redListYear',
+          'origin', 'habitat', 'biome',
+          'bloomSeason', 'bloomWindow',
+          'story', 'quickFacts',
+          'primaryImageId',
           'microLat', 'microLng', 'gardenZone',
           'targetCents', 'status',
         ],
+        showProperties: [
+          'id', 'slug', 'taxonId',
+          'nameEn', 'nameFi', 'nameSv',
+          'redListStatus', 'redListYear',
+          'origin', 'habitat', 'biome',
+          'bloomSeason', 'bloomWindow',
+          'story', 'quickFacts',
+          'primaryImageId',
+          'microLat', 'microLng', 'gardenZone',
+          'targetCents', 'fundedCents', 'adopterCount', 'scanCount',
+          'status', 'createdAt', 'updatedAt',
+        ],
+        filterProperties: [
+          'nameEn', 'nameFi', 'nameSv', 'slug', 'taxonId',
+          'redListStatus', 'bloomSeason', 'status', 'gardenZone',
+          'redListYear', 'createdAt', 'updatedAt',
+        ],
         properties: {
-          targetCents: { description: 'Funding target for this plant, in cents (€500 = 50000)' },
-          status: { description: '"active" shows on the site; "hidden" keeps it off the public catalogue' },
-          story: { type: 'mixed', isArray: false, components: {} },
+          slug: { description: 'Short URL slug (kebab-case). Public URL is /plants/{slug}. Must be unique. Once published, do not rename — it breaks external links and QR labels.' },
+          taxonId: { description: 'Link to the canonical Taxon row. Create the Taxon first via Catalogue → Taxon → New if it doesn\'t exist yet.' },
+          nameEn: { description: 'Common name in English. Shown as the card title on the public site.' },
+          nameFi: { description: 'Common name in Finnish (Suomi).' },
+          nameSv: { description: 'Common name in Swedish (Svenska).' },
+          redListStatus: { description: 'IUCN / Finnish Red List category: CR · EN · VU · NT · LC · DD · NE · NA. Drives the badge on the public card.' },
+          redListYear: { description: 'Year the Red-List assessment was published. Defaults to 2019 (Suomen lajien uhanalaisuus).' },
+          origin: { description: 'Short native-origin description (≤ 240 chars). e.g. "Northern boreal forests, Fennoscandia". Auto-filled by GBIF if blank.' },
+          habitat: { description: 'Habitat type: mire, esker, alpine, riparian, etc. Free text.' },
+          biome: { description: 'Wide biome label: boreal, temperate, montane, arctic. Drives the home-page biome filter.' },
+          bloomSeason: { description: 'Primary season: Spring · Summer · Autumn · Winter · All. Shown as a badge and drives the homepage filter.' },
+          bloomWindow: { description: 'Free-text bloom window. e.g. "April – May". Optional.' },
+          story: { description: 'Long-form description per language. JSON: { "en": "…", "fi": "…", "sv": "…" }. Auto-filled by the open-data assistant (Wikipedia / EOL).', type: 'mixed', isArray: false, components: {} },
+          quickFacts: { description: 'Bulleted highlights on the public card. JSON array of { "labelKey": "origin", "value": "Häme esker" } objects.', type: 'mixed', isArray: true },
+          primaryImageId: { description: 'Hero image shown on the public card. Pick from PlantImage rows attached to this plant (create one first via Catalogue → Plant images → New). Auto-suggested by the enrichment worker.' },
+          microLat: { description: 'Latitude of the plant inside the garden (WGS84 decimal). Used for the kiosk wayfinder. Leave blank if not staked.' },
+          microLng: { description: 'Longitude of the plant inside the garden (WGS84 decimal).' },
+          gardenZone: { description: 'Internal zone code: "south esker bed", "romeo greenhouse pond", etc. Used by curators and the bulk-label printer, not shown to donors.' },
+          adopterCount: { description: 'Number of active adoptions. Denormalised counter — read-only; updated automatically when adoptions activate or cancel.' },
+          fundedCents: { description: 'Total amount donated (in cents). Read-only counter — sourced from Adoption rows.' },
+          scanCount: { description: 'Lifetime QR scan count. Read-only counter — bumped per insert via PlantsService.recordScan.' },
+          targetCents: { description: 'Funding target for this plant (in cents). e.g. €500 = 50000. Shown on the public card as a progress bar.' },
+          status: { description: '"active" shows on the public site; "hidden" keeps it off the catalogue; "retired" archives it but keeps the donor record.' },
+          createdAt: { description: 'Row creation timestamp. Read-only.' },
+          updatedAt: { description: 'Most-recent update timestamp. Read-only; bumped automatically.' },
         },
         sort: { sortBy: 'adopterCount', direction: 'desc' as const },
         actions: {
@@ -275,6 +564,12 @@ const adminConfig = new AdminJS({
             actionType: 'record',
             label: 'Enrich from open data',
             icon: 'Download',
+            // AdminJS 7 requires a `component` for any action with a
+            // dedicated route. Setting `false` tells AdminJS this is a
+            // handler-only action — run the handler, apply the
+            // returned `notice`, redirect back to the show page. No
+            // custom React component needed.
+            component: false,
             isAccessible: ({ currentAdmin }: { currentAdmin?: { role?: string } }) =>
               ['admin', 'curator'].includes(currentAdmin?.role as string),
             handler: enrichHandler(false),
@@ -283,6 +578,7 @@ const adminConfig = new AdminJS({
             actionType: 'record',
             label: 'Re-enrich (overwrite)',
             icon: 'RefreshCw',
+            component: false,
             guard:
               'Re-fetch story, origin, conservation status and photo from open data, ' +
               'replacing the current values. Continue?',
@@ -374,19 +670,29 @@ const adminConfig = new AdminJS({
             actionType: 'record',
             label: 'Cancel adoption',
             icon: 'X',
+            component: false,
             isAccessible: ({ currentAdmin }: { currentAdmin?: { role?: string } }) =>
               ['admin', 'finance'].includes(currentAdmin?.role as string),
             handler: async (_req: any, _res: any, ctx: any) => {
-              await prisma.adoption.update({
-                where: { id: ctx.record!.params['id'] },
-                data: { status: 'cancelled', cancelledAt: new Date() },
-              });
-              await prisma.auditLog.create({
-                data: {
-                  actorUserId: ctx.currentAdmin?.id ?? null,
-                  action: 'admin.adoption.cancel',
-                  resource: `Adoption/${ctx.record!.params['id']}`,
-                },
+              const adoptionId = ctx.record!.params['id'];
+              const actorUserId = ctx.currentAdmin?.id ?? null;
+              // One transaction: status flip + counter decrement +
+              // adoption.cancelled audit (via cancelAdoption) PLUS the
+              // admin-specific audit row that records WHO clicked it.
+              await prisma.$transaction(async (tx) => {
+                await cancelAdoption(
+                  tx,
+                  adoptionId,
+                  { reason: 'admin_cancel', cancelledAt: new Date() },
+                  actorUserId ?? undefined,
+                );
+                await tx.auditLog.create({
+                  data: {
+                    actorUserId,
+                    action: 'admin.adoption.cancel',
+                    resource: `Adoption/${adoptionId}`,
+                  },
+                });
               });
               return { record: ctx.record!.toJSON(ctx.currentAdmin) };
             },
@@ -445,6 +751,7 @@ const adminConfig = new AdminJS({
             actionType: 'record',
             label: 'Mark installed',
             icon: 'CheckCircle',
+            component: false,
             isAccessible: ({ currentAdmin }: { currentAdmin?: { role?: string } }) =>
               ['admin', 'curator'].includes(currentAdmin?.role as string),
             handler: async (_req: any, _res: any, ctx: any) => {
@@ -722,6 +1029,7 @@ const adminConfig = new AdminJS({
             actionType: 'record',
             label: 'Approve & execute',
             icon: 'Trash2',
+            component: false,
             isAccessible: ({ currentAdmin, record }: { currentAdmin?: { role?: string }; record?: any }) =>
               ['admin'].includes(currentAdmin?.role as string) && record?.params?.status === 'pending',
             handler: async (_req: any, _res: any, ctx: any) => {
@@ -752,6 +1060,7 @@ const adminConfig = new AdminJS({
             actionType: 'record',
             label: 'Reject (legal hold)',
             icon: 'X',
+            component: false,
             isAccessible: ({ currentAdmin, record }: { currentAdmin?: { role?: string }; record?: any }) =>
               ['admin'].includes(currentAdmin?.role as string) && record?.params?.status === 'pending',
             handler: async (_req: any, _res: any, ctx: any) => {
@@ -777,105 +1086,62 @@ const adminConfig = new AdminJS({
       },
     },
   ],
+  // Sidebar pages — kept deliberately small. Each entry below is a hub
+  // that contains tabs for related sub-workflows, so the sidebar stays
+  // under ten clicks even though the platform exposes 15+ admin panels.
+  //
+  // Sidebar order (intentional, top-to-bottom most-frequent first):
+  //   1. Plant tools  — daily curator workflow (Add / Review / Print / Ingest)
+  //   2. QR analytics — read-only QR scan funnel + top plants
+  //   3. Configure    — every system setting + translations + advanced
+  //   4. Operations   — bank reconciliation + backups
   pages: {
-    settings: {
-      label: 'Settings',
-      icon: 'Settings',
+    plantTools: {
+      label: 'Plant tools',
+      icon: 'Search',
       handler: async () => ({}),
-      component: SettingsPage,
-    },
-    translations: {
-      label: 'Translations',
-      icon: 'Globe',
-      handler: async () => ({}),
-      component: TranslationsPage,
-    },
-    backups: {
-      label: 'Backups',
-      icon: 'Save',
-      handler: async () => ({}),
-      component: BackupsPage,
-    },
-    reconciliation: {
-      label: 'Reconciliation',
-      icon: 'CheckCircle',
-      handler: async () => ({}),
-      component: ReconciliationPage,
+      component: PlantToolsPage,
     },
     qrMetrics: {
-      label: 'QR scans',
+      label: 'QR scan analytics',
       icon: 'BarChart2',
       handler: async () => ({}),
       component: QrMetricsPage,
     },
-    bulkQrPrint: {
-      label: 'Bulk QR print',
-      icon: 'Printer',
+    configure: {
+      label: 'Configure',
+      icon: 'Sliders',
       handler: async () => ({}),
-      component: BulkQrPrintPage,
+      component: ConfigurePage,
     },
-    enrichmentAssistant: {
-      label: 'Add plant (assistant)',
-      icon: 'Search',
+    operations: {
+      label: 'Operations',
+      icon: 'Tool',
       handler: async () => ({}),
-      component: EnrichmentAssistantPage,
+      component: OperationsPage,
     },
-    enrichmentReview: {
-      label: 'Enrichment review',
-      icon: 'CheckSquare',
+    observability: {
+      label: 'Observability',
+      icon: 'Activity',
       handler: async () => ({}),
-      component: EnrichmentReviewPage,
-    },
-    ingest: {
-      label: 'Ingest RAG doc',
-      icon: 'Plus',
-      handler: async () => ({}),
-      component: IngestDocPage,
-    },
-    // ── Configure: end-user-friendly pages grouped by domain.
-    //    Each renders apps/admin/src/pages/ConfigForm via a small
-    //    schema-only wrapper. Saves go through /admin/settings/batch.
-    gardenIdentity: {
-      label: 'Garden Identity',
-      icon: 'Tag',
-      handler: async () => ({}),
-      component: GardenIdentityPage,
-    },
-    paymentProviders: {
-      label: 'Payment Providers',
-      icon: 'CreditCard',
-      handler: async () => ({}),
-      component: PaymentProvidersPage,
-    },
-    curatorConfig: {
-      label: 'Curator & Ask',
-      icon: 'MessageCircle',
-      handler: async () => ({}),
-      component: CuratorConfigPage,
-    },
-    adoptionConfig: {
-      label: 'Adoption Knobs',
-      icon: 'Heart',
-      handler: async () => ({}),
-      component: AdoptionConfigPage,
-    },
-    qrLabelConfig: {
-      label: 'QR labels',
-      icon: 'Printer',
-      handler: async () => ({}),
-      component: QrLabelConfigPage,
-    },
-    enrichmentConfig: {
-      label: 'Enrichment',
-      icon: 'Globe',
-      handler: async () => ({}),
-      component: EnrichmentConfigPage,
+      component: ObservabilityPage,
     },
   },
 } as any);
 
 async function bootstrap() {
   const app = Fastify({ logger: true, trustProxy: true });
+
+  // Initialise the persistent event log before any hook runs so the
+  // first request that comes in is captured. installHttpHook hangs
+  // onRequest/onResponse listeners onto Fastify that auto-log every
+  // request with method/url/status/duration and a trace id.
+  initObservability(prisma);
+  installHttpHook(app);
+  obs.info('system', 'admin server starting', {
+    nodeEnv: process.env.NODE_ENV,
+    pid: process.pid,
+  });
 
   // Favicon shim. AdminJS's plugin registers a catch-all under /admin/*
   // that beats any sibling route, so an `app.get('/admin/static/favicon.ico')`
@@ -890,6 +1156,67 @@ async function bootstrap() {
       req.url === '/favicon.ico'
     ) {
       reply.header('cache-control', 'public, max-age=86400').code(204).send();
+      return;
+    }
+    // BloomOulu admin design-system stylesheet. Injected on every page
+    // via AdminJSOptions.assets.styles. Same onRequest-precedence
+    // workaround as the favicon shim — AdminJS's catch-all at /admin/*
+    // would otherwise swallow the route.
+    if (req.url === '/admin/static/global.css' && req.method === 'GET') {
+      reply
+        .header('content-type', 'text/css; charset=utf-8')
+        .header('cache-control', 'public, max-age=60')
+        .send(ADMIN_GLOBAL_CSS);
+      return;
+    }
+    // Same-origin proxy for the NestJS API. In production Caddy already
+    // routes /v1/* → api:4000 on the same hostname so browser calls are
+    // same-origin. In standalone dev the admin runs on :4100 and the API
+    // on :4000 — a direct browser call cross-ports, the API doesn't echo
+    // an Access-Control-Allow-Origin, and the browser blocks the request
+    // ("Failed to fetch"). Proxying here keeps the page code identical
+    // (relative URLs) in both environments. Forwards method, headers,
+    // and body; restreams the upstream response verbatim.
+    if (req.url?.startsWith('/v1/')) {
+      const apiUrl = (process.env.API_URL ?? 'http://localhost:4000').replace(/\/$/, '');
+      const target = `${apiUrl}${req.url}`;
+      const fwdHeaders: Record<string, string> = {};
+      for (const [k, v] of Object.entries(req.headers)) {
+        if (typeof v !== 'string') continue;
+        const lk = k.toLowerCase();
+        if (['host', 'connection', 'content-length'].includes(lk)) continue;
+        fwdHeaders[k] = v;
+      }
+      let body: Buffer | undefined;
+      if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method!)) {
+        body = await new Promise<Buffer>((resolve, reject) => {
+          const chunks: Buffer[] = [];
+          req.raw.on('data', (c) => chunks.push(Buffer.from(c as Uint8Array)));
+          req.raw.on('end', () => resolve(Buffer.concat(chunks)));
+          req.raw.on('error', reject);
+        });
+      }
+      try {
+        // undici accepts Buffer at runtime but the DOM-lib BodyInit type
+        // doesn't include it; cast through unknown for the proxy call.
+        const r = await fetch(target, {
+          method: req.method,
+          headers: fwdHeaders,
+          body: (body ? body.toString('utf8') : undefined) as BodyInit | undefined,
+        });
+        reply.code(r.status);
+        for (const [k, v] of r.headers) {
+          const lk = k.toLowerCase();
+          if (['transfer-encoding', 'connection', 'content-encoding', 'content-length'].includes(lk)) {
+            continue;
+          }
+          reply.header(k, v);
+        }
+        const buf = Buffer.from(await r.arrayBuffer());
+        reply.send(buf);
+      } catch (e) {
+        reply.code(502).send({ error: `API proxy failed: ${(e as Error).message}` });
+      }
       return;
     }
     // ── Manual RAG doc ingest ────────────────────────────────────────
@@ -999,6 +1326,373 @@ async function bootstrap() {
       }
       return;
     }
+    // Create a Plant row from the open-data assistant's gathered values.
+    // The assistant builds an object with { latinName, family, slug?,
+    // nameEn?, nameFi?, nameSv?, redListStatus?, origin?, storyEn?,
+    // imageUrl?, attribution?, licenseSpdx? }, the endpoint looks up
+    // (or creates) the Taxon then inserts a Plant + optional PlantImage,
+    // and the response is { id, slug } so the page can redirect the
+    // curator to the AdminJS edit form to finish up.
+    if (req.url === '/admin/plants/create-from-assistant' && req.method === 'POST') {
+      try {
+        const body = await new Promise<string>((resolve, reject) => {
+          const chunks: Buffer[] = [];
+          req.raw.on('data', (c) => chunks.push(Buffer.from(c as Uint8Array)));
+          req.raw.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+          req.raw.on('error', reject);
+        });
+        const dto = JSON.parse(body || '{}') as AssistantPlantDto;
+        const actor = (req as any).session?.adminUser?.id ?? null;
+        const result = await createPlantFromAssistantDto(dto, actor);
+        reply.send(result);
+      } catch (err) {
+        const msg = (err as Error).message;
+        reply.code(msg === 'latinName is required' ? 400 : 500).send({ error: msg });
+      }
+      return;
+    }
+
+    // ── Persistent bulk-add jobs ─────────────────────────────────────
+    //
+    // POST   /admin/plants/bulk-jobs                   → create + kick off enrichment
+    // GET    /admin/plants/bulk-jobs                   → list recent jobs (latest 20)
+    // GET    /admin/plants/bulk-jobs/{id}              → fetch one job's full state
+    // POST   /admin/plants/bulk-jobs/{id}/create-ready → kick off creation phase
+    // POST   /admin/plants/bulk-jobs/{id}/cancel       → abort inflight processing
+    // POST   /admin/plants/bulk-jobs/{id}/retry-row    → re-queue a failed row's enrichment
+    // POST   /admin/plants/bulk-jobs/{id}/skip-row     → mark a row as skipped (not created)
+    // POST   /admin/plants/bulk-jobs/{id}/toggle-keep  → flip a row's keep flag
+    // DELETE /admin/plants/bulk-jobs/{id}              → delete the job row
+    if (req.url === '/admin/plants/bulk-jobs' && req.method === 'POST') {
+      try {
+        const body = await new Promise<string>((resolve, reject) => {
+          const chunks: Buffer[] = [];
+          req.raw.on('data', (c) => chunks.push(Buffer.from(c as Uint8Array)));
+          req.raw.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+          req.raw.on('error', reject);
+        });
+        const dto = JSON.parse(body || '{}') as { items?: Array<Partial<BulkAddJobRow>> };
+        if (!Array.isArray(dto.items) || dto.items.length === 0) {
+          reply.code(400).send({ error: 'items array is required' });
+          return;
+        }
+        const items: BulkAddJobRow[] = dto.items.map((r, i) => ({
+          id: r.id ?? `row-${i}-${Math.random().toString(36).slice(2, 8)}`,
+          latinName: (r.latinName ?? '').toString().trim(),
+          nameEn: r.nameEn?.toString(),
+          nameFi: r.nameFi?.toString(),
+          nameSv: r.nameSv?.toString(),
+          family: r.family?.toString(),
+          status: 'queued',
+          keep: { story: true, origin: true, status: true, image: true },
+        }));
+        const job = await prisma.bulkAddJob.create({
+          data: {
+            createdByUser: (req as any).session?.adminUser?.id ?? null,
+            status: 'running',
+            phase: 'enrich',
+            items: items as unknown as object,
+            totals: bulkAddJobTotals(items) as unknown as object,
+          },
+        });
+        // Fire-and-forget. The processor persists progress to the row.
+        void runBulkAddEnrichmentPhase(prisma, job.id);
+        reply.send({ id: job.id });
+      } catch (err) {
+        reply.code(500).send({ error: (err as Error).message });
+      }
+      return;
+    }
+    if (req.url === '/admin/plants/bulk-jobs' && req.method === 'GET') {
+      try {
+        const jobs = await prisma.bulkAddJob.findMany({
+          orderBy: { createdAt: 'desc' },
+          take: 20,
+          select: {
+            id: true,
+            status: true,
+            phase: true,
+            totals: true,
+            createdAt: true,
+            updatedAt: true,
+            createdByUser: true,
+          },
+        });
+        reply.send({ jobs });
+      } catch (err) {
+        reply.code(500).send({ error: (err as Error).message });
+      }
+      return;
+    }
+    if (req.url?.startsWith('/admin/plants/bulk-jobs/') && req.method === 'GET') {
+      const id = req.url.slice('/admin/plants/bulk-jobs/'.length).split('?')[0]!;
+      try {
+        const job = await prisma.bulkAddJob.findUnique({ where: { id } });
+        if (!job) {
+          reply.code(404).send({ error: 'not found' });
+          return;
+        }
+        reply.send({ ...job, running: isBulkAddJobRunning(id) });
+      } catch (err) {
+        reply.code(500).send({ error: (err as Error).message });
+      }
+      return;
+    }
+    if (
+      req.url?.startsWith('/admin/plants/bulk-jobs/') &&
+      req.url.endsWith('/create-ready') &&
+      req.method === 'POST'
+    ) {
+      const id = req.url.slice('/admin/plants/bulk-jobs/'.length, -'/create-ready'.length);
+      try {
+        const actor = (req as any).session?.adminUser?.id ?? null;
+        // Fire-and-forget — UI polls.
+        void runBulkAddCreationPhase(prisma, id, async (row) => {
+          const dto = jobRowToCreateDto(row);
+          return createPlantFromAssistantDto(dto, actor);
+        });
+        reply.send({ ok: true });
+      } catch (err) {
+        reply.code(500).send({ error: (err as Error).message });
+      }
+      return;
+    }
+    if (
+      req.url?.startsWith('/admin/plants/bulk-jobs/') &&
+      req.url.endsWith('/cancel') &&
+      req.method === 'POST'
+    ) {
+      const id = req.url.slice('/admin/plants/bulk-jobs/'.length, -'/cancel'.length);
+      const stopped = cancelBulkAddJob(id);
+      // If the job wasn't inflight in this process (e.g. the user
+      // pressed Cancel after a restart), just mark the DB row.
+      if (!stopped) {
+        try {
+          const job = await prisma.bulkAddJob.findUnique({ where: { id } });
+          if (job && job.status === 'running') {
+            await prisma.bulkAddJob.update({
+              where: { id },
+              data: { status: 'cancelled' },
+            });
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+      reply.send({ ok: true });
+      return;
+    }
+    if (
+      req.url?.startsWith('/admin/plants/bulk-jobs/') &&
+      (req.url.endsWith('/retry-row') ||
+        req.url.endsWith('/skip-row') ||
+        req.url.endsWith('/toggle-keep')) &&
+      req.method === 'POST'
+    ) {
+      const action = req.url.endsWith('/retry-row')
+        ? 'retry-row'
+        : req.url.endsWith('/skip-row')
+          ? 'skip-row'
+          : 'toggle-keep';
+      const id = req.url.slice(
+        '/admin/plants/bulk-jobs/'.length,
+        -(`/${action}`.length),
+      );
+      try {
+        const body = await new Promise<string>((resolve, reject) => {
+          const chunks: Buffer[] = [];
+          req.raw.on('data', (c) => chunks.push(Buffer.from(c as Uint8Array)));
+          req.raw.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+          req.raw.on('error', reject);
+        });
+        const dto = JSON.parse(body || '{}') as { rowId?: string; field?: string };
+        const job = await prisma.bulkAddJob.findUnique({ where: { id } });
+        if (!job) {
+          reply.code(404).send({ error: 'not found' });
+          return;
+        }
+        const items: BulkAddJobRow[] = (job.items as unknown as BulkAddJobRow[]).map((r) => {
+          if (r.id !== dto.rowId) return r;
+          if (action === 'retry-row') return { ...r, status: 'queued' as const, error: undefined };
+          if (action === 'skip-row')
+            return {
+              ...r,
+              status: (r.status === 'skipped' ? 'ready' : 'skipped') as BulkAddJobRow['status'],
+            };
+          if (action === 'toggle-keep' && dto.field) {
+            const keep = r.keep ?? { story: true, origin: true, status: true, image: true };
+            return {
+              ...r,
+              keep: { ...keep, [dto.field]: !keep[dto.field as keyof typeof keep] },
+            };
+          }
+          return r;
+        });
+        await prisma.bulkAddJob.update({
+          where: { id },
+          data: {
+            items: items as unknown as object,
+            totals: bulkAddJobTotals(items) as unknown as object,
+          },
+        });
+        // If we just re-queued a row and no enrichment phase is in
+        // flight, kick one off so the row actually gets fetched.
+        if (action === 'retry-row' && !isBulkAddJobRunning(id)) {
+          void runBulkAddEnrichmentPhase(prisma, id);
+        }
+        reply.send({ ok: true });
+      } catch (err) {
+        reply.code(500).send({ error: (err as Error).message });
+      }
+      return;
+    }
+    if (req.url?.startsWith('/admin/plants/bulk-jobs/') && req.method === 'DELETE') {
+      const id = req.url.slice('/admin/plants/bulk-jobs/'.length).split('?')[0]!;
+      try {
+        cancelBulkAddJob(id);
+        await prisma.bulkAddJob.delete({ where: { id } });
+        reply.send({ ok: true });
+      } catch (err) {
+        reply.code(500).send({ error: (err as Error).message });
+      }
+      return;
+    }
+
+    // ── Observability ────────────────────────────────────────────────
+    //
+    // GET /admin/observability/events?severity=&source=&q=&traceId=&since=&until=&limit=
+    // GET /admin/observability/events/{id}
+    // GET /admin/observability/kpis
+    if (req.url?.startsWith('/admin/observability/events/') && req.method === 'GET') {
+      const id = req.url.slice('/admin/observability/events/'.length).split('?')[0]!;
+      try {
+        const event = await prisma.observabilityEvent.findUnique({ where: { id } });
+        if (!event) {
+          reply.code(404).send({ error: 'not found' });
+          return;
+        }
+        // Pull adjacent events with the same trace id so the curator
+        // sees the full picture of what surrounded the chosen event.
+        const trace = event.traceId
+          ? await prisma.observabilityEvent.findMany({
+              where: { traceId: event.traceId },
+              orderBy: { ts: 'asc' },
+              take: 200,
+            })
+          : [];
+        reply.send({ event, trace });
+      } catch (err) {
+        reply.code(500).send({ error: (err as Error).message });
+      }
+      return;
+    }
+    if (req.url?.startsWith('/admin/observability/events') && req.method === 'GET') {
+      try {
+        const u = new URL(req.url, 'http://x');
+        const severity = u.searchParams.get('severity') ?? '';
+        const source = u.searchParams.get('source') ?? '';
+        const q = u.searchParams.get('q')?.trim() ?? '';
+        const traceId = u.searchParams.get('traceId')?.trim() ?? '';
+        const since = u.searchParams.get('since');
+        const until = u.searchParams.get('until');
+        const limit = Math.min(500, Math.max(1, parseInt(u.searchParams.get('limit') ?? '200', 10) || 200));
+        const where: any = {};
+        if (severity) where.severity = severity;
+        if (source) where.source = source;
+        if (traceId) where.traceId = traceId;
+        if (since || until) {
+          where.ts = {};
+          if (since) where.ts.gte = new Date(since);
+          if (until) where.ts.lte = new Date(until);
+        }
+        if (q) where.message = { contains: q, mode: 'insensitive' };
+        const [events, total] = await Promise.all([
+          prisma.observabilityEvent.findMany({
+            where,
+            orderBy: { ts: 'desc' },
+            take: limit,
+          }),
+          prisma.observabilityEvent.count({ where }),
+        ]);
+        reply.send({ events, total, limit });
+      } catch (err) {
+        reply.code(500).send({ error: (err as Error).message });
+      }
+      return;
+    }
+    if (req.url === '/admin/observability/kpis' && req.method === 'GET') {
+      try {
+        const sinceHour = new Date(Date.now() - 60 * 60 * 1000);
+        const sinceDay = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        const [
+          total24h,
+          errors24h,
+          warns24h,
+          errorsHour,
+          recent5xx,
+          httpAvgMs,
+          bySource,
+          bySeverity,
+        ] = await Promise.all([
+          prisma.observabilityEvent.count({ where: { ts: { gte: sinceDay } } }),
+          prisma.observabilityEvent.count({
+            where: { ts: { gte: sinceDay }, severity: { in: ['error', 'fatal'] } },
+          }),
+          prisma.observabilityEvent.count({
+            where: { ts: { gte: sinceDay }, severity: 'warn' },
+          }),
+          prisma.observabilityEvent.count({
+            where: { ts: { gte: sinceHour }, severity: { in: ['error', 'fatal'] } },
+          }),
+          prisma.observabilityEvent.findMany({
+            where: { ts: { gte: sinceDay }, severity: { in: ['error', 'fatal'] } },
+            orderBy: { ts: 'desc' },
+            take: 10,
+          }),
+          prisma.observabilityEvent.aggregate({
+            where: { source: 'http', ts: { gte: sinceHour }, durationMs: { not: null } },
+            _avg: { durationMs: true },
+            _max: { durationMs: true },
+            _count: { _all: true },
+          }),
+          prisma.observabilityEvent.groupBy({
+            by: ['source'],
+            where: { ts: { gte: sinceDay } },
+            _count: { _all: true },
+          }),
+          prisma.observabilityEvent.groupBy({
+            by: ['severity'],
+            where: { ts: { gte: sinceDay } },
+            _count: { _all: true },
+          }),
+        ]);
+        const memory = process.memoryUsage();
+        reply.send({
+          process: {
+            uptimeSec: Math.round(process.uptime()),
+            pid: process.pid,
+            nodeVersion: process.version,
+            memRssMb: Math.round(memory.rss / 1024 / 1024),
+            memHeapUsedMb: Math.round(memory.heapUsed / 1024 / 1024),
+            memHeapTotalMb: Math.round(memory.heapTotal / 1024 / 1024),
+          },
+          last24h: { total: total24h, errors: errors24h, warns: warns24h },
+          lastHour: { errors: errorsHour },
+          http: {
+            requestsLastHour: httpAvgMs._count?._all ?? 0,
+            avgMsLastHour: httpAvgMs._avg?.durationMs ?? 0,
+            maxMsLastHour: httpAvgMs._max?.durationMs ?? 0,
+          },
+          bySource: bySource.map((b) => ({ source: b.source, count: b._count._all })),
+          bySeverity: bySeverity.map((b) => ({ severity: b.severity, count: b._count._all })),
+          recentErrors: recent5xx,
+        });
+      } catch (err) {
+        reply.code(500).send({ error: (err as Error).message });
+      }
+      return;
+    }
+
     if (req.url === '/admin/manual-docs' && req.method === 'GET') {
       try {
         const rows = await prisma.ragDocument.findMany({
@@ -1421,6 +2115,41 @@ async function bootstrap() {
       return;
     }
   });
+
+  // Any persistent bulk-add jobs that were 'running' when the admin
+  // process died need to be cleaned up so the curator sees an accurate
+  // state when they return. See bulk-add-job.ts.
+  try {
+    await repairStaleBulkAddJobs(prisma);
+  } catch (err) {
+    app.log.warn(`[bulk-add] repairStaleJobs failed: ${(err as Error).message}`);
+  }
+
+  // Belt-and-braces RAG drift guard. Runs once at startup (catches up
+  // any writes that landed while the admin process was down) and every
+  // 6 hours thereafter. The hook in the Prisma extension above does
+  // the live re-ingest; this just heals any miss.
+  const RECONCILE_INTERVAL_MS = 6 * 60 * 60 * 1000;
+  void reconcilePlantRagDocuments(prisma).catch((err) =>
+    app.log.warn(`[rag] startup reconcile failed: ${(err as Error).message}`),
+  );
+  setInterval(() => {
+    void reconcilePlantRagDocuments(prisma).catch((err) =>
+      app.log.warn(`[rag] periodic reconcile failed: ${(err as Error).message}`),
+    );
+  }, RECONCILE_INTERVAL_MS).unref();
+
+  // AdminJS 7 only bundles user components when NODE_ENV=production OR
+  // adminConfig.watch() is called. In dev we MUST opt in or the browser
+  // gets the default welcome page instead of the BloomOulu Dashboard, and
+  // every custom page falls back to AdminJS' built-in placeholder. In
+  // prod the bundle is written once by initialize(); locally the watch
+  // call also picks up source-file edits without a server restart.
+  if (process.env.NODE_ENV === 'production') {
+    await adminConfig.initialize();
+  } else {
+    void adminConfig.watch();
+  }
 
   // The @adminjs/fastify peer-types target an older Fastify generic shape;
   // cast `app` so the call site compiles. The runtime behaviour is unchanged.

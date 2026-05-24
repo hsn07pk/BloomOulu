@@ -26,7 +26,7 @@ import type { Job } from 'bullmq';
 import { getWebUrl } from '@bloomoulu/constants';
 import { Logger } from '@nestjs/common';
 import { v7 as uuidv7 } from 'uuid';
-import { prisma } from '@bloomoulu/db';
+import { prisma, cancelAdoption, recoverAdoption } from '@bloomoulu/db';
 import { enqueueEmail, enqueuePaymentRetry } from '../enqueue.js';
 
 const logger = new Logger('PaymentRetry');
@@ -92,23 +92,12 @@ export async function processPaymentRetry(job: Job<PaymentRetryJob>): Promise<vo
       logger.log(`Cancellation skipped: ${adoption.id} is now ${adoption.status}`);
       return;
     }
-    await prisma.$transaction(async (tx) => {
-      await tx.adoption.update({
-        where: { id: adoption.id },
-        data: {
-          status: 'cancelled',
-          cancelledAt: new Date(),
-          cancellationReason: 'dunning_grace_expired',
-        },
-      });
-      await tx.auditLog.create({
-        data: {
-          action: 'adoption.cancelled',
-          resource: `Adoption/${adoption.id}`,
-          after: { reason: 'dunning_grace_expired', attempts: 3 },
-        },
-      });
-    });
+    await prisma.$transaction((tx) =>
+      cancelAdoption(tx, adoption.id, {
+        reason: 'dunning_grace_expired',
+        cancelledAt: new Date(),
+      }),
+    );
     await enqueueEmail({
       template: 'dunning-cancelled',
       to: adoption.donor.email,
@@ -132,19 +121,7 @@ export async function processPaymentRetry(job: Job<PaymentRetryJob>): Promise<vo
   const result = await attemptCharge(adoption);
 
   if (result.ok) {
-    await prisma.$transaction(async (tx) => {
-      await tx.adoption.update({
-        where: { id: adoption.id },
-        data: { status: 'active' },
-      });
-      await tx.auditLog.create({
-        data: {
-          action: 'adoption.dunning.recovered',
-          resource: `Adoption/${adoption.id}`,
-          after: { attempt },
-        },
-      });
-    });
+    await prisma.$transaction((tx) => recoverAdoption(tx, adoption.id));
     logger.log(`Adoption ${adoption.id} recovered on attempt ${attempt}`);
     return;
   }

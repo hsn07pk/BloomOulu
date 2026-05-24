@@ -16,6 +16,7 @@ vi.mock('../src/modules/jobs/enqueue.js', () => ({
 }));
 
 import { PaymentsService } from '../src/modules/payments/payments.service.js';
+import { AdoptionLifecycleService } from '../src/modules/adoptions/adoption-lifecycle.service.js';
 
 // vitest uses esbuild which drops `emitDecoratorMetadata`, so Nest's DI
 // container can't introspect the constructor. We bypass DI entirely and
@@ -39,8 +40,14 @@ beforeAll(async () => {
   svc = new PaymentsService(
     prisma as any,
     { log: vi.fn(async () => {}) } as any,
-    { get: () => ({ vat: { donationRateBp: 0 } }) } as any,
+    {
+      get: () => ({
+        vat: { donationRateBp: 0 },
+        adoption: { plaqueEligibleTiers: ['endangered', 'corporate'] },
+      }),
+    } as any,
     { enabledProviders: () => [], for: () => null as any } as any,
+    new AdoptionLifecycleService(),
   );
 });
 

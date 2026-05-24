@@ -13,6 +13,7 @@ import { AuthModule } from './modules/auth/auth.module.js';
 import { UsersModule } from './modules/users/users.module.js';
 import { PlantsModule } from './modules/plants/plants.module.js';
 import { AdoptionsModule } from './modules/adoptions/adoptions.module.js';
+import { AdoptionLifecycleModule } from './modules/adoptions/adoption-lifecycle.module.js';
 import { PaymentsModule } from './modules/payments/payments.module.js';
 import { WebhooksModule } from './modules/webhooks/webhooks.module.js';
 import { ReceiptsModule } from './modules/receipts/receipts.module.js';
@@ -90,6 +91,7 @@ const isProd = process.env.NODE_ENV === 'production';
     AuthModule,
     UsersModule,
     PlantsModule,
+    AdoptionLifecycleModule,
     AdoptionsModule,
     PaymentsModule,
     WebhooksModule,

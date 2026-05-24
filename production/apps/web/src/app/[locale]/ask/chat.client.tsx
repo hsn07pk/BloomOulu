@@ -45,6 +45,11 @@ interface Citation {
   title?: string;
   page?: string | null;
   year?: number | null;
+  // Per-plant citations resolve to the Plant.slug and its primary photo
+  // so the chat bubble can render the image + a link to the plant page.
+  plantSlug?: string | null;
+  sourceUrl?: string | null;
+  image?: { url: string; attribution: string; licenseSpdx: string } | null;
 }
 
 interface Turn {
@@ -571,6 +576,13 @@ export default function AskChat({
                   {tn.text}
                   {tn.streaming && <span aria-hidden="true">▍</span>}
                 </p>
+                {/* Plant photo gallery — pulled from per-plant citations
+                 *  that came back with an image. Multiple distinct plants
+                 *  in the answer each get one card; duplicates dedupe by
+                 *  slug. */}
+                {tn.role === 'assistant' && !tn.streaming && (tn.citations?.length ?? 0) > 0 && (
+                  <PlantImageGallery citations={tn.citations!} locale={locale} />
+                )}
                 {/* Source pills hidden for now (user request). The
                  *  citations payload is still received so we can re-enable
                  *  them later without touching the API. */}
@@ -868,6 +880,186 @@ function WelcomeBubble({
           </ul>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Inline image gallery rendered right under an assistant answer.
+ *
+ * Pulls the primary photo from every per-plant citation the API returned.
+ * Dedupes by slug, caps at 4 cards so a long answer doesn't dominate the
+ * thread. Layout: a single hero card when there's one plant, a 2-up
+ * responsive grid otherwise (1-col on narrow screens). Clicking a card
+ * opens the full plant page in a new tab; clicking the open-in-new
+ * affordance is the explicit call-out for that intent.
+ */
+function PlantImageGallery({ citations, locale }: { citations: Citation[]; locale: Locale }) {
+  const seen = new Set<string>();
+  // Only render images whose URL is on our own public bucket. ~226
+  // legacy PlantImage rows from the bulk seed still point directly at
+  // upload.wikimedia.org/.../*.jpg — and many of those URLs 404 because
+  // the file path was wrong at seed time. Rendering them produces a
+  // broken-image icon for the donor. A separate rehost backfill script
+  // will move salvageable ones into our bucket and purge the rest, but
+  // until then the chat must defend against showing broken cards.
+  const isHostedUrl = (url: string) =>
+    /\/bloomoulu-public\//.test(url) ||
+    url.startsWith('http://localhost:9000/') ||
+    url.startsWith('http://minio:9000/');
+  const items = citations
+    .filter((c): c is Citation & { image: NonNullable<Citation['image']>; plantSlug: string } => {
+      if (!c.plantSlug || !c.image?.url) return false;
+      if (!isHostedUrl(c.image.url)) return false;
+      if (seen.has(c.plantSlug)) return false;
+      seen.add(c.plantSlug);
+      return true;
+    })
+    .slice(0, 4);
+  if (items.length === 0) return null;
+  const single = items.length === 1;
+  const label = locale === 'fi' ? 'kasvi kokoelmasta' : locale === 'sv' ? 'växt från samlingen' : 'plant from the collection';
+  return (
+    <div
+      style={{
+        marginTop: 14,
+        display: 'grid',
+        gridTemplateColumns: single ? '1fr' : 'repeat(auto-fill, minmax(min(100%, 240px), 1fr))',
+        gap: 12,
+      }}
+      role="list"
+      aria-label={`${items.length} ${label}${items.length === 1 ? '' : 's'}`}
+    >
+      {items.map((c) => {
+        const latin = c.plantSlug.replace(/-/g, ' ').replace(/\b\w/, (m) => m.toUpperCase());
+        const display = c.title && c.title !== c.plantSlug ? c.title : latin;
+        return (
+          <a
+            key={c.plantSlug}
+            href={`/${locale}/plants/${c.plantSlug}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="bo-plant-card"
+            role="listitem"
+            aria-label={`${display} — open plant page`}
+            style={{
+              position: 'relative',
+              display: 'block',
+              background: 'var(--paper, #fff)',
+              border: '1px solid var(--line)',
+              borderRadius: 14,
+              overflow: 'hidden',
+              textDecoration: 'none',
+              color: 'inherit',
+              boxShadow: '0 1px 2px rgba(15,30,15,0.04)',
+              transition: 'transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease',
+            }}
+          >
+            <div
+              style={{
+                position: 'relative',
+                width: '100%',
+                height: single ? 280 : 180,
+                background: 'var(--sage-pale, #eef2ea)',
+                overflow: 'hidden',
+              }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={c.image.url}
+                alt={display}
+                loading="lazy"
+                className="bo-plant-card__img"
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                  transition: 'transform 360ms ease',
+                }}
+              />
+              <div
+                aria-hidden="true"
+                style={{
+                  position: 'absolute',
+                  inset: 'auto 0 0 0',
+                  height: 64,
+                  background:
+                    'linear-gradient(to top, rgba(0,0,0,0.42) 0%, rgba(0,0,0,0) 100%)',
+                  pointerEvents: 'none',
+                }}
+              />
+              <span
+                aria-hidden="true"
+                style={{
+                  position: 'absolute',
+                  top: 10,
+                  right: 10,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 28,
+                  height: 28,
+                  borderRadius: 999,
+                  background: 'rgba(255,255,255,0.92)',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.18)',
+                  color: 'var(--forest)',
+                  fontSize: 13,
+                  fontWeight: 600,
+                }}
+                title="Open plant page in a new tab"
+              >
+                ↗
+              </span>
+            </div>
+            <div style={{ padding: '12px 14px 14px' }}>
+              <div
+                className="serif"
+                style={{ fontSize: 16, lineHeight: 1.25, color: 'var(--forest)' }}
+              >
+                {display}
+              </div>
+              <div
+                style={{
+                  marginTop: 4,
+                  fontStyle: 'italic',
+                  fontSize: 12.5,
+                  color: 'var(--ink-mute, #555)',
+                }}
+              >
+                {latin}
+              </div>
+              <div
+                className="tiny"
+                style={{
+                  marginTop: 8,
+                  color: 'var(--ink-mute, #666)',
+                  fontSize: 11,
+                  lineHeight: 1.4,
+                  display: 'inline-flex',
+                  gap: 6,
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                }}
+              >
+                <span
+                  style={{
+                    display: 'inline-block',
+                    padding: '2px 8px',
+                    borderRadius: 999,
+                    background: 'var(--sage-pale, #eef2ea)',
+                    color: 'var(--forest)',
+                    fontWeight: 600,
+                  }}
+                >
+                  {c.image.licenseSpdx}
+                </span>
+                <span style={{ opacity: 0.85 }}>{c.image.attribution}</span>
+              </div>
+            </div>
+          </a>
+        );
+      })}
     </div>
   );
 }
