@@ -96,6 +96,19 @@ export class PlantsController {
    * tolerance. Active plants only — the index pre-filters by status so a
    * single index scan answers the query.
    */
+  /**
+   * Public count of catalogued plants — feeds the homepage hero stat tile.
+   *
+   * Declared BEFORE @Get(':slug') so it matches as a static route. Defaults
+   * to active plants only so the hero number is the user-facing collection,
+   * not retired records. count(*) on the `status` partial index is cheap.
+   */
+  @Get('count')
+  async count(@Query('status') status: string = 'active') {
+    const total = await this.prisma.plant.count({ where: { status } });
+    return { total };
+  }
+
   @Get('search')
   async search(
     @Query('q') q: string,
