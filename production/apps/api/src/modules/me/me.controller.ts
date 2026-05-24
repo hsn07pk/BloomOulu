@@ -39,6 +39,19 @@ const PatchProfile = z.object({
   marketingOptIn: z.boolean().optional(),
 });
 
+/**
+ * Per-user accessibility preferences. Lives under
+ * `User.preferences.a11y` as a JSON sub-object. All fields optional; the
+ * client sends only what changed, server merges. Closed enum so the
+ * Json column can't drift into junk values.
+ */
+const A11yPrefs = z.object({
+  textSize: z.enum(['small', 'normal', 'large']).optional(),
+  contrast: z.enum(['normal', 'high']).optional(),
+  motion: z.enum(['normal', 'reduced']).optional(),
+});
+type A11yPrefs = z.infer<typeof A11yPrefs>;
+
 @Controller('me')
 @Roles('donor', 'curator', 'finance', 'admin')
 export class MeController {
@@ -111,6 +124,66 @@ export class MeController {
       },
     });
     return updated;
+  }
+
+  /**
+   * Read the donor's accessibility preferences. Empty object when the user
+   * has never opened the a11y panel yet — the client treats missing fields
+   * as "normal" and lets localStorage be authoritative until the user picks
+   * something.
+   */
+  @Get('a11y')
+  async getA11y(@CurrentUser() actor: AuthenticatedUser): Promise<A11yPrefs> {
+    const userId = actor.sub;
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { preferences: true },
+    });
+    if (!user) throw new NotFoundException();
+    const prefs = (typeof user.preferences === 'object' && user.preferences !== null
+      ? (user.preferences as Record<string, unknown>)
+      : {}) as Record<string, unknown>;
+    const a11y = (typeof prefs['a11y'] === 'object' && prefs['a11y'] !== null
+      ? (prefs['a11y'] as Record<string, unknown>)
+      : {}) as Record<string, unknown>;
+    // Defensive parse — the JSON column could in theory contain anything
+    // from older clients; A11yPrefs strips unknown fields and rejects junk.
+    const parsed = A11yPrefs.safeParse(a11y);
+    return parsed.success ? parsed.data : {};
+  }
+
+  /**
+   * Merge accessibility preferences into the user's preferences JSON.
+   * Sparse — clients send only changed fields. Each call is one update
+   * statement; no audit log entry (these are personal display choices,
+   * not financial / GDPR-sensitive data).
+   */
+  @Patch('a11y')
+  async patchA11y(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Body(new ZodValidationPipe(A11yPrefs)) body: A11yPrefs,
+  ): Promise<A11yPrefs> {
+    const userId = actor.sub;
+    const before = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { preferences: true },
+    });
+    if (!before) throw new NotFoundException();
+    const prefs = (typeof before.preferences === 'object' && before.preferences !== null
+      ? (before.preferences as Record<string, unknown>)
+      : {}) as Record<string, unknown>;
+    const currentA11y = (typeof prefs['a11y'] === 'object' && prefs['a11y'] !== null
+      ? (prefs['a11y'] as Record<string, unknown>)
+      : {}) as Record<string, unknown>;
+    const nextA11y = { ...currentA11y, ...body };
+    const nextPrefs = { ...prefs, a11y: nextA11y };
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { preferences: nextPrefs as never },
+    });
+    // Return the merged shape so the client doesn't have to refetch.
+    const parsed = A11yPrefs.safeParse(nextA11y);
+    return parsed.success ? parsed.data : {};
   }
 
   @Get('saved')

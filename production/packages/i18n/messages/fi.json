@@ -347,5 +347,17 @@
     "accessibility": "Saavutettavuusseloste",
     "contact": "Yhteystiedot",
     "fundsFlow": "Mihin rahasi käytetään"
+  },
+  "A11y": {
+    "title": "Saavutettavuus",
+    "open": "Avaa saavutettavuusasetukset",
+    "close": "Sulje",
+    "textSize": "Tekstin koko",
+    "textSizeSmall": "Pieni",
+    "textSizeNormal": "Normaali",
+    "textSizeLarge": "Suuri",
+    "highContrast": "Suuri kontrasti",
+    "reduceMotion": "Vähennä liikettä",
+    "readStatement": "Lue saavutettavuusseloste"
   }
 }

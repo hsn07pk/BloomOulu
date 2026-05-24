@@ -347,5 +347,17 @@
     "accessibility": "Tillgänglighetsutlåtande",
     "contact": "Kontakt",
     "fundsFlow": "Vart pengarna går"
+  },
+  "A11y": {
+    "title": "Tillgänglighet",
+    "open": "Öppna tillgänglighetsinställningar",
+    "close": "Stäng",
+    "textSize": "Textstorlek",
+    "textSizeSmall": "Liten",
+    "textSizeNormal": "Normal",
+    "textSizeLarge": "Stor",
+    "highContrast": "Hög kontrast",
+    "reduceMotion": "Minska rörelse",
+    "readStatement": "Läs tillgänglighetsutlåtande"
   }
 }
