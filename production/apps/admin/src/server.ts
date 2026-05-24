@@ -2276,7 +2276,10 @@ async function bootstrap() {
     return { ok: true, queued: true };
   });
 
-  const port = parseInt(process.env.PORT ?? '4100', 10);
+  // Prefer ADMIN_PORT so we don't collide with API's PORT when both run from
+  // the same monorepo .env in `pnpm dev`. Docker containers don't set PORT
+  // for admin, so the default still holds in prod.
+  const port = parseInt(process.env.ADMIN_PORT ?? '4100', 10);
   await app.listen({ port, host: '0.0.0.0' });
   console.log(`Admin listening on :${port}/admin`);
 }
