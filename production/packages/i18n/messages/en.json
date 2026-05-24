@@ -87,7 +87,21 @@
     "audio": "Listen to the story",
     "modeAdult": "Adult mode",
     "modeKid": "Kid mode",
-    "modeSchool": "School mode"
+    "modeSchool": "School mode",
+    "statsTitle": "Community engagement",
+    "statsVisits": "Visits",
+    "statsSaved": "Saved",
+    "statsLastAdopted": "Last adopted",
+    "statsLastAdoptedNever": "No adoptions yet",
+    "statsQuestions": "Questions asked",
+    "timeJustNow": "just now",
+    "timeMinutesAgo": "{n} min ago",
+    "timeHoursAgo": "{n} h ago",
+    "timeYesterday": "yesterday",
+    "timeDaysAgo": "{n} days ago",
+    "timeWeeksAgo": "{n} weeks ago",
+    "timeMonthsAgo": "{n} months ago",
+    "timeYearsAgo": "{n} years ago"
   },
   "Adopt": {
     "title": "Adopt a plant",

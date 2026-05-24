@@ -87,7 +87,21 @@
     "audio": "Kuuntele tarina",
     "modeAdult": "Aikuisille",
     "modeKid": "Lapsille",
-    "modeSchool": "Kouluille"
+    "modeSchool": "Kouluille",
+    "statsTitle": "Yhteisön kiinnostus",
+    "statsVisits": "Käyntiä",
+    "statsSaved": "Tallennettu",
+    "statsLastAdopted": "Adoptoitu viimeksi",
+    "statsLastAdoptedNever": "Ei vielä adoptioita",
+    "statsQuestions": "Kysymyksiä esitetty",
+    "timeJustNow": "juuri nyt",
+    "timeMinutesAgo": "{n} min sitten",
+    "timeHoursAgo": "{n} t sitten",
+    "timeYesterday": "eilen",
+    "timeDaysAgo": "{n} päivää sitten",
+    "timeWeeksAgo": "{n} viikkoa sitten",
+    "timeMonthsAgo": "{n} kuukautta sitten",
+    "timeYearsAgo": "{n} vuotta sitten"
   },
   "Adopt": {
     "title": "Adoptoi kasvi",

@@ -24,6 +24,7 @@ import {
   type TierId,
 } from '@bloomoulu/constants';
 import { useCart } from '../../../../lib/cart.client';
+import { PlantStats } from '../../../../components/PlantStats';
 
 /** Secondary "Add to cart" CTA so visitors can queue multiple plants
  *  before checkout. The primary adopt path on this page routes the donor
@@ -148,6 +149,13 @@ interface Plant {
   adopterCount?: number;
   fundedCents?: number;
   targetCents?: number;
+  // Engagement counters (denormalised on Plant) + on-demand aggregate
+  // for the "Last adopted N days ago" tile. All four feed the PlantStats
+  // card in the sticky right column.
+  scanCount?: number;
+  saveCount?: number;
+  askCount?: number;
+  lastAdoptedAt?: string | null;
   primaryImage?: { url: string; altEn: string; altFi: string; altSv: string; attribution?: string } | null;
   images?: Array<{ id: string; url: string; altEn: string; altFi: string; altSv: string; attribution?: string }>;
   taxon?: { latinName: string; family: string } | null;
@@ -1156,6 +1164,16 @@ export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled,
 
         {/* ── RIGHT COLUMN: STICKY CTA + SIMILAR PLANTS ─────────────── */}
         <div style={{ position: 'sticky', top: 100, alignSelf: 'flex-start' }}>
+          {/* Community engagement — visits / saves / last-adopted / asked.
+              Sits above the adoption CTA card as social proof before the
+              donation moment. See PlantStats.tsx + stats-roadmap.md. */}
+          <PlantStats
+            scanCount={plant.scanCount ?? 0}
+            saveCount={plant.saveCount ?? 0}
+            askCount={plant.askCount ?? 0}
+            lastAdoptedAt={plant.lastAdoptedAt ?? null}
+            locale={locale}
+          />
           <div className="card" style={{ overflow: 'hidden', borderRadius: 24 }}>
             {/* Mode toggle */}
             <div

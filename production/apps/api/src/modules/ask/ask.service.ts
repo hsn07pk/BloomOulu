@@ -596,6 +596,31 @@ export class AskService {
       }
     }
 
+    // Bump Plant.askCount for every plant whose chunks contributed to
+    // this answer. Counts "this plant came up in an answer" once per
+    // answer — three chunks from the same plant = one ask, not three.
+    // Best-effort: a failure here must not break the user's answer.
+    try {
+      const retrievedIds = top5.map((c) => c.id);
+      if (retrievedIds.length > 0) {
+        const chunksForCounter = await this.prisma.ragChunk.findMany({
+          where: { id: { in: retrievedIds }, plantId: { not: null } },
+          select: { plantId: true },
+        });
+        const distinctPlantIds = Array.from(
+          new Set(chunksForCounter.map((c) => c.plantId).filter((id): id is string => Boolean(id))),
+        );
+        if (distinctPlantIds.length > 0) {
+          await this.prisma.plant.updateMany({
+            where: { id: { in: distinctPlantIds } },
+            data: { askCount: { increment: 1 } },
+          });
+        }
+      }
+    } catch {
+      // Observability: counter drift is acceptable; user experience is not.
+    }
+
     return {
       text: cleaned,
       citations,

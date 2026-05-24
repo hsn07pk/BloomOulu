@@ -413,6 +413,17 @@ export class PlantsController {
     });
     if (!plant) throw new NotFoundException();
 
+    // Latest active adoption — feeds the "Last adopted N days ago" engagement
+    // tile on the plant detail page. Computed on-demand instead of denormalised
+    // because Adoption status can flip in both directions (pending → active,
+    // active → cancelled, etc.) — chasing all those edges to keep a column
+    // accurate is more error-prone than a single indexed query.
+    const lastAdoption = await this.prisma.adoption.findFirst({
+      where: { plantId: plant.id, status: 'active' },
+      orderBy: { createdAt: 'desc' },
+      select: { createdAt: true },
+    });
+
     // Fire-and-forget: kick off background TTS generation for any locale
     // that's still missing. The current request returns immediately with
     // whatever narrations exist; a follow-up fetch (next visit / hard
@@ -432,7 +443,11 @@ export class PlantsController {
         }
       }),
     );
-    return { ...plant, narrations };
+    return {
+      ...plant,
+      narrations,
+      lastAdoptedAt: lastAdoption?.createdAt ?? null,
+    };
   }
 
   /**

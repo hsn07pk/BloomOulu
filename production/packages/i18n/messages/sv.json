@@ -87,7 +87,21 @@
     "audio": "Lyssna på berättelsen",
     "modeAdult": "Vuxenläge",
     "modeKid": "Barnläge",
-    "modeSchool": "Skolläge"
+    "modeSchool": "Skolläge",
+    "statsTitle": "Gemenskapens engagemang",
+    "statsVisits": "Besök",
+    "statsSaved": "Sparad",
+    "statsLastAdopted": "Senast adopterad",
+    "statsLastAdoptedNever": "Inga adoptioner än",
+    "statsQuestions": "Frågor ställda",
+    "timeJustNow": "just nu",
+    "timeMinutesAgo": "{n} min sedan",
+    "timeHoursAgo": "{n} h sedan",
+    "timeYesterday": "i går",
+    "timeDaysAgo": "{n} dagar sedan",
+    "timeWeeksAgo": "{n} veckor sedan",
+    "timeMonthsAgo": "{n} månader sedan",
+    "timeYearsAgo": "{n} år sedan"
   },
   "Adopt": {
     "title": "Adoptera en växt",
