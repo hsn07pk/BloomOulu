@@ -21,6 +21,75 @@ export function plantAltText(p: PlantIndexItem, locale: string): string {
   return p.primaryImage.altEn;
 }
 
+/**
+ * Localised human label for the `BloomSeason` enum
+ * (spring | summer | autumn | winter | all). The DB stores raw enum values;
+ * UI surfaces ('all' especially) were leaking through as cryptic tags.
+ * Kept here so every plant-display site renders the same wording.
+ */
+const BLOOM_SEASON_LABELS: Record<string, Record<string, string>> = {
+  en: { spring: 'Spring', summer: 'Summer', autumn: 'Autumn', winter: 'Winter', all: 'Year-round' },
+  fi: { spring: 'Kevät', summer: 'Kesä', autumn: 'Syksy', winter: 'Talvi', all: 'Vuoden ympäri' },
+  sv: { spring: 'Vår', summer: 'Sommar', autumn: 'Höst', winter: 'Vinter', all: 'Året om' },
+};
+
+export function bloomSeasonLabel(
+  season: string | null | undefined,
+  locale: string,
+): string {
+  if (!season) return '';
+  const dict = BLOOM_SEASON_LABELS[locale] ?? BLOOM_SEASON_LABELS.en!;
+  return dict[season] ?? BLOOM_SEASON_LABELS.en![season] ?? season;
+}
+
+/**
+ * Best display string for a plant's bloom timing. Prefers the curator-set
+ * `bloomWindow` (e.g. "May–June") when present, otherwise falls back to a
+ * localised enum label.
+ */
+export function plantBloomLabel(p: PlantIndexItem, locale: string): string {
+  return p.bloomWindow ?? bloomSeasonLabel(p.bloomSeason, locale);
+}
+
+/**
+ * Common-name subline for plant cards, robust against the data shape where
+ * 99% of `nameEn` rows fall back to the Latin name. Returns null when the
+ * available common-name candidates are all identical to the Latin name —
+ * so the caller can hide the line entirely instead of rendering a
+ * duplicate of the main heading.
+ *
+ *   - locale=en  →  nameEn, hidden if same as latin
+ *   - locale=fi  →  nameFi, plus ` · nameEn` if distinct; both hidden if same as latin
+ *   - locale=sv  →  nameSv, plus ` · nameEn` if distinct; both hidden if same as latin
+ */
+export function plantSubName(
+  p: PlantIndexItem,
+  locale: string,
+  latin: string | null | undefined,
+): string | null {
+  const norm = (s: string | null | undefined) => (s ? s.trim().toLowerCase() : '');
+  const latinKey = norm(latin);
+  const same = (s: string | null | undefined) => norm(s) === latinKey;
+
+  const local = plantLocalisedName(p, locale);
+  const parts: string[] = [];
+  const seen = new Set<string>();
+
+  const push = (s: string | null | undefined) => {
+    if (!s) return;
+    if (latinKey && same(s)) return;
+    const key = norm(s);
+    if (seen.has(key)) return;
+    seen.add(key);
+    parts.push(s);
+  };
+
+  push(local);
+  if (locale !== 'en') push(p.nameEn);
+
+  return parts.length ? parts.join(' · ') : null;
+}
+
 interface PlantCardProps {
   plant: PlantIndexItem;
   locale: string;
@@ -28,6 +97,8 @@ interface PlantCardProps {
 }
 
 export function PlantCard({ plant: p, locale, adoptersLabel }: PlantCardProps) {
+  const latin = p.taxon?.latinName ?? null;
+  const sub = plantSubName(p, locale, latin);
   return (
     <Link
       href={`/${locale}/plants/${p.slug}`}
@@ -84,12 +155,13 @@ export function PlantCard({ plant: p, locale, adoptersLabel }: PlantCardProps) {
             lineHeight: 1.05,
           }}
         >
-          {p.taxon?.latinName ?? p.nameEn}
+          {latin ?? p.nameEn}
         </div>
-        <div className="small muted" style={{ marginTop: 4 }}>
-          {plantLocalisedName(p, locale)}
-          {locale !== 'en' ? ` · ${p.nameEn}` : ''}
-        </div>
+        {sub && (
+          <div className="small muted" style={{ marginTop: 4 }}>
+            {sub}
+          </div>
+        )}
         <div
           style={{
             marginTop: 14,
@@ -103,7 +175,7 @@ export function PlantCard({ plant: p, locale, adoptersLabel }: PlantCardProps) {
             <div style={{ fontSize: 15, fontWeight: 600, marginTop: 2 }}>{p.adopterCount ?? 0}</div>
           </div>
           <span className="pill" style={{ fontSize: 11 }}>
-            {p.bloomWindow ?? p.bloomSeason}
+            {plantBloomLabel(p, locale)}
           </span>
         </div>
       </div>

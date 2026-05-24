@@ -1,7 +1,7 @@
 import { getTranslations } from 'next-intl/server';
 import Link from 'next/link';
 import { type PlantIndexItem } from '../../components/PlantIndex.client';
-import { PlantCard } from '../../components/PlantCard';
+import { PlantCard, plantSubName } from '../../components/PlantCard';
 import { internalApiUrl } from '../../lib/api';
 
 export const revalidate = 60;
@@ -25,19 +25,50 @@ async function fetchInitialPlants(): Promise<{ items: Plant[] }> {
   }
 }
 
-function localisedName(p: Plant, locale: string): string {
-  if (locale === 'fi') return p.nameFi || p.nameEn;
-  if (locale === 'sv') return p.nameSv || p.nameEn;
-  return p.nameEn;
+/**
+ * Live count of catalogued (active) plants. Falls back to null on error so
+ * the hero tile can degrade to a sensible static placeholder without
+ * breaking SSR.
+ */
+async function fetchPlantCount(): Promise<number | null> {
+  try {
+    const res = await fetch(`${internalApiUrl()}/v1/plants/count`, {
+      next: { revalidate: 300 },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return typeof data.total === 'number' ? data.total : null;
+  } catch {
+    return null;
+  }
 }
+
+/** Locale-aware number formatting — '1 234' in fi/sv, '1,234' in en. */
+function formatCount(n: number, locale: string): string {
+  const tag = locale === 'fi' ? 'fi-FI' : locale === 'sv' ? 'sv-SE' : 'en-GB';
+  return new Intl.NumberFormat(tag).format(n);
+}
+
 
 export default async function HomePage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: 'Home' });
   const tn = await getTranslations({ locale, namespace: 'Nav' });
   const tp = await getTranslations({ locale, namespace: 'Plants' });
-  const { items: plants } = await fetchInitialPlants();
+  const [{ items: plants }, plantCount] = await Promise.all([
+    fetchInitialPlants(),
+    fetchPlantCount(),
+  ]);
   const previewPlants = plants.slice(3, 11);
+
+  // First hero stat is live-from-DB. The other three are LIFE+ ESCAPE
+  // conservation context (external project, not platform metrics) so they
+  // stay hardcoded — see docs/handover-files/homepage-stats.md for the
+  // rationale.
+  const heroPlantCountLabel =
+    plantCount !== null
+      ? formatCount(plantCount, locale)
+      : '4 000+';
 
   return (
     <div className="fade-in">
@@ -124,7 +155,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
                 }}
               >
                 {[
-                  ['4 000+', locale === 'fi' ? 'kasvilajia Oulun kokoelmassa' : 'plant species in the Oulu collection'],
+                  [heroPlantCountLabel, locale === 'fi' ? 'kasvilajia Oulun kokoelmassa' : 'plant species in the Oulu collection'],
                   ['175', 'taxa collected · 148 banked (LIFE+ ESCAPE)'],
                   ['1.7M', 'seeds collected · LIFE+ ESCAPE 2012–2017'],
                   ['56 %', locale === 'fi' ? 'uhanalaisten Suomen kasvien ex-situ-kattavuus' : 'ex-situ coverage of threatened Finnish plants'],
@@ -170,7 +201,10 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
                   </div>
                 </div>
               </div>
-              {plants.slice(0, 3).map((p, i) => (
+              {plants.slice(0, 3).map((p, i) => {
+                const latin = p.taxon?.latinName ?? null;
+                const sub = plantSubName(p, locale, latin);
+                return (
                 <Link
                   key={p.id}
                   href={`/${locale}/plants/${p.slug}`}
@@ -212,16 +246,27 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
                     )}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div className="serif" style={{ fontSize: 18, color: 'var(--ink)' }}>
-                      {localisedName(p, locale)}
+                    <div
+                      className="serif"
+                      style={{
+                        fontSize: 18,
+                        color: 'var(--ink)',
+                        fontStyle: 'italic',
+                        lineHeight: 1.15,
+                      }}
+                    >
+                      {latin ?? p.nameEn}
                     </div>
-                    <div className="small muted" style={{ marginTop: 2 }}>
-                      {p.taxon?.latinName ?? ''} · {p.bloomWindow ?? p.bloomSeason}
-                    </div>
+                    {sub && (
+                      <div className="small muted" style={{ marginTop: 2 }}>
+                        {sub}
+                      </div>
+                    )}
                   </div>
                   <span aria-hidden="true" style={{ color: 'var(--ink-mute)' }}>→</span>
                 </Link>
-              ))}
+                );
+              })}
               <div style={{ padding: '14px 24px', background: 'rgba(31,58,44,0.04)', textAlign: 'center' }}>
                 <Link href={`/${locale}/plants`} className="btn btn-ghost small">
                   🏛 {t('browseAll')}
@@ -286,96 +331,6 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
           >
             {t('browseAll')} →
           </Link>
-        </div>
-      </section>
-
-      {/* ── CONSERVATION STORY BAND ─────────────────────────────────── */}
-      <section
-        style={{
-          background: 'var(--paper)',
-          borderTop: '1px solid var(--line)',
-          borderBottom: '1px solid var(--line)',
-          marginTop: 64,
-        }}
-      >
-        <div
-          className="container"
-          style={{
-            paddingTop: 64,
-            paddingBottom: 64,
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            gap: 64,
-            alignItems: 'center',
-          }}
-        >
-          <div>
-            <div className="tiny" style={{ color: 'var(--rust-on-light)' }}>
-              {locale === 'fi' ? 'Suojelutarina' : 'The conservation story'}
-            </div>
-            <h2 style={{ fontSize: 48, marginTop: 12 }}>
-              {locale === 'fi' ? '11 %:sta 56 %:iin.' : 'From 11 % to 56 %.'}
-              <br />
-              <span style={{ fontStyle: 'italic' }}>
-                {locale === 'fi' ? 'Mitattava kansallinen hanke.' : 'A measurable national project.'}
-              </span>
-            </h2>
-            <p
-              className="muted"
-              style={{ marginTop: 20, fontSize: 16, lineHeight: 1.6, maxWidth: 480 }}
-            >
-              {locale === 'fi'
-                ? 'Vuosina 2012–2017 LIFE+ ESCAPE -ohjelma nosti uhanalaisten suomalaisten kasvien ex-situ-kattavuuden 11 %:sta 56 %:iin, talletti 1,7 miljoonaa siementä 175 lajista ja täytti Suomen kansallisen geenipankin 148 lajilla. Oulu oli partneripuutarha. Adoptio rahoittaa seuraavan luvun.'
-                : "Between 2012 and 2017, the LIFE+ ESCAPE programme lifted ex-situ coverage of Finland's threatened plants from 11 % to 56 %, banked 1.7 million seeds across 175 taxa, and seeded the Finnish national gene bank with 148 species. Oulu was a partner garden then. Adoption funds the next chapter."}
-            </p>
-          </div>
-          <div className="card card-pad" style={{ background: 'var(--bg)', borderRadius: 24 }}>
-            <div className="tiny">{locale === 'fi' ? 'Jokaisesta €100:sta' : 'Of every €100 adopted'}</div>
-            <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {(
-                [
-                  [locale === 'fi' ? 'Ex-situ-suojelutyö' : 'Direct ex-situ work', 62, 'var(--forest)'],
-                  [locale === 'fi' ? 'Siemenpankki (Luomus)' : 'Seed bank deposits (Luomus)', 18, 'var(--moss)'],
-                  [locale === 'fi' ? 'Puutarhan toiminta + opasteet' : 'Garden operations & signage', 12, 'var(--bloom)'],
-                  [locale === 'fi' ? 'Maksu- + alustakulut' : 'Payment & platform costs', 8, 'var(--ink-3)'],
-                ] as const
-              ).map(([label, pct, color]) => (
-                <div key={label}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <span className="small">{label}</span>
-                    <span className="serif" style={{ fontSize: 18 }}>
-                      €{pct}
-                    </span>
-                  </div>
-                  <div
-                    style={{
-                      height: 4,
-                      borderRadius: 2,
-                      background: 'rgba(31,58,44,0.08)',
-                      overflow: 'hidden',
-                    }}
-                  >
-                    <div style={{ width: `${pct}%`, height: '100%', background: color }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-            <p
-              style={{
-                marginTop: 24,
-                padding: 16,
-                background: 'var(--paper)',
-                borderRadius: 12,
-                fontSize: 13,
-                color: 'var(--ink-2)',
-              }}
-            >
-              ℹ{' '}
-              {locale === 'fi'
-                ? 'Tarkastettu vuosittain. Avoin varaintilavirta julkaistaan tammikuussa.'
-                : 'Audited annually; transparent funds-flow page published every January.'}
-            </p>
-          </div>
         </div>
       </section>
 
