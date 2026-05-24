@@ -51,35 +51,74 @@ export class PlantsController {
     @Query('status') status: string = 'active',
     @Query('redList') redList?: string,
     @Query('bloomSeason') bloomSeason?: string,
+    @Query('family') family?: string,
+    @Query('hasAdopters') hasAdopters?: string,
     @Query('limit') limitStr?: string,
     @Query('cursor') cursor?: string,
+    @Query('page') pageStr?: string,
     @Query('q') q?: string,
   ) {
     const limit = Math.min(Math.max(parseInt(limitStr ?? '', 10) || DEFAULT_LIMIT, 1), MAX_LIMIT);
+    // Two pagination modes coexist:
+    //   - cursor (?cursor=...) — legacy keyset, infinite-scroll Load More
+    //   - offset (?page=N)     — page-number UI; response includes total
+    // If the client sends `page`, we run offset mode. Otherwise cursor.
+    const pageMode = pageStr !== undefined;
+    const page = Math.max(1, parseInt(pageStr ?? '1', 10) || 1);
 
     // Fuzzy / FTS path: delegate to /search internally so the index plan
     // is the same. Forward facet filters so combined search+filter works.
     if (q && q.trim().length >= 2) {
-      return this.search(q, limitStr, cursor, redList, bloomSeason);
+      return this.search(q, limitStr, cursor, redList, bloomSeason, family, hasAdopters, pageMode ? page : undefined);
     }
 
     const where: any = { status };
     if (redList) where.redListStatus = redList as any;
     if (bloomSeason) where.bloomSeason = bloomSeason as any;
+    if (family) where.taxon = { family };
+    if (hasAdopters === 'true') where.adopterCount = { gt: 0 };
+    else if (hasAdopters === 'false') where.adopterCount = 0;
 
-    // Keyset pagination. The cursor encodes the row position in the sort
-    // order (adopterCount DESC, nameEn ASC, id) so two rows with the same
-    // adopterCount + nameEn still resolve deterministically.
+    const orderBy = [
+      { adopterCount: 'desc' as const },
+      { nameEn: 'asc' as const },
+      { id: 'asc' as const },
+    ];
+    const include = {
+      primaryImage: true,
+      taxon: { select: { latinName: true, family: true } },
+    };
+
+    // Offset mode — pulls page rows + total count in parallel.
+    if (pageMode) {
+      const [rows, total] = await Promise.all([
+        this.prisma.plant.findMany({
+          where,
+          orderBy,
+          take: limit,
+          skip: (page - 1) * limit,
+          include,
+        }),
+        this.prisma.plant.count({ where }),
+      ]);
+      return {
+        items: rows,
+        page,
+        pageSize: limit,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+      };
+    }
+
+    // Cursor (keyset) mode — unchanged. The cursor encodes the row
+    // position in the sort order so two rows with the same adopterCount +
+    // nameEn still resolve deterministically.
     const rows = await this.prisma.plant.findMany({
       where,
-      orderBy: [
-        { adopterCount: 'desc' },
-        { nameEn: 'asc' },
-        { id: 'asc' },
-      ],
+      orderBy,
       take: limit + 1,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-      include: { primaryImage: true, taxon: { select: { latinName: true, family: true } } },
+      include,
     });
 
     const hasMore = rows.length > limit;
@@ -97,16 +136,94 @@ export class PlantsController {
    * single index scan answers the query.
    */
   /**
-   * Public count of catalogued plants — feeds the homepage hero stat tile.
+   * Public count of catalogued plants — feeds the homepage hero stat tile
+   * and the filter-aware "Showing X of Y" counter on the /plants page.
    *
-   * Declared BEFORE @Get(':slug') so it matches as a static route. Defaults
-   * to active plants only so the hero number is the user-facing collection,
-   * not retired records. count(*) on the `status` partial index is cheap.
+   * Accepts the same filter params as @Get() so the client can call this
+   * alongside the list fetch to get the unpaginated total. count(*) on the
+   * partial `status` index is cheap; adding facet filters still keeps it
+   * to a single index scan.
+   *
+   * Declared BEFORE @Get(':slug') so it matches as a static route.
    */
   @Get('count')
-  async count(@Query('status') status: string = 'active') {
-    const total = await this.prisma.plant.count({ where: { status } });
+  async count(
+    @Query('status') status: string = 'active',
+    @Query('redList') redList?: string,
+    @Query('bloomSeason') bloomSeason?: string,
+    @Query('family') family?: string,
+    @Query('hasAdopters') hasAdopters?: string,
+    @Query('q') q?: string,
+  ) {
+    // Fuzzy / FTS path mirrors search() WHERE clauses so the counter
+    // stays accurate when the user has a query active.
+    if (q && q.trim().length >= 2) {
+      return this.searchCount(q, redList, bloomSeason, family, hasAdopters);
+    }
+    const where: any = { status };
+    if (redList) where.redListStatus = redList as any;
+    if (bloomSeason) where.bloomSeason = bloomSeason as any;
+    if (family) where.taxon = { family };
+    if (hasAdopters === 'true') where.adopterCount = { gt: 0 };
+    else if (hasAdopters === 'false') where.adopterCount = 0;
+    const total = await this.prisma.plant.count({ where });
     return { total };
+  }
+
+  /**
+   * SQL-side counterpart to search() — same WHERE clauses but COUNT(*).
+   * Kept separate from search() so the FTS+trigram fetch stays a single
+   * ranked index scan; the count is a parallel scan against the same
+   * predicate, executed only when the client explicitly asks for it.
+   */
+  private async searchCount(
+    q: string,
+    redList?: string,
+    bloomSeason?: string,
+    family?: string,
+    hasAdopters?: string,
+  ): Promise<{ total: number }> {
+    const qTrim = q.trim();
+    const tsq = qTrim
+      .split(/\s+/)
+      .filter((t) => t.length > 0)
+      .map((t) => t.replace(/[^\p{L}\p{N}_-]/gu, '') + ':*')
+      .filter(Boolean)
+      .join(' & ');
+
+    // Param positions: $1=tsq, $2=qTrim, then optional redList, bloomSeason,
+    // family, hasAdopters in source order. Build clauses + params in lockstep.
+    const clauses: string[] = [];
+    const params: any[] = [tsq.length > 0 ? tsq : qTrim, qTrim];
+    if (redList) {
+      params.push(redList);
+      clauses.push(`AND p."redListStatus" = $${params.length}::"RedListStatus"`);
+    }
+    if (bloomSeason) {
+      params.push(bloomSeason);
+      clauses.push(`AND p."bloomSeason" = $${params.length}::"BloomSeason"`);
+    }
+    if (family) {
+      params.push(family);
+      clauses.push(`AND EXISTS (SELECT 1 FROM "Taxon" t WHERE t.id = p."taxonId" AND t.family = $${params.length})`);
+    }
+    if (hasAdopters === 'true') clauses.push(`AND p."adopterCount" > 0`);
+    else if (hasAdopters === 'false') clauses.push(`AND p."adopterCount" = 0`);
+
+    const sql = `
+      SELECT COUNT(*)::int AS total
+      FROM "Plant" p
+      WHERE p.status = 'active'
+        ${clauses.join('\n        ')}
+        AND (
+          p."searchText" @@ to_tsquery('simple', $1)
+          OR p."nameEn" % $2
+          OR p."nameFi" % $2
+          OR p."nameSv" % $2
+        )
+    `;
+    const rows = await this.prisma.$queryRawUnsafe<Array<{ total: number }>>(sql, ...params);
+    return { total: rows[0]?.total ?? 0 };
   }
 
   @Get('search')
@@ -116,9 +233,19 @@ export class PlantsController {
     @Query('cursor') cursor?: string,
     @Query('redList') redList?: string,
     @Query('bloomSeason') bloomSeason?: string,
+    @Query('family') family?: string,
+    @Query('hasAdopters') hasAdopters?: string,
+    /** When set, switches search into offset pagination — returns total + totalPages instead of nextCursor. */
+    @Query('page') pageParam?: number | string,
   ) {
-    if (!q || q.trim().length < 2) return { items: [], nextCursor: null };
+    if (!q || q.trim().length < 2)
+      return pageParam !== undefined
+        ? { items: [], page: 1, pageSize: DEFAULT_LIMIT, total: 0, totalPages: 1 }
+        : { items: [], nextCursor: null };
+
     const limit = Math.min(Math.max(parseInt(limitStr ?? '', 10) || DEFAULT_LIMIT, 1), MAX_LIMIT);
+    const pageMode = pageParam !== undefined;
+    const page = Math.max(1, parseInt(String(pageParam ?? '1'), 10) || 1);
     const qTrim = q.trim();
     // tsquery — wrap each whitespace-separated token in a prefix match so
     // "puls" matches "pulsatilla". Quote internally to escape user input.
@@ -129,8 +256,80 @@ export class PlantsController {
       .filter(Boolean)
       .join(' & ');
 
-    // Phase 1: ranked SQL. Returns just the id + rank so the FTS+trigram
-    // index plan stays a single index scan. We pull limit+1 to detect more.
+    // Build the WHERE clause + ordered param list together so positional
+    // placeholders stay correct as we add filters.
+    const filterClauses: string[] = [];
+    const filterParams: any[] = [];
+    const filterParamStart = 4; // $1=tsq, $2=qTrim, $3=limit, $4+=filters
+
+    if (redList) {
+      filterParams.push(redList);
+      filterClauses.push(`AND p."redListStatus" = $${filterParamStart + filterParams.length - 1}::"RedListStatus"`);
+    }
+    if (bloomSeason) {
+      filterParams.push(bloomSeason);
+      filterClauses.push(`AND p."bloomSeason" = $${filterParamStart + filterParams.length - 1}::"BloomSeason"`);
+    }
+    if (family) {
+      filterParams.push(family);
+      filterClauses.push(`AND EXISTS (SELECT 1 FROM "Taxon" t WHERE t.id = p."taxonId" AND t.family = $${filterParamStart + filterParams.length - 1})`);
+    }
+    if (hasAdopters === 'true') filterClauses.push(`AND p."adopterCount" > 0`);
+    else if (hasAdopters === 'false') filterClauses.push(`AND p."adopterCount" = 0`);
+
+    // Offset mode: pull limit + offset, also count separately, both
+    // dispatched in parallel.
+    if (pageMode) {
+      const rankedSql = `
+        SELECT
+          p."id",
+          (
+            ts_rank(p."searchText", to_tsquery('simple', $1)) * 2
+            + GREATEST(
+                similarity(p."nameEn", $2),
+                similarity(p."nameFi", $2),
+                similarity(p."nameSv", $2)
+              )
+          ) AS rank
+        FROM "Plant" p
+        WHERE p.status = 'active'
+          ${filterClauses.join('\n          ')}
+          AND (
+            p."searchText" @@ to_tsquery('simple', $1)
+            OR p."nameEn" % $2
+            OR p."nameFi" % $2
+            OR p."nameSv" % $2
+          )
+        ORDER BY rank DESC, p."nameEn" ASC, p."id" ASC
+        LIMIT $3 OFFSET $${filterParamStart + filterParams.length}
+      `;
+      const offset = (page - 1) * limit;
+      const params = [tsq.length > 0 ? tsq : qTrim, qTrim, limit, ...filterParams, offset];
+      const [ranked, countRes] = await Promise.all([
+        this.prisma.$queryRawUnsafe<Array<{ id: string }>>(rankedSql, ...params),
+        this.searchCount(q, redList, bloomSeason, family, hasAdopters),
+      ]);
+      const rankedIds = ranked.map((r) => r.id);
+      const fullRows = rankedIds.length
+        ? await this.prisma.plant.findMany({
+            where: { id: { in: rankedIds } },
+            include: { primaryImage: true, taxon: { select: { latinName: true, family: true } } },
+          })
+        : [];
+      const byId = new Map(fullRows.map((r) => [r.id, r]));
+      const items = rankedIds.map((id) => byId.get(id)).filter(Boolean);
+      const total = countRes.total;
+      return {
+        items,
+        page,
+        pageSize: limit,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+      };
+    }
+
+    // Cursor mode (unchanged ranked-then-hydrate pattern). Returns
+    // nextCursor for Load-More UIs.
     const ranked = await this.prisma.$queryRawUnsafe<Array<{ id: string; rank: number }>>(
       `
       SELECT
@@ -145,8 +344,7 @@ export class PlantsController {
         ) AS rank
       FROM "Plant" p
       WHERE p.status = 'active'
-        ${redList ? `AND p."redListStatus" = $4::"RedListStatus"` : ''}
-        ${bloomSeason ? `AND p."bloomSeason" = $${redList ? 5 : 4}::"BloomSeason"` : ''}
+        ${filterClauses.join('\n        ')}
         AND (
           p."searchText" @@ to_tsquery('simple', $1)
           OR p."nameEn" % $2
@@ -156,13 +354,7 @@ export class PlantsController {
       ORDER BY rank DESC, p."nameEn" ASC, p."id" ASC
       LIMIT $3
       `,
-      ...[
-        tsq.length > 0 ? tsq : qTrim,
-        qTrim,
-        limit + 1,
-        ...(redList ? [redList] : []),
-        ...(bloomSeason ? [bloomSeason] : []),
-      ],
+      ...[tsq.length > 0 ? tsq : qTrim, qTrim, limit + 1, ...filterParams],
     );
 
     if (ranked.length === 0) return { items: [], nextCursor: null };
@@ -181,6 +373,29 @@ export class PlantsController {
     const items = rankedIds.map((id) => byId.get(id)).filter(Boolean);
 
     return { items, nextCursor: hasMore ? rankedIds[rankedIds.length - 1]! : null };
+  }
+
+  /**
+   * Top plant families by count (for the family-filter dropdown). Returns
+   * the N most-common family names with their plant counts so the UI can
+   * surface them without scanning the whole taxon table.
+   */
+  @Get('families')
+  async families(@Query('limit') limitStr?: string) {
+    const limit = Math.min(Math.max(parseInt(limitStr ?? '', 10) || 50, 1), 500);
+    const rows = await this.prisma.$queryRawUnsafe<Array<{ family: string; count: number }>>(
+      `
+      SELECT t.family, COUNT(*)::int AS count
+      FROM "Plant" p
+      JOIN "Taxon" t ON t.id = p."taxonId"
+      WHERE p.status = 'active' AND t.family IS NOT NULL AND t.family <> ''
+      GROUP BY t.family
+      ORDER BY count DESC, t.family ASC
+      LIMIT $1
+      `,
+      limit,
+    );
+    return { items: rows };
   }
 
   @Get(':slug')

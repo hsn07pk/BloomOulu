@@ -122,9 +122,11 @@ a { color: var(--forest); text-underline-offset: 3px; }
 
 .badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 3px; font-size: 0.667rem; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; font-family: var(--f-mono); white-space: nowrap; }
 .badge-cr, .badge-en { background: var(--rust-soft); color: var(--rust-on-light); } /* AA on rust-soft at 10px */
+.badge-ex { background: #2a2a2a; color: #f0f0f0; } /* extinct — heaviest visual weight, mono grey on near-black */
 .badge-vu { background: var(--amber-soft); color: #6B4F1B; } /* darkened for 4.5:1 at 10px on amber-soft */
 .badge-nt { background: var(--sage-pale); color: var(--forest); }
 .badge-lc { background: var(--teal-pale); color: var(--forest-mid); }
+.badge-dd { background: #e6e1d4; color: #5a5750; } /* data deficient — neutral grey */
 .badge-na { background: var(--cream-deep); color: var(--ink-mute); }
 
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 20px; border-radius: 999px; font-size: 0.933rem; font-weight: 500; transition: all 140ms; border: 1px solid transparent; font-family: var(--f-body); text-decoration: none; }

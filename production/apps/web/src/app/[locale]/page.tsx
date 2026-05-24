@@ -2,6 +2,7 @@ import { getTranslations } from 'next-intl/server';
 import Link from 'next/link';
 import { type PlantIndexItem } from '../../components/PlantIndex.client';
 import { PlantCard, plantSubName } from '../../components/PlantCard';
+import { PlantImage } from '../../components/PlantImage.client';
 import { internalApiUrl } from '../../lib/api';
 
 export const revalidate = 60;
@@ -234,13 +235,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
                     }}
                   >
                     {p.primaryImage?.url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={p.primaryImage.url}
-                        alt=""
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                        loading="lazy"
-                      />
+                      <PlantImage src={p.primaryImage.url} alt="" variant="thumb" />
                     ) : (
                       <span style={{ fontSize: 28 }}>🌿</span>
                     )}

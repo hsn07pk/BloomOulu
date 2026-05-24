@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { PlantIndexItem } from './PlantIndex.client';
+import { PlantImage } from './PlantImage.client';
 
 const ACCENT_PALETTE = ['#E8EEDE', '#F1E6CB', '#F0DCD0', '#D6EBE3'];
 
@@ -120,13 +121,7 @@ export function PlantCard({ plant: p, locale, adoptersLabel }: PlantCardProps) {
         }}
       >
         {p.primaryImage?.url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={p.primaryImage.url}
-            alt={plantAltText(p, locale)}
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-            loading="lazy"
-          />
+          <PlantImage src={p.primaryImage.url} alt={plantAltText(p, locale)} variant="card" />
         ) : (
           <div
             style={{
