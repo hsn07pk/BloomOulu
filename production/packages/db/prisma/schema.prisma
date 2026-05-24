@@ -203,6 +203,15 @@ model Plant {
   // sort by popularity without scanning the event table.
   scanCount       Int           @default(0)
 
+  // Denormalised counters for plant-detail engagement. Authoritative
+  // sources stay in SavedPlant (saves) and AskAnswer (RAG retrievals
+  // whose chunks linked to this plant); these are bumped transactionally
+  // on insert in me.controller / ask.service. Both default to 0 and are
+  // backfilled by the 20260524170000_plant_engagement_counters migration.
+  // See docs/handover-files/stats-roadmap.md (Pattern B).
+  saveCount       Int           @default(0)
+  askCount        Int           @default(0)
+
   // Relations
   accessions      Accession[]
   adoptions       Adoption[]

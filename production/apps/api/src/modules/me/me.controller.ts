@@ -137,10 +137,21 @@ export class MeController {
     const userId = actor.sub;
     const plant = await this.prisma.plant.findUnique({ where: { slug }, select: { id: true } });
     if (!plant) throw new NotFoundException();
-    const row = await this.prisma.savedPlant.upsert({
-      where: { userId_plantId: { userId, plantId: plant.id } },
-      create: { userId, plantId: plant.id },
-      update: {},
+    // Check first so we only bump the denormalized Plant.saveCount on a
+    // true insert (not on an idempotent re-save of an already-saved row).
+    const row = await this.prisma.$transaction(async (tx) => {
+      const existing = await tx.savedPlant.findUnique({
+        where: { userId_plantId: { userId, plantId: plant.id } },
+      });
+      if (existing) return existing;
+      const created = await tx.savedPlant.create({
+        data: { userId, plantId: plant.id },
+      });
+      await tx.plant.update({
+        where: { id: plant.id },
+        data: { saveCount: { increment: 1 } },
+      });
+      return created;
     });
     return { ok: true, id: row.id, savedAt: row.savedAt };
   }
@@ -150,10 +161,23 @@ export class MeController {
     const userId = actor.sub;
     const plant = await this.prisma.plant.findUnique({ where: { slug }, select: { id: true } });
     if (!plant) return { ok: true, deleted: 0 };
-    const r = await this.prisma.savedPlant.deleteMany({
-      where: { userId, plantId: plant.id },
+    // Decrement only by what was actually deleted — handles the case where
+    // the row was already gone (idempotent unsave) without going negative.
+    // Using GREATEST(0, …) as a safety net against drift.
+    const deleted = await this.prisma.$transaction(async (tx) => {
+      const r = await tx.savedPlant.deleteMany({
+        where: { userId, plantId: plant.id },
+      });
+      if (r.count > 0) {
+        await tx.$executeRaw`
+          UPDATE "Plant"
+          SET "saveCount" = GREATEST(0, "saveCount" - ${r.count})
+          WHERE id = ${plant.id}::uuid
+        `;
+      }
+      return r.count;
     });
-    return { ok: true, deleted: r.count };
+    return { ok: true, deleted };
   }
 
   /**
@@ -171,10 +195,25 @@ export class MeController {
     });
     if (plants.length === 0) return { ok: true, merged: 0 };
     const data = plants.map((p) => ({ userId, plantId: p.id }));
-    const r = await this.prisma.savedPlant.createMany({
-      data,
-      skipDuplicates: true,
+    // createMany returns how many rows it actually inserted (the rest were
+    // skipped as duplicates) but doesn't tell us which specific plantIds got
+    // a new row. We recompute saveCount from SavedPlant for every plant in
+    // the input — accurate regardless of which were dupes. Single update,
+    // bounded by the 200-slug cap.
+    const merged = await this.prisma.$transaction(async (tx) => {
+      const inserted = await tx.savedPlant.createMany({ data, skipDuplicates: true });
+      if (inserted.count > 0) {
+        const ids = plants.map((p) => p.id);
+        await tx.$executeRaw`
+          UPDATE "Plant" p
+          SET "saveCount" = (
+            SELECT COUNT(*)::int FROM "SavedPlant" sp WHERE sp."plantId" = p.id
+          )
+          WHERE p.id = ANY(${ids}::uuid[])
+        `;
+      }
+      return inserted.count;
     });
-    return { ok: true, merged: r.count };
+    return { ok: true, merged };
   }
 }
