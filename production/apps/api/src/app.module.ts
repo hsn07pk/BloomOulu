@@ -35,6 +35,7 @@ import { EventsModule } from './modules/events/events.module.js';
 import { FilesModule } from './modules/files/files.module.js';
 import { TranslationsModule } from './modules/translations/translations.module.js';
 import { EnrichmentModule } from './modules/enrichment/enrichment.module.js';
+import { StatsModule } from './modules/stats/stats.module.js';
 
 const isProd = process.env.NODE_ENV === 'production';
 
@@ -111,6 +112,7 @@ const isProd = process.env.NODE_ENV === 'production';
     FilesModule,
     TranslationsModule,
     EnrichmentModule,
+    StatsModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: RolesGuard }],

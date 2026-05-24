@@ -26,19 +26,42 @@ async function fetchInitialPlants(): Promise<{ items: Plant[] }> {
   }
 }
 
+interface HomepageStats {
+  plantCount: number;
+  adoptionCount: number;
+  raisedCents: number;
+}
+
 /**
- * Live count of catalogued (active) plants. Falls back to null on error so
- * the hero tile can degrade to a sensible static placeholder without
- * breaking SSR.
+ * Live homepage hero stats — single round-trip pulling plant count,
+ * adoption count, and total raised in one shot. Falls back to null on
+ * error so the hero tile can degrade to sensible static placeholders
+ * without breaking SSR.
+ *
+ * The fourth hero tile (56 % ex-situ coverage) is kept hardcoded — it's
+ * LIFE+ESCAPE conservation context, not a platform metric. Rationale +
+ * the whole audience-by-audience stats plan: docs/handover-files/
+ * stats-roadmap.md.
  */
-async function fetchPlantCount(): Promise<number | null> {
+async function fetchHomepageStats(): Promise<HomepageStats | null> {
   try {
-    const res = await fetch(`${internalApiUrl()}/v1/plants/count`, {
+    const res = await fetch(`${internalApiUrl()}/v1/stats/homepage`, {
       next: { revalidate: 300 },
     });
     if (!res.ok) return null;
     const data = await res.json();
-    return typeof data.total === 'number' ? data.total : null;
+    if (
+      typeof data.plantCount !== 'number' ||
+      typeof data.adoptionCount !== 'number' ||
+      typeof data.raisedCents !== 'number'
+    ) {
+      return null;
+    }
+    return {
+      plantCount: data.plantCount,
+      adoptionCount: data.adoptionCount,
+      raisedCents: data.raisedCents,
+    };
   } catch {
     return null;
   }
@@ -50,26 +73,42 @@ function formatCount(n: number, locale: string): string {
   return new Intl.NumberFormat(tag).format(n);
 }
 
+/**
+ * Locale-aware EUR formatting with no fractional cents shown — the hero
+ * tile reads better as '€1,266' / '1 266 €' than '€1,266.00'. Currency
+ * symbol position differs by locale (Intl handles it).
+ */
+function formatEur(cents: number, locale: string): string {
+  const tag = locale === 'fi' ? 'fi-FI' : locale === 'sv' ? 'sv-SE' : 'en-GB';
+  return new Intl.NumberFormat(tag, {
+    style: 'currency',
+    currency: 'EUR',
+    maximumFractionDigits: 0,
+  }).format(Math.round(cents / 100));
+}
+
 
 export default async function HomePage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: 'Home' });
   const tn = await getTranslations({ locale, namespace: 'Nav' });
   const tp = await getTranslations({ locale, namespace: 'Plants' });
-  const [{ items: plants }, plantCount] = await Promise.all([
+  const [{ items: plants }, stats] = await Promise.all([
     fetchInitialPlants(),
-    fetchPlantCount(),
+    fetchHomepageStats(),
   ]);
   const previewPlants = plants.slice(3, 11);
 
-  // First hero stat is live-from-DB. The other three are LIFE+ ESCAPE
-  // conservation context (external project, not platform metrics) so they
-  // stay hardcoded — see docs/handover-files/homepage-stats.md for the
-  // rationale.
-  const heroPlantCountLabel =
-    plantCount !== null
-      ? formatCount(plantCount, locale)
-      : '4 000+';
+  // Hero strip: three live engagement stats + one LIFE+ESCAPE mission
+  // anchor (the 56 % ex-situ tile). If the stats endpoint is unreachable
+  // the live tiles degrade to '—' placeholders rather than misleading
+  // static numbers. See docs/handover-files/stats-roadmap.md.
+  const heroPlantCount =
+    stats !== null ? formatCount(stats.plantCount, locale) : '—';
+  const heroAdoptionCount =
+    stats !== null ? formatCount(stats.adoptionCount, locale) : '—';
+  const heroRaised =
+    stats !== null ? formatEur(stats.raisedCents, locale) : '—';
 
   return (
     <div className="fade-in">
@@ -156,10 +195,38 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
                 }}
               >
                 {[
-                  [heroPlantCountLabel, locale === 'fi' ? 'kasvilajia Oulun kokoelmassa' : 'plant species in the Oulu collection'],
-                  ['175', 'taxa collected · 148 banked (LIFE+ ESCAPE)'],
-                  ['1.7M', 'seeds collected · LIFE+ ESCAPE 2012–2017'],
-                  ['56 %', locale === 'fi' ? 'uhanalaisten Suomen kasvien ex-situ-kattavuus' : 'ex-situ coverage of threatened Finnish plants'],
+                  [
+                    heroPlantCount,
+                    locale === 'fi'
+                      ? 'kasvilajia Oulun kokoelmassa'
+                      : locale === 'sv'
+                        ? 'växtarter i Uleåborgs samling'
+                        : 'plant species in the Oulu collection',
+                  ],
+                  [
+                    heroAdoptionCount,
+                    locale === 'fi'
+                      ? 'aktiivista adoptiota'
+                      : locale === 'sv'
+                        ? 'aktiva adoptioner'
+                        : 'active adoptions',
+                  ],
+                  [
+                    heroRaised,
+                    locale === 'fi'
+                      ? 'kerätty puutarhan suojeluun'
+                      : locale === 'sv'
+                        ? 'insamlat för trädgårdens bevarande'
+                        : 'raised for garden conservation',
+                  ],
+                  [
+                    '56 %',
+                    locale === 'fi'
+                      ? 'uhanalaisten Suomen kasvien ex-situ-kattavuus'
+                      : locale === 'sv'
+                        ? 'ex-situ-täckning av hotade finska växter'
+                        : 'ex-situ coverage of threatened Finnish plants',
+                  ],
                 ].map(([n, l]) => (
                   <div key={l} style={{ paddingRight: 16 }}>
                     <div
