@@ -121,6 +121,28 @@ export default async function SignInPage({
               : 'That link has expired. Request a new one below.',
       };
     }
+    if (reason === 'service_unavailable') {
+      return {
+        kind: 'warn',
+        text:
+          locale === 'fi'
+            ? 'Palveluun ei juuri nyt saatu yhteyttä. Yritä uudelleen hetken kuluttua.'
+            : locale === 'sv'
+              ? 'Kunde inte nå tjänsten just nu. Försök igen om en stund.'
+              : "Couldn't reach the sign-in service right now. Please try again in a moment.",
+      };
+    }
+    if (reason === 'rate_limited') {
+      return {
+        kind: 'warn',
+        text:
+          locale === 'fi'
+            ? 'Liian monta yritystä lyhyessä ajassa. Odota minuutti ja yritä uudelleen.'
+            : locale === 'sv'
+              ? 'För många försök på kort tid. Vänta en stund och försök igen.'
+              : 'Too many attempts. Please wait a minute, then try again.',
+      };
+    }
     return null;
   })();
 

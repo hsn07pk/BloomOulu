@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { BullModule } from '@nestjs/bullmq';
 import { PrometheusModule } from '@willsoto/nestjs-prometheus';
 import { LoggerModule } from 'nestjs-pino';
@@ -115,6 +115,15 @@ const isProd = process.env.NODE_ENV === 'production';
     StatsModule,
   ],
   controllers: [HealthController],
-  providers: [{ provide: APP_GUARD, useClass: RolesGuard }],
+  providers: [
+    // Order matters: ThrottlerGuard runs first to short-circuit obvious
+    // abuse before we spend any time on auth / role checks. RolesGuard
+    // runs next on requests that survive the rate limit. Per-endpoint
+    // limits are set with @Throttle() (see e.g. auth.controller.ts);
+    // anything without an explicit decorator inherits the global tier
+    // from ThrottlerModule.forRoot above (10/sec, 120/min).
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_GUARD, useClass: RolesGuard },
+  ],
 })
 export class AppModule {}

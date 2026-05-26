@@ -45,6 +45,13 @@ export async function verifyAndSetupAction(formData: FormData) {
   // bare `catch {}` would swallow and silently land the user in
   // `?reason=expired` even on success. We branch first, then redirect
   // exactly once at the very end.
+  //
+  // Three failure modes — three distinct reasons:
+  //   * Token rejected by API     → ?reason=expired
+  //   * 429 from rate limiter     → ?reason=rate_limited
+  //   * Fetch threw (API down)    → ?reason=service_unavailable
+  // Previously every non-success case collapsed into `expired`, which
+  // misled the user when the real cause was the API being unreachable.
   let nextUrl = `/${locale}/sign-in?reason=expired`;
   let jwtToSet: string | null = null;
   try {
@@ -59,7 +66,9 @@ export async function verifyAndSetupAction(formData: FormData) {
       body: JSON.stringify({ email, token, password, name: name || undefined, locale }),
       cache: 'no-store',
     });
-    if (res.ok) {
+    if (res.status === 429) {
+      nextUrl = `/${locale}/sign-in?reason=rate_limited`;
+    } else if (res.ok) {
       const data = (await res.json()) as {
         ok: boolean;
         user?: { id: string; email: string; name: string | null; role: string; locale: string };
@@ -84,8 +93,11 @@ export async function verifyAndSetupAction(formData: FormData) {
     }
   } catch (err) {
     // Defensive: in case future edits re-introduce a redirect() inside the
-    // try, never swallow it. Plain fetch failures fall through silently.
+    // try, never swallow it.
     if (isNextRedirect(err)) throw err;
+    // True fetch failure (API not reachable) — distinguish from "the API
+    // said your token was bad" so the user-facing copy makes sense.
+    nextUrl = `/${locale}/sign-in?reason=service_unavailable`;
   }
 
   if (jwtToSet) {

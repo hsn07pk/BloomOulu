@@ -86,6 +86,8 @@ export async function lookupEmailAction(formData: FormData) {
   }
   interface LookupResult { exists: boolean; hasPassword: boolean; verified: boolean }
   let info: LookupResult | null = null;
+  let networkErr = false;
+  let rateLimited = false;
   try {
     const res = await fetch(`${apiUrl()}/v1/auth/lookup`, {
       method: 'POST',
@@ -93,22 +95,37 @@ export async function lookupEmailAction(formData: FormData) {
       body: JSON.stringify({ email }),
       cache: 'no-store',
     });
-    if (res.ok) info = (await res.json()) as LookupResult;
-  } catch {/* ignore — handled below */}
+    if (res.status === 429) rateLimited = true;
+    else if (res.ok) info = (await res.json()) as LookupResult;
+  } catch { networkErr = true; }
 
+  if (rateLimited) {
+    redirect(`/${locale}/sign-in?reason=rate_limited`);
+  }
   if (info?.exists && info.hasPassword) {
     // Returning donor with a password → show password field on next step.
     redirect(`/${locale}/sign-in?step=password&email=${encodeURIComponent(email)}`);
   }
   // New user OR existing magic-link-only → send a verify-and-setup link.
   try {
-    await fetch(`${apiUrl()}/v1/auth/magic-link`, {
+    const res = await fetch(`${apiUrl()}/v1/auth/magic-link`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ email, locale, setup: !info?.hasPassword }),
       cache: 'no-store',
     });
-  } catch {/* ignore — sent-page just tells user to check email */}
+    if (res.status === 429) rateLimited = true;
+  } catch { networkErr = true; }
+
+  if (rateLimited) {
+    redirect(`/${locale}/sign-in?reason=rate_limited`);
+  }
+  // If we never managed to reach the API at all, telling the user to
+  // "check their inbox" is a lie — they'd wait forever for an email
+  // that never went out. Surface the real problem.
+  if (networkErr && !info) {
+    redirect(`/${locale}/sign-in?reason=service_unavailable`);
+  }
   redirect(`/${locale}/sign-in/sent?email=${encodeURIComponent(email)}`);
 }
 
@@ -133,7 +150,9 @@ export async function passwordSignInAction(formData: FormData) {
       body: JSON.stringify({ email, password }),
       cache: 'no-store',
     });
-    if (res.ok) {
+    if (res.status === 429) {
+      nextUrl = `/${locale}/sign-in?reason=rate_limited`;
+    } else if (res.ok) {
       const data = (await res.json()) as {
         ok: boolean;
         user: { id: string; email: string; name: string | null; role: string; locale: string } | null;
@@ -145,6 +164,8 @@ export async function passwordSignInAction(formData: FormData) {
     }
   } catch (err) {
     if (isNextRedirect(err)) throw err;
+    // True fetch failure (API down) — don't pretend the password was wrong.
+    nextUrl = `/${locale}/sign-in?reason=service_unavailable`;
   }
   if (jwtToSet) {
     await setSessionCookie(jwtToSet);
@@ -160,14 +181,25 @@ export async function forgotPasswordAction(formData: FormData) {
   if (!email || !email.includes('@')) {
     redirect(`/${locale}/sign-in?reason=forgot&error=invalid_email`);
   }
+  let networkErr = false;
+  let rateLimited = false;
   try {
-    await fetch(`${apiUrl()}/v1/auth/forgot-password`, {
+    const res = await fetch(`${apiUrl()}/v1/auth/forgot-password`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ email, locale }),
       cache: 'no-store',
     });
-  } catch {/* anti user-enumeration: never leak failure */}
+    if (res.status === 429) rateLimited = true;
+  } catch { networkErr = true; }
+  if (rateLimited) {
+    redirect(`/${locale}/sign-in?reason=rate_limited`);
+  }
+  if (networkErr) {
+    // The API said nothing (network blip / down) — don't pretend a
+    // reset email is in the user's inbox. Surface the real state.
+    redirect(`/${locale}/sign-in?reason=service_unavailable`);
+  }
   redirect(`/${locale}/sign-in/sent?email=${encodeURIComponent(email)}&kind=reset` as Parameters<typeof redirect>[0]);
 }
 

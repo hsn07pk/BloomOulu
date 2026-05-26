@@ -1,10 +1,29 @@
 import { Body, Controller, Get, Logger, Post, Req } from '@nestjs/common';
 import type { FastifyRequest } from 'fastify';
+import { Throttle } from '@nestjs/throttler';
 import { z } from 'zod';
 import { LocaleEnum, getWebUrl } from '@bloomoulu/constants';
 import { ZodValidationPipe } from '../../common/zod.pipe.js';
 import { AuthService } from './auth.service.js';
 import { sendEmail } from '../../infra/email.js';
+
+// Per-endpoint rate-limit tiers, per IP. ThrottlerGuard is registered
+// globally in app.module.ts; these decorators tighten the defaults
+// (10/sec, 120/min) on routes that cost something real per call.
+//
+//   email-sending (sends an SMTP message — costs money + can DoS the
+//   target mailbox if abused) ........................ 5 per minute
+//   credential-checking (brute-force surface) ........ 10 per minute
+//   identity-probing (email enumeration surface) ..... 10 per minute
+//
+// The remaining `verify-token` operations (verify, verify-and-setup,
+// reset-password) sit at 10/min — a legitimate user only ever fires
+// these once per token, but an attacker brute-forcing the token would
+// hit the cap immediately.
+const RATE_EMAIL = { mid: { ttl: 60_000, limit: 5 } };
+const RATE_CREDENTIAL = { mid: { ttl: 60_000, limit: 10 } };
+const RATE_PROBE = { mid: { ttl: 60_000, limit: 10 } };
+const RATE_VERIFY = { mid: { ttl: 60_000, limit: 10 } };
 
 const EmailBody = z.object({ email: z.string().email(), locale: LocaleEnum.optional() });
 const VerifyBody = z.object({ email: z.string().email(), token: z.string().min(1) });
@@ -34,6 +53,7 @@ export class AuthController {
   constructor(private readonly svc: AuthService) {}
 
   @Post('magic-link')
+  @Throttle(RATE_EMAIL)
   async magicLink(@Body(new ZodValidationPipe(EmailBody)) body: { email: string; locale?: 'en' | 'fi' | 'sv' }) {
     const link = await this.svc.issueMagicLink(body.email);
     const locale = body.locale ?? 'en';
@@ -141,6 +161,7 @@ export class AuthController {
   }
 
   @Post('verify')
+  @Throttle(RATE_VERIFY)
   async verify(@Body(new ZodValidationPipe(VerifyBody)) body: { email: string; token: string }) {
     const user = await this.svc.verifyMagicLink(body.email, body.token);
     if (!user) return { ok: false, user: null };
@@ -163,6 +184,7 @@ export class AuthController {
    * an attacker who is trying to enumerate accounts.
    */
   @Post('lookup')
+  @Throttle(RATE_PROBE)
   async lookup(@Body(new ZodValidationPipe(LookupBody)) body: { email: string }) {
     const info = await this.svc.lookup(body.email);
     return { ok: true, ...info };
@@ -170,6 +192,7 @@ export class AuthController {
 
   /** Email + password sign-in. */
   @Post('sign-in')
+  @Throttle(RATE_CREDENTIAL)
   async signIn(@Body(new ZodValidationPipe(SignInBody)) body: { email: string; password: string }) {
     const user = await this.svc.signInWithPassword(body.email, body.password);
     if (!user) return { ok: false as const, user: null };
@@ -189,6 +212,7 @@ export class AuthController {
    *  Used by /auth/verify on the web after the new user clicks the
    *  link in their welcome email. */
   @Post('verify-and-setup')
+  @Throttle(RATE_VERIFY)
   async verifyAndSetup(
     @Body(new ZodValidationPipe(VerifyAndSetupBody))
     body: { email: string; token: string; password: string; name?: string; locale?: 'en' | 'fi' | 'sv' },
@@ -211,6 +235,7 @@ export class AuthController {
    *  single-use token and email a link to /auth/reset. Returns 200
    *  whether or not the email exists (anti user-enumeration). */
   @Post('forgot-password')
+  @Throttle(RATE_EMAIL)
   async forgotPassword(@Body(new ZodValidationPipe(EmailBody)) body: { email: string; locale?: 'en' | 'fi' | 'sv' }) {
     const user = await this.svc.lookup(body.email);
     if (!user.exists) {
@@ -277,6 +302,7 @@ export class AuthController {
    *  Returns the user row so the web layer can mint a session JWT and
    *  land the donor in /garden. */
   @Post('reset-password')
+  @Throttle(RATE_VERIFY)
   async resetPassword(
     @Body(new ZodValidationPipe(ResetPasswordBody))
     body: { email: string; token: string; password: string },
