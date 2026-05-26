@@ -128,6 +128,7 @@ export class AuthService {
     token: string;
     password: string;
     name?: string;
+    locale?: 'en' | 'fi' | 'sv';
   }) {
     if (!input.password || input.password.length < 8) {
       return { ok: false as const, reason: 'password_too_short' as const };
@@ -143,6 +144,12 @@ export class AuthService {
       where: { identifier_token: { identifier: input.email, token: tokenHash } },
     });
     const passwordHash = await bcrypt.hash(input.password, 12);
+    // On CREATE: set locale to the value passed by the verify form (which
+    // mirrors the URL segment the user clicked through from). Without
+    // this, every new sign-up landed with the Prisma default `fi`
+    // regardless of which language they actually browsed in.
+    // On UPDATE: leave locale alone — only the user themselves should
+    // change it later from /profile, never from a re-verify flow.
     const user = await this.prisma.user.upsert({
       where: { email: input.email },
       update: {
@@ -155,6 +162,7 @@ export class AuthService {
         emailVerified: new Date(),
         passwordHash,
         name: input.name ?? null,
+        ...(input.locale ? { locale: input.locale } : {}),
       },
     });
     return { ok: true as const, user };

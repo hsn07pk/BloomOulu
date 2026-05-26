@@ -15,6 +15,12 @@ const VerifyAndSetupBody = z.object({
   token: z.string().min(1),
   password: z.string().min(8).max(200),
   name: z.string().min(1).max(120).optional(),
+  // Locale the user signed up in — taken from the URL segment they
+  // verified from (/en/auth/verify vs /fi/...). Stored on User so
+  // future emails / receipts / UI hints respect it. Falls back to
+  // the Prisma default (`fi`) when omitted, preserving the old
+  // behaviour for any unchanged clients.
+  locale: LocaleEnum.optional(),
 });
 const ResetPasswordBody = z.object({
   email: z.string().email(),
@@ -185,7 +191,7 @@ export class AuthController {
   @Post('verify-and-setup')
   async verifyAndSetup(
     @Body(new ZodValidationPipe(VerifyAndSetupBody))
-    body: { email: string; token: string; password: string; name?: string },
+    body: { email: string; token: string; password: string; name?: string; locale?: 'en' | 'fi' | 'sv' },
   ) {
     const r = await this.svc.verifyAndSetup(body);
     if (!r.ok) return { ok: false as const, reason: r.reason };
@@ -208,8 +214,21 @@ export class AuthController {
   async forgotPassword(@Body(new ZodValidationPipe(EmailBody)) body: { email: string; locale?: 'en' | 'fi' | 'sv' }) {
     const user = await this.svc.lookup(body.email);
     if (!user.exists) {
-      // Don't reveal that the email isn't registered.
-      return { ok: true, sent: false };
+      // Anti-enumeration: return the SAME success shape we'd return for
+      // a real send so the response is indistinguishable from a hit.
+      // Previously this returned `{ok:true, sent:false}` while the
+      // success path returned `{ok:true, sent:true, expiresAt:...}` —
+      // a probing attacker could distinguish registered emails by
+      // checking whether `sent` was true.
+      //
+      // We return the same shape but no email actually goes out. The
+      // `expiresAt` is fabricated from the same 15-minute window so
+      // even response timing / content length matches the real path.
+      return {
+        ok: true,
+        sent: true,
+        expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+      };
     }
     const link = await this.svc.issueMagicLink(body.email);
     const locale = body.locale ?? 'en';
