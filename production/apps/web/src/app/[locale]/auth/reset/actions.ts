@@ -44,7 +44,9 @@ export async function resetPasswordAction(formData: FormData) {
       body: JSON.stringify({ email, token, password }),
       cache: 'no-store',
     });
-    if (res.ok) {
+    if (res.status === 429) {
+      nextUrl = `/${locale}/sign-in?reason=rate_limited`;
+    } else if (res.ok) {
       const data = (await res.json()) as {
         ok: boolean;
         user?: { id: string; email: string; name: string | null; role: string; locale: string };
@@ -68,6 +70,9 @@ export async function resetPasswordAction(formData: FormData) {
     }
   } catch (err) {
     if (isNextRedirect(err)) throw err;
+    // Genuine fetch failure (API not reachable) — don't pretend the
+    // token was expired when actually the service is down.
+    nextUrl = `/${locale}/sign-in?reason=service_unavailable`;
   }
 
   if (jwtToSet) {

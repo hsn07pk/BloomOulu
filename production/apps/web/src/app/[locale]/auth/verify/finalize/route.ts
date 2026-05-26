@@ -39,6 +39,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ locale: str
     locale?: string;
   }
   let user: VerifiedUser | null = null;
+  let nextReason: 'expired' | 'rate_limited' | 'service_unavailable' = 'expired';
   try {
     const res = await fetch(`${apiUrl}/v1/auth/verify`, {
       method: 'POST',
@@ -46,16 +47,20 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ locale: str
       body: JSON.stringify({ email, token }),
       cache: 'no-store',
     });
-    if (res.ok) {
+    if (res.status === 429) {
+      nextReason = 'rate_limited';
+    } else if (res.ok) {
       const data = (await res.json()) as { ok: boolean; user: VerifiedUser | null };
       if (data.ok && data.user) user = data.user;
     }
   } catch {
-    /* fall through to expired */
+    // The API didn't respond at all — distinguish from "token bad" so
+    // the user-facing copy makes sense.
+    nextReason = 'service_unavailable';
   }
 
   if (!user) {
-    return NextResponse.redirect(new URL(`/${locale}/sign-in?reason=expired`, origin));
+    return NextResponse.redirect(new URL(`/${locale}/sign-in?reason=${nextReason}`, origin));
   }
 
   const secret = new TextEncoder().encode(process.env.AUTH_SECRET ?? 'dev-secret');
