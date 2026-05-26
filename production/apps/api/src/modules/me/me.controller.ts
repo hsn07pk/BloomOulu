@@ -289,4 +289,156 @@ export class MeController {
     });
     return { ok: true, merged };
   }
+
+  /**
+   * Unified donor-activity timeline for the MyGarden page.
+   *
+   * Aggregates four event sources that already live in the DB:
+   *   - Adoption.createdAt           (kind: 'adoption_created')
+   *   - Payment.createdAt + succeeded (kind: 'payment_succeeded')
+   *   - AskMessage.createdAt          (kind: 'ask_asked')
+   *   - SavedPlant.savedAt            (kind: 'plant_saved')
+   *
+   * Each source is queried for its top `limit` rows (so 4 × limit = 80
+   * candidates max for the default), the union is sorted ts-DESC, and
+   * the top `limit` is returned. No new tables, no denormalised
+   * activity log — keeps the source of truth in each entity's own
+   * column.
+   *
+   * Plant scans aren't included even though they're per-user: PlantScan
+   * intentionally stores only `visitorHash` (anonymised SHA-256 of
+   * ip|ua), not userId, so we can't tie scans to a specific donor
+   * without breaking the GDPR posture. Worth revisiting later if we
+   * add an opt-in `PlantView` event tied to userId.
+   *
+   * Response is a discriminated union: each item has `kind` + `ts` +
+   * exactly one of `adoption | payment | ask | plantSaved` populated.
+   * The web layer formats the human-readable copy with i18n.
+   */
+  @Get('activity')
+  async activity(@CurrentUser() actor: AuthenticatedUser) {
+    const userId = actor.sub;
+    // Limit is fixed for now — if we ever need ?limit=N, add @Query
+    // without changing the response shape. The per-source cap keeps
+    // each individual query bounded so the union is at most 4 × N.
+    const PER_SOURCE = 20;
+    const FINAL_LIMIT = 20;
+
+    const [adoptions, payments, asks, saves] = await Promise.all([
+      this.prisma.adoption.findMany({
+        where: { donorId: userId },
+        orderBy: { createdAt: 'desc' },
+        take: PER_SOURCE,
+        select: {
+          id: true,
+          createdAt: true,
+          intent: true,
+          plant: {
+            select: {
+              slug: true,
+              nameEn: true,
+              nameFi: true,
+              nameSv: true,
+              taxon: { select: { latinName: true } },
+            },
+          },
+        },
+      }),
+      this.prisma.payment.findMany({
+        where: { donorId: userId, status: 'succeeded' },
+        orderBy: { createdAt: 'desc' },
+        take: PER_SOURCE,
+        select: { id: true, createdAt: true, amountCents: true, currency: true },
+      }),
+      this.prisma.askMessage.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        take: PER_SOURCE,
+        select: { id: true, createdAt: true, text: true },
+      }),
+      this.prisma.savedPlant.findMany({
+        where: { userId },
+        orderBy: { savedAt: 'desc' },
+        take: PER_SOURCE,
+        select: {
+          savedAt: true,
+          plant: {
+            select: {
+              slug: true,
+              nameEn: true,
+              nameFi: true,
+              nameSv: true,
+              taxon: { select: { latinName: true } },
+            },
+          },
+        },
+      }),
+    ]);
+
+    // Normalize each row into a tagged item with a `ts` for sorting.
+    type Item = {
+      kind: 'adoption_created' | 'payment_succeeded' | 'ask_asked' | 'plant_saved';
+      ts: Date;
+      adoption?: {
+        id: string;
+        plantSlug: string;
+        plantNameEn: string;
+        plantNameFi: string;
+        plantNameSv: string;
+        plantLatin: string | null;
+        intent: string;
+      };
+      payment?: { id: string; amountCents: number; currency: string };
+      ask?: { messageId: string; prompt: string };
+      plantSaved?: {
+        plantSlug: string;
+        plantNameEn: string;
+        plantNameFi: string;
+        plantNameSv: string;
+        plantLatin: string | null;
+      };
+    };
+
+    const items: Item[] = [
+      ...adoptions.map((a): Item => ({
+        kind: 'adoption_created',
+        ts: a.createdAt,
+        adoption: {
+          id: a.id,
+          plantSlug: a.plant.slug,
+          plantNameEn: a.plant.nameEn,
+          plantNameFi: a.plant.nameFi,
+          plantNameSv: a.plant.nameSv,
+          plantLatin: a.plant.taxon?.latinName ?? null,
+          intent: a.intent,
+        },
+      })),
+      ...payments.map((p): Item => ({
+        kind: 'payment_succeeded',
+        ts: p.createdAt,
+        payment: { id: p.id, amountCents: p.amountCents, currency: p.currency },
+      })),
+      ...asks.map((m): Item => ({
+        kind: 'ask_asked',
+        ts: m.createdAt,
+        ask: { messageId: m.id, prompt: m.text.slice(0, 120) },
+      })),
+      ...saves.map((s): Item => ({
+        kind: 'plant_saved',
+        ts: s.savedAt,
+        plantSaved: {
+          plantSlug: s.plant.slug,
+          plantNameEn: s.plant.nameEn,
+          plantNameFi: s.plant.nameFi,
+          plantNameSv: s.plant.nameSv,
+          plantLatin: s.plant.taxon?.latinName ?? null,
+        },
+      })),
+    ];
+
+    items.sort((a, b) => b.ts.getTime() - a.ts.getTime());
+    return {
+      items: items.slice(0, FINAL_LIMIT).map((i) => ({ ...i, ts: i.ts.toISOString() })),
+    };
+  }
 }
