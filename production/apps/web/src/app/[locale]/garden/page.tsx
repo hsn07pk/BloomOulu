@@ -158,6 +158,94 @@ function localisedPlantName(p: GardenView['adoptions'][number]['plant'], locale:
   return p.nameEn;
 }
 
+// ── Activity feed (Phase B) ──────────────────────────────────────────
+//
+// Pulls a unified donor timeline from /v1/me/activity (four event
+// sources joined on the API side: adoptions, payments, asks, saves).
+// The page renders a small vertical timeline card after Gifts/Memorials.
+// See docs/handover-files/stats-roadmap.md (My Garden, Phase B).
+type ActivityItem =
+  | {
+      kind: 'adoption_created';
+      ts: string;
+      adoption: {
+        id: string;
+        plantSlug: string;
+        plantNameEn: string;
+        plantNameFi: string;
+        plantNameSv: string;
+        plantLatin: string | null;
+        intent: 'for_self' | 'gift' | 'memorial' | 'class' | 'corporate';
+      };
+    }
+  | {
+      kind: 'payment_succeeded';
+      ts: string;
+      payment: { id: string; amountCents: number; currency: string };
+    }
+  | {
+      kind: 'ask_asked';
+      ts: string;
+      ask: { messageId: string; prompt: string };
+    }
+  | {
+      kind: 'plant_saved';
+      ts: string;
+      plantSaved: {
+        plantSlug: string;
+        plantNameEn: string;
+        plantNameFi: string;
+        plantNameSv: string;
+        plantLatin: string | null;
+      };
+    };
+
+async function fetchActivity(jwt: string): Promise<ActivityItem[]> {
+  if (!jwt) return [];
+  const apiUrl = getInternalApiUrl();
+  try {
+    const res = await fetch(`${apiUrl}/v1/me/activity`, {
+      headers: { Authorization: `Bearer ${jwt}` },
+      cache: 'no-store',
+    });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { items?: ActivityItem[] };
+    return data.items ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Server-side relative-time formatter. Buckets a past ISO timestamp
+ * into "just now / N min / N h / yesterday / N days / N weeks /
+ * N months / N years" in the right locale. No client component needed.
+ */
+function relativeTime(iso: string, locale: string): string {
+  const tag = locale === 'fi' ? 'fi-FI' : locale === 'sv' ? 'sv-SE' : 'en-GB';
+  const fmt = new Intl.NumberFormat(tag);
+  const fmtN = (n: number) => fmt.format(Math.max(1, Math.round(n)));
+  const diffMs = Date.now() - new Date(iso).getTime();
+  if (Number.isNaN(diffMs) || diffMs < 0) return '';
+  const sec = diffMs / 1000;
+  const min = sec / 60;
+  const hr = min / 60;
+  const day = hr / 24;
+  const week = day / 7;
+  const month = day / 30.44;
+  const year = day / 365.25;
+  const t = (en: string, fi: string, sv: string) =>
+    locale === 'fi' ? fi : locale === 'sv' ? sv : en;
+  if (sec < 60) return t('just now', 'juuri nyt', 'just nu');
+  if (min < 60) return t(`${fmtN(min)} min ago`, `${fmtN(min)} min sitten`, `${fmtN(min)} min sedan`);
+  if (hr < 24) return t(`${fmtN(hr)} h ago`, `${fmtN(hr)} t sitten`, `${fmtN(hr)} h sedan`);
+  if (day < 2) return t('yesterday', 'eilen', 'i går');
+  if (day < 7) return t(`${fmtN(day)} days ago`, `${fmtN(day)} päivää sitten`, `${fmtN(day)} dagar sedan`);
+  if (week < 5) return t(`${fmtN(week)} weeks ago`, `${fmtN(week)} viikkoa sitten`, `${fmtN(week)} veckor sedan`);
+  if (month < 12) return t(`${fmtN(month)} months ago`, `${fmtN(month)} kuukautta sitten`, `${fmtN(month)} månader sedan`);
+  return t(`${fmtN(year)} years ago`, `${fmtN(year)} vuotta sitten`, `${fmtN(year)} år sedan`);
+}
+
 function localisedTierName(t: GardenView['adoptions'][number]['tier'], locale: string) {
   if (locale === 'fi') return t.nameFi || t.name;
   if (locale === 'sv') return t.nameSv || t.name;
@@ -180,10 +268,11 @@ export default async function GardenPage({
   const { cookies } = await import('next/headers');
   const jar = await cookies();
   const sessionJwt = jar.get('bloomoulu.session')?.value ?? '';
-  const [garden, saved, askHistory] = await Promise.all([
+  const [garden, saved, askHistory, activity] = await Promise.all([
     fetchGarden(session.user.id, sessionJwt),
     sessionJwt ? fetchSaved(sessionJwt) : Promise.resolve([] as SavedRow[]),
     fetchAskHistory(session.user.id),
+    fetchActivity(sessionJwt),
   ]);
 
   if (!garden) {
@@ -761,6 +850,156 @@ export default async function GardenPage({
                   </div>
                 </article>
               )}
+            </section>
+          );
+        })()}
+
+        {/* ── Activity feed (Phase B) ──────────────────────────────────
+            Unified donor timeline aggregating adoptions / payments /
+            asks / saves from /v1/me/activity. The card hides itself
+            for new donors with no events. See stats-roadmap.md. */}
+        {activity.length > 0 && (() => {
+          const gT = (en: string, fi: string, sv: string) =>
+            locale === 'fi' ? fi : locale === 'sv' ? sv : en;
+          // Per-event icon + accent colour. Keeping the visual language
+          // tight (one emoji + the existing palette tokens) instead of
+          // pulling in a dedicated icon set.
+          const ICONS: Record<ActivityItem['kind'], { icon: string; bg: string }> = {
+            adoption_created:  { icon: '🌱', bg: 'rgba(111,143,120,0.18)' }, // sage
+            payment_succeeded: { icon: '✓', bg: 'rgba(31,58,44,0.10)'  }, // forest
+            ask_asked:         { icon: '💬', bg: 'rgba(99,143,140,0.18)' }, // teal
+            plant_saved:       { icon: '♥', bg: 'rgba(182,90,63,0.16)' }, // rust
+          };
+          // Render a single line: <Title> · plant-link / amount / prompt.
+          const renderItem = (it: ActivityItem) => {
+            const meta = ICONS[it.kind];
+            let title: React.ReactNode = '';
+            let body: React.ReactNode = '';
+            const plantLink = (slug: string, latin: string | null, fallback: string) => (
+              <Link
+                href={`/${locale}/plants/${slug}`}
+                style={{ color: 'inherit', fontStyle: 'italic' }}
+              >
+                {latin ?? fallback}
+              </Link>
+            );
+            if (it.kind === 'adoption_created') {
+              const a = it.adoption;
+              const verbEn =
+                a.intent === 'gift'
+                  ? 'gifted'
+                  : a.intent === 'memorial'
+                    ? 'dedicated'
+                    : 'adopted';
+              const verbFi =
+                a.intent === 'gift' ? 'lahjoitit' : a.intent === 'memorial' ? 'omistit' : 'adoptoit';
+              const verbSv =
+                a.intent === 'gift' ? 'gav' : a.intent === 'memorial' ? 'tillägnade' : 'adopterade';
+              title = `${gT('You', 'Sinä', 'Du')} ${gT(verbEn, verbFi, verbSv)} `;
+              body = plantLink(a.plantSlug, a.plantLatin, a.plantNameEn);
+            } else if (it.kind === 'payment_succeeded') {
+              const p = it.payment;
+              const tag = locale === 'fi' ? 'fi-FI' : locale === 'sv' ? 'sv-SE' : 'en-GB';
+              const fmtEur = new Intl.NumberFormat(tag, {
+                style: 'currency',
+                currency: p.currency || 'EUR',
+                maximumFractionDigits: 0,
+              });
+              title = gT('Donation processed', 'Lahjoitus käsitelty', 'Donation behandlad');
+              body = fmtEur.format(p.amountCents / 100);
+            } else if (it.kind === 'ask_asked') {
+              title = gT('You asked the garden', 'Kysyit puutarhalta', 'Du frågade trädgården');
+              body = `“${it.ask.prompt}${it.ask.prompt.length >= 120 ? '…' : ''}”`;
+            } else {
+              const s = it.plantSaved;
+              title = gT('You saved ', 'Tallensit ', 'Du sparade ');
+              body = plantLink(s.plantSlug, s.plantLatin, s.plantNameEn);
+            }
+            return (
+              <div
+                key={`${it.kind}-${it.ts}`}
+                style={{
+                  display: 'flex',
+                  gap: 14,
+                  padding: '14px 18px',
+                  borderBottom: '1px solid var(--line, rgba(31,58,44,0.08))',
+                }}
+              >
+                <div
+                  aria-hidden="true"
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: '50%',
+                    background: meta.bg,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                    fontSize: 16,
+                  }}
+                >
+                  {meta.icon}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'baseline',
+                      gap: 12,
+                      fontSize: 14,
+                    }}
+                  >
+                    <span style={{ fontWeight: 500 }}>
+                      {title}
+                      {body}
+                    </span>
+                    <span
+                      className="tiny"
+                      style={{
+                        flexShrink: 0,
+                        color: 'var(--ink-mute, #5A6E63)',
+                      }}
+                    >
+                      {relativeTime(it.ts, locale)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          };
+          return (
+            <section aria-labelledby="activity-h" style={{ marginBottom: 56 }}>
+              <div className="eyebrow">
+                {gT('Activity', 'Toiminta', 'Aktivitet')}
+              </div>
+              <h2
+                id="activity-h"
+                style={{ fontSize: 28, marginTop: 8, marginBottom: 16 }}
+              >
+                {gT('Recent activity', 'Viimeisin toiminta', 'Senaste aktivitet')}
+              </h2>
+              <div
+                className="card"
+                style={{
+                  padding: 0,
+                  overflow: 'hidden',
+                  borderRadius: 16,
+                }}
+              >
+                {activity.map(renderItem)}
+              </div>
+              <div
+                className="tiny muted"
+                style={{ marginTop: 8, textAlign: 'right' }}
+              >
+                {gT(
+                  `${activity.length} most recent`,
+                  `${activity.length} viimeisintä`,
+                  `${activity.length} senaste`,
+                )}
+              </div>
             </section>
           );
         })()}
