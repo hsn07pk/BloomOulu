@@ -51,7 +51,12 @@ export async function verifyAndSetupAction(formData: FormData) {
     const res = await fetch(`${apiUrl()}/v1/auth/verify-and-setup`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ email, token, password, name: name || undefined }),
+      // `locale` is read from the form's hidden field (originally the
+      // URL segment the user came from). The API stamps it onto the new
+      // User row so subsequent visits / emails / receipts respect the
+      // language they signed up in. Falls back to Prisma's default
+      // (`fi`) on the server if omitted, which was the silent bug.
+      body: JSON.stringify({ email, token, password, name: name || undefined, locale }),
       cache: 'no-store',
     });
     if (res.ok) {
