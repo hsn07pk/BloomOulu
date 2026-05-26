@@ -1,3 +1,17 @@
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
+
+// Load the monorepo-root .env into process.env. Next.js only auto-loads
+// .env from the app directory (apps/kiosk/) — without this the dev
+// process silently falls back to 'dev-secret' / undefined for shared
+// env vars. See apps/web/next.config.mjs for the full rationale.
+const __dirname = dirname(fileURLToPath(import.meta.url));
+try {
+  process.loadEnvFile(resolve(__dirname, '../../.env'));
+} catch {
+  // .env missing — expected in prod/CI.
+}
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
