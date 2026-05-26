@@ -193,12 +193,29 @@ body.bloom-reduced-motion *::before,
 body.bloom-reduced-motion *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 body.bloom-reduced-motion .fade-in { animation: none !important; }
 
+/* ── Accessibility: text-size scaling ─────────────────────────────────
+ *
+ * We only scale the body font-size + the `.small`/`.tiny` utility classes.
+ * Headings are deliberately NOT overridden because most h1/h2/h3 in this
+ * codebase are inline-styled with raw px (e.g. `fontSize: 52`) — a CSS
+ * rule like `h1 { font-size: 110% !important }` would interpret `110%`
+ * as "110% of the parent's font-size" (body, ~18px), which would shrink
+ * those 52–92px headings down to ~20px. Bug, not feature.
+ *
+ * The right long-term fix is to refactor heading sizes to use `rem`/`em`
+ * so they participate in root-font-size scaling. Until then, "Large"
+ * means larger body text + slightly larger utility classes; headings
+ * stay at their (already large) original sizes. Same shape for "Small".
+ *
+ * The body scale also cascades to anything not explicitly sized — labels,
+ * inline copy, links, etc. — which is what users actually need from an
+ * accessibility text-size control.
+ */
 body.bloom-smaller-text { font-size: 0.9rem; }
 body.bloom-smaller-text .small { font-size: 0.8rem !important; }
 body.bloom-smaller-text .tiny  { font-size: 0.7rem !important; }
 
 body.bloom-larger-text { font-size: 1.133rem; }
-body.bloom-larger-text h1, body.bloom-larger-text h2, body.bloom-larger-text h3 { font-size: 110% !important; }
 body.bloom-larger-text .small, body.bloom-larger-text .tiny { font-size: 0.933rem !important; }
 
 body.bloom-high-contrast { --ink: #000000; --ink-soft: #111111; --ink-mute: #2A2A2A; --line: rgba(0,0,0,0.45); --line-strong: rgba(0,0,0,0.8); --paper: #FFFFFF; --cream: #FFFFFF; --cream-deep: #F5F5F5; }
