@@ -871,6 +871,64 @@ const adminConfig = new AdminJS({
         actions: restrictTo(...FINANCE_OR_ADMIN),
       },
     },
+    {
+      // Disbursement claim packets — the channel through which the
+      // University of Oulu's central treasury reimburses the Garden for
+      // donations it collected on the Garden's behalf. Status flow:
+      // draft → ready → submitted → paid → reconciled. Editing entries
+      // is only allowed in `draft`; everything else is immutable to
+      // preserve the audit trail.
+      resource: { model: getModelByName('Disbursement'), client: prisma },
+      options: {
+        navigation: { name: 'Finance', icon: 'Repeat' },
+        listProperties: [
+          'reference', 'status', 'periodStart', 'periodEnd',
+          'expectedCents', 'paidCents', 'createdAt',
+        ],
+        filterProperties: ['status', 'reference', 'periodStart', 'periodEnd'],
+        sort: { sortBy: 'createdAt', direction: 'desc' as const },
+        properties: {
+          reference: { description: 'Gapless year-prefixed reference (DISB-YYYY-NNN). Shown on the claim PDF and the University payment reference.' },
+          status: { description: 'draft → ready → submitted → paid → reconciled. cancelled is terminal.' },
+          expectedCents: { description: 'Sum of included Payment grosses, in cents.' },
+          netCents: { description: 'expectedCents − feeCents — what the University owes the Garden.' },
+          paidCents: { description: 'Amount the University actually wired. Compare to netCents to spot drift.' },
+          csvUrl: { description: 'Download the canonical CSV claim payload.' },
+          csvSha256: { description: 'SHA-256 of the last-generated CSV. Tamper-evidence — re-export to refresh.' },
+        },
+        actions: {
+          ...restrictTo(...FINANCE_OR_ADMIN),
+          // Status transitions go through the api (audit-logged + role-checked).
+          // We deliberately disable bulk delete; cancelled rows stay for audit.
+          bulkDelete: { isAccessible: false },
+          // The `new` flow draft-creates through /v1/disbursements/draft so
+          // entries get bundled atomically. Disable the admin shortcut so
+          // staff don't create empty rows by accident.
+          new: { isAccessible: false },
+        },
+      },
+    },
+    {
+      resource: { model: getModelByName('DisbursementEntry'), client: prisma },
+      options: {
+        navigation: { name: 'Finance', icon: 'List' },
+        listProperties: ['disbursementId', 'paymentId', 'amountCents', 'feeCents', 'netCents', 'included'],
+        filterProperties: ['disbursementId', 'included'],
+        sort: { sortBy: 'createdAt', direction: 'desc' as const },
+        properties: {
+          amountCents: { description: 'Snapshot of Payment.amountCents at inclusion time.' },
+          feeCents: { description: 'Snapshot of Payment.feeCents (provider fee).' },
+          netCents: { description: 'amountCents − feeCents.' },
+          included: { description: 'Uncheck via /v1/disbursements/:id/entries to exclude with a reason.' },
+        },
+        actions: {
+          ...restrictTo(...FINANCE_OR_ADMIN),
+          new: { isAccessible: false },
+          delete: { isAccessible: false },
+          bulkDelete: { isAccessible: false },
+        },
+      },
+    },
     // ── RAG (curator-owned, ADR-0007) ─────────────────────────────────
     {
       resource: { model: getModelByName('RagDocument'), client: prisma },

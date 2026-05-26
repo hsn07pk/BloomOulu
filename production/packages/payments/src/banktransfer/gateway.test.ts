@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { rfCreditorReference, isValidRfReference } from './gateway.js';
+import { createHmac } from 'node:crypto';
+import { BankTransferGateway, rfCreditorReference, isValidRfReference } from './gateway.js';
 
 describe('RF Creditor Reference (ISO 11649)', () => {
   it('generates a valid reference for a UUIDv7 orderId', () => {
@@ -25,5 +26,59 @@ describe('RF Creditor Reference (ISO 11649)', () => {
     const a = rfCreditorReference('019085b0-1111-7000-8000-aaaaaaaaaaaa');
     const b = rfCreditorReference('019085b0-1111-7000-8000-aaaaaaaaaaaa');
     expect(a).toBe(b);
+  });
+});
+
+describe('BankTransferGateway.parseWebhook auth', () => {
+  const cfg = {
+    iban: 'FI21 1234 5600 0007 85',
+    bic: 'OKOYFIHH',
+    beneficiaryName: 'BloomOulu',
+    instructionsUrl: 'https://example.test/donate/pay',
+  };
+  const validPayload = {
+    reference: rfCreditorReference('019085b0-1111-7000-8000-aaaaaaaaaaaa'),
+    amountCents: 2500,
+    paidAt: new Date().toISOString(),
+    bankRef: 'bank-ref-1',
+  };
+  const body = JSON.stringify(validPayload);
+
+  it('accepts unsigned requests when no secret is configured', async () => {
+    const gw = new BankTransferGateway(cfg);
+    const event = await gw.parseWebhook({ rawBody: body, headers: {} });
+    expect(event.kind).toBe('checkout.completed');
+  });
+
+  it('rejects unsigned requests when secret is configured', async () => {
+    const gw = new BankTransferGateway({ ...cfg, webhookSecret: 'top-secret' });
+    await expect(gw.parseWebhook({ rawBody: body, headers: {} })).rejects.toThrow(
+      /missing HMAC-SHA256/,
+    );
+  });
+
+  it('rejects mismatched signatures', async () => {
+    const gw = new BankTransferGateway({ ...cfg, webhookSecret: 'top-secret' });
+    const headers = { authorization: `HMAC-SHA256 ${'a'.repeat(64)}` };
+    await expect(gw.parseWebhook({ rawBody: body, headers })).rejects.toThrow(
+      /signature mismatch/,
+    );
+  });
+
+  it('accepts a correctly signed request', async () => {
+    const secret = 'top-secret';
+    const gw = new BankTransferGateway({ ...cfg, webhookSecret: secret });
+    const sig = createHmac('sha256', secret).update(body).digest('hex');
+    const headers = { authorization: `HMAC-SHA256 ${sig}` };
+    const event = await gw.parseWebhook({ rawBody: body, headers });
+    expect(event.kind).toBe('checkout.completed');
+  });
+
+  it('refuses an unsolicited Authorization header in dev mode (fail-closed)', async () => {
+    const gw = new BankTransferGateway(cfg); // no secret
+    const headers = { authorization: 'HMAC-SHA256 anything' };
+    await expect(gw.parseWebhook({ rawBody: body, headers })).rejects.toThrow(
+      /not configured/,
+    );
   });
 });

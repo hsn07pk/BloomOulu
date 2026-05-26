@@ -19,7 +19,7 @@ import { AuditService } from '../audit/audit.service.js';
 import { SettingsService } from '../settings/settings.service.js';
 import { AdoptionLifecycleService } from '../adoptions/adoption-lifecycle.service.js';
 import { PaymentGatewayFactory } from './payment-gateway.factory.js';
-import { enqueueReceipt, enqueuePaymentRetry } from '../jobs/enqueue.js';
+import { enqueueReceipt, enqueuePaymentRetry, enqueueAgreementFirstCharge } from '../jobs/enqueue.js';
 
 export interface CreatePaymentInput {
   donorId: string;
@@ -127,6 +127,13 @@ export class PaymentsService {
       providerSessionId = handoff.providerSessionId;
     }
 
+    // For recurring rails, the gateway hands us a long-lived agreement
+    // / token credential up-front (MobilePay) or it arrives on the
+    // return webhook (Paytrail). Persist what we have so renewals can
+    // chargeAgreement against it; Paytrail tokens land via handleEvent.
+    const initialAgreementId =
+      input.recurring && provider === 'mobilepay' ? providerSessionId : null;
+
     const payment = await this.prisma.$transaction(async (tx) => {
       const p = await tx.payment.create({
         data: {
@@ -135,6 +142,7 @@ export class PaymentsService {
           donorId: input.donorId,
           provider: provider as any,
           providerSessionId,
+          providerCustomerId: initialAgreementId,
           amountCents: input.amountCents,
           currency: 'EUR',
           netCents: input.amountCents,
@@ -204,13 +212,30 @@ export class PaymentsService {
             this.logger.warn(`No Payment found for orderId=${event.orderId}`);
             return { deduplicated: false };
           }
+          // Token / agreement credential. Paytrail emits it via
+          // exchanged tokenization-id; MobilePay carries the agreement
+          // separately on agreement.activated. Once stored, dunning and
+          // the renewal cron can call chargeAgreement against this row.
+          const providerCustomerId =
+            event.agreementId && event.agreementId.length > 0
+              ? event.agreementId
+              : payment.providerCustomerId;
+          // Provider fee — Paytrail returns this on enrichment; default
+          // to whatever was already on the row.
+          const feeCents = typeof event.feeCents === 'number' ? event.feeCents : payment.feeCents;
+          const grossAmount = event.amountCents || payment.amountCents;
           await tx.payment.update({
             where: { id: payment.id },
             data: {
               status: PaymentStatus.succeeded,
               providerPaymentRef: event.providerPaymentRef,
+              providerCustomerId,
               receivedAt: event.paidAt,
-              amountCents: event.amountCents || payment.amountCents,
+              amountCents: grossAmount,
+              feeCents,
+              // Net = gross − provider fee. VAT is exempt for FI
+              // non-profit donations so VAT cents stay zero.
+              netCents: grossAmount - feeCents,
             },
           });
           if (payment.adoptionId) {
@@ -329,12 +354,46 @@ export class PaymentsService {
           break;
         }
         case 'agreement.activated': {
-          // Look up Adoption by metadata orderId; activate.
-          const adoption = await tx.adoption.findFirst({
-            where: { id: event.orderId },
+          // event.orderId is a Payment.orderId (uuidv7), NOT an Adoption.id.
+          // Look up the Payment, then operate on its adoption.
+          const linkPayment = await tx.payment.findUnique({
+            where: { orderId: event.orderId },
           });
-          if (adoption) {
-            await this.lifecycle.activate(tx, adoption.id, new Date());
+          if (!linkPayment?.adoptionId) {
+            this.logger.warn(
+              `agreement.activated: no Payment/adoptionId for orderId=${event.orderId}`,
+            );
+            return { deduplicated: false };
+          }
+          // Persist the long-lived credential (token / agreementId) on
+          // the Payment row so future renewals can chargeAgreement
+          // against it.
+          if (event.agreementId) {
+            await tx.payment.update({
+              where: { id: linkPayment.id },
+              data: { providerCustomerId: event.agreementId },
+            });
+          }
+          await this.lifecycle.activate(tx, linkPayment.adoptionId, new Date());
+          await this.audit.log(tx, {
+            action: 'payment.agreement.activated',
+            resource: `Adoption/${linkPayment.adoptionId}`,
+            after: {
+              provider: event.provider,
+              agreementId: event.agreementId ?? null,
+              cardSummary: event.metadata?.['cardSummary'] ?? null,
+            },
+          });
+          // Paytrail's addcard-form flow only captures the card — no
+          // charge happens. Enqueue an immediate first charge so the
+          // donor's expectation ("I just paid") matches reality within
+          // seconds. MobilePay fires its own `epayment.captured.v1`
+          // automatically on agreement activation, so we skip the
+          // explicit enqueue for that provider.
+          if (event.provider === 'paytrail' && event.agreementId) {
+            sideEffects.push(() =>
+              enqueueAgreementFirstCharge({ adoptionId: linkPayment.adoptionId! }),
+            );
           }
           break;
         }

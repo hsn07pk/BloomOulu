@@ -25,6 +25,8 @@ import {
   QUEUE_KIOSK_WATCHDOG,
   QUEUE_PAYMENT_RETRY,
   QUEUE_RENEWAL,
+  QUEUE_AGREEMENT_FIRST_CHARGE,
+  QUEUE_DISBURSEMENT_MONTHLY,
   QUEUE_TAX_CERT_ANNUAL,
   QUEUE_RAG_EVAL,
   QUEUE_AUDIT_GAP,
@@ -39,8 +41,17 @@ import { processRagIngest } from './modules/jobs/processors/rag-ingest.processor
 import { processGdprExport } from './modules/jobs/processors/gdpr-export.processor.js';
 import { processGdprErase } from './modules/jobs/processors/gdpr-erase.processor.js';
 import { processKioskWatchdog } from './modules/jobs/processors/kiosk-watchdog.processor.js';
-import { processPaymentRetry } from './modules/jobs/processors/payment-retry.processor.js';
-import { processRenewal } from './modules/jobs/processors/renewal.processor.js';
+import { makeProcessPaymentRetry } from './modules/jobs/processors/payment-retry.processor.js';
+import { makeProcessRenewal } from './modules/jobs/processors/renewal.processor.js';
+import { processDisbursementMonthly } from './modules/jobs/processors/disbursement-monthly.processor.js';
+import {
+  BankTransferGateway,
+  MobilePayGateway,
+  PaytrailGateway,
+  type PaymentGateway,
+  type ProviderId,
+} from '@bloomoulu/payments';
+import { getWebUrl } from '@bloomoulu/constants';
 import { processTaxCertAnnual } from './modules/jobs/processors/tax-cert-annual.processor.js';
 import { processRagEval } from './modules/jobs/processors/rag-eval.processor.js';
 import { processAuditGap } from './modules/jobs/processors/audit-gap.processor.js';
@@ -59,6 +70,51 @@ interface QueueDef {
   handler: (job: Job) => Promise<unknown>;
 }
 
+// Stateless gateway resolver shared by the dunning + renewal processors.
+// Mirrors PaymentGatewayFactory.for in the api process; instantiating
+// adapters per call is cheap (they're stateless) and keeps env changes
+// reflected on the next job without a process restart.
+const gatewayFor = (provider: ProviderId): PaymentGateway => {
+  switch (provider) {
+    case 'bank_transfer': {
+      const s = buildSettingsDefaults();
+      return new BankTransferGateway({
+        ...s.bankTransfer,
+        webhookSecret: process.env.BANK_TRANSFER_WEBHOOK_SECRET,
+      });
+    }
+    case 'paytrail': {
+      const merchantId = process.env.PAYTRAIL_MERCHANT_ID;
+      const secret = process.env.PAYTRAIL_SECRET;
+      if (!merchantId || !secret) {
+        throw new Error('Paytrail not configured (PAYTRAIL_MERCHANT_ID / PAYTRAIL_SECRET unset)');
+      }
+      return new PaytrailGateway({
+        merchantId,
+        secret,
+        apiBaseUrl: process.env.PAYTRAIL_API_URL,
+        webhookSecret: process.env.PAYTRAIL_WEBHOOK_SECRET,
+        mockMode: process.env.PAYTRAIL_MOCK === 'true',
+        webBaseUrl: getWebUrl(),
+        refundCallbackUrl: process.env.PAYTRAIL_CALLBACK_URL,
+      });
+    }
+    case 'mobilepay':
+      return new MobilePayGateway({
+        clientId: process.env.MOBILEPAY_CLIENT_ID ?? '',
+        clientSecret: process.env.MOBILEPAY_CLIENT_SECRET ?? '',
+        subscriptionKey: process.env.MOBILEPAY_SUBSCRIPTION_KEY ?? '',
+        merchantSerialNumber: process.env.MOBILEPAY_MERCHANT_SERIAL_NUMBER ?? '',
+        webhookSecret: process.env.MOBILEPAY_WEBHOOK_SECRET ?? '',
+        apiBaseUrl: process.env.MOBILEPAY_API_URL,
+        returnUrl: process.env.MOBILEPAY_RETURN_URL ?? '',
+        callbackPrefix: process.env.MOBILEPAY_CALLBACK_URL ?? '',
+      });
+    default:
+      throw new Error(`Unknown provider ${provider}`);
+  }
+};
+
 const QUEUES: ReadonlyArray<QueueDef> = [
   { name: QUEUE_RECEIPT,        concurrency: 4,  handler: processReceipt },
   { name: QUEUE_EMAIL,          concurrency: 8,  handler: processEmail },
@@ -67,8 +123,12 @@ const QUEUES: ReadonlyArray<QueueDef> = [
   { name: QUEUE_GDPR_EXPORT,    concurrency: 2,  handler: processGdprExport },
   { name: QUEUE_GDPR_ERASE,     concurrency: 1,  handler: processGdprErase },
   { name: QUEUE_KIOSK_WATCHDOG, concurrency: 1,  handler: processKioskWatchdog },
-  { name: QUEUE_PAYMENT_RETRY,  concurrency: 4,  handler: processPaymentRetry },
-  { name: QUEUE_RENEWAL,        concurrency: 2,  handler: processRenewal },
+  { name: QUEUE_PAYMENT_RETRY,  concurrency: 4,  handler: makeProcessPaymentRetry({ gatewayFor }) },
+  { name: QUEUE_RENEWAL,        concurrency: 2,  handler: makeProcessRenewal({ gatewayFor }) },
+  // Single-adoption first-charge after a Paytrail agreement activation.
+  // Reuses the renewal processor — passing {adoptionId} narrows to one row.
+  { name: QUEUE_AGREEMENT_FIRST_CHARGE, concurrency: 4, handler: makeProcessRenewal({ gatewayFor }) },
+  { name: QUEUE_DISBURSEMENT_MONTHLY, concurrency: 1, handler: processDisbursementMonthly },
   { name: QUEUE_TAX_CERT_ANNUAL, concurrency: 1, handler: processTaxCertAnnual },
   { name: QUEUE_RAG_EVAL,       concurrency: 1,  handler: processRagEval },
   { name: QUEUE_AUDIT_GAP,      concurrency: 1,  handler: processAuditGap },

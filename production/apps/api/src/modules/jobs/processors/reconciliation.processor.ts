@@ -77,5 +77,26 @@ export async function processReconciliation(job: Job<ReconciliationJob>) {
     });
   }
 
-  return { exceptions, stale: stale.length };
+  // 3. Bank-transfer staleness — donors who chose bank but haven't
+  //    paid in 7+ days are unlikely to. The accountant should see a
+  //    list so they can either nudge or write off. P1 (not P0) — this
+  //    is operational, not a code-bug.
+  const staleBank = await prisma.payment.count({
+    where: {
+      status: 'pending',
+      provider: 'bank_transfer',
+      createdAt: { lt: new Date(Date.now() - 7 * 24 * 3600_000) },
+    },
+  });
+  if (staleBank > 0) {
+    await ntfyAlert({
+      tier: 'P1',
+      title: `Reconciliation: ${staleBank} bank-transfer payment(s) pending > 7d`,
+      body:
+        `Either upload the latest camt.054 CSV at /admin/pages/reconciliation, ` +
+        `or write the donors off in /admin → Payment with status=pending+provider=bank_transfer.`,
+    });
+  }
+
+  return { exceptions, stale: stale.length, staleBank };
 }

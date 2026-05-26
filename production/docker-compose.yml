@@ -194,6 +194,11 @@ services:
       PAYMENTS_BANK_TRANSFER_ENABLED: ${PAYMENTS_BANK_TRANSFER_ENABLED:-true}
       PAYMENTS_PAYTRAIL_ENABLED: ${PAYMENTS_PAYTRAIL_ENABLED:-true}
       PAYMENTS_MOBILEPAY_ENABLED: ${PAYMENTS_MOBILEPAY_ENABLED:-false}
+      # Shared HMAC secret protecting `/webhooks/bank-transfer`. When
+      # unset (dev), the webhook still works but accepts only requests
+      # WITHOUT an Authorization header (fail-closed). In prod this MUST
+      # be set or the accountant's reconciliation cron is rejected.
+      BANK_TRANSFER_WEBHOOK_SECRET: ${BANK_TRANSFER_WEBHOOK_SECRET:-}
       # Adoption flow knobs.
       ADOPTION_GIFT_WRAP_CENTS: ${ADOPTION_GIFT_WRAP_CENTS:-400}
       ADOPTION_DONATION_SHARE_BP: ${ADOPTION_DONATION_SHARE_BP:-7200}
@@ -267,6 +272,31 @@ services:
       OLLAMA_EMBED_MODEL: bge-m3
       EMBED_MODEL: bge-m3
       LLM_MODEL: gemma3:4b
+      # Payment env — dunning + renewal workers construct gateway
+      # adapters here. Must mirror the `api` service's payment env so
+      # background charges hit the same merchant. The defaults match
+      # the api block so `docker compose up` works out of the box.
+      PAYTRAIL_MERCHANT_ID: ${PAYTRAIL_MERCHANT_ID:-375917}
+      PAYTRAIL_SECRET: ${PAYTRAIL_SECRET:-SAIPPUAKAUPPIAS}
+      PAYTRAIL_API_URL: ${PAYTRAIL_API_URL:-https://services.paytrail.com}
+      PAYTRAIL_WEBHOOK_SECRET: ${PAYTRAIL_WEBHOOK_SECRET:-SAIPPUAKAUPPIAS}
+      PAYTRAIL_CALLBACK_URL: ${PAYTRAIL_CALLBACK_URL:-http://localhost:4000/webhooks/paytrail}
+      PAYTRAIL_MOCK: ${PAYTRAIL_MOCK:-true}
+      MOBILEPAY_API_URL: ${MOBILEPAY_API_URL:-https://apitest.vipps.no}
+      MOBILEPAY_CLIENT_ID: ${MOBILEPAY_CLIENT_ID:-}
+      MOBILEPAY_CLIENT_SECRET: ${MOBILEPAY_CLIENT_SECRET:-}
+      MOBILEPAY_SUBSCRIPTION_KEY: ${MOBILEPAY_SUBSCRIPTION_KEY:-}
+      MOBILEPAY_MERCHANT_SERIAL_NUMBER: ${MOBILEPAY_MERCHANT_SERIAL_NUMBER:-}
+      MOBILEPAY_WEBHOOK_SECRET: ${MOBILEPAY_WEBHOOK_SECRET:-}
+      MOBILEPAY_RETURN_URL: ${MOBILEPAY_RETURN_URL:-${NEXT_PUBLIC_WEB_URL:-http://localhost:3000}/en/donate/complete}
+      MOBILEPAY_CALLBACK_URL: ${MOBILEPAY_CALLBACK_URL:-${NEXT_PUBLIC_API_URL:-http://localhost:4000}/webhooks/mobilepay}
+      GARDEN_IBAN: ${GARDEN_IBAN:-FI00 0000 0000 0000 00}
+      GARDEN_BIC: ${GARDEN_BIC:-NDEAFIHH}
+      GARDEN_ORG_NAME: ${GARDEN_ORG_NAME:-Oulun yliopiston kasvitieteellinen puutarha}
+      GARDEN_DONATE_URL: ${GARDEN_DONATE_URL:-${NEXT_PUBLIC_WEB_URL:-http://localhost:3000}/en/donate/pay}
+      NEXT_PUBLIC_WEB_URL: ${NEXT_PUBLIC_WEB_URL:-http://localhost:3000}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
+      BANK_TRANSFER_WEBHOOK_SECRET: ${BANK_TRANSFER_WEBHOOK_SECRET:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:

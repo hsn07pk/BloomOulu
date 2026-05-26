@@ -21,6 +21,7 @@ import {
   QUEUE_RAG_EVAL,
   QUEUE_AUDIT_GAP,
   QUEUE_ENRICHMENT_SWEEP,
+  QUEUE_DISBURSEMENT_MONTHLY,
   defaultJobOpts,
 } from './queues.js';
 
@@ -90,6 +91,15 @@ export async function registerCronJobs() {
   const auditGap = new Queue(QUEUE_AUDIT_GAP, { connection });
   await auditGap.upsertJobScheduler('daily-0330', { pattern: '30 3 * * *' }, {
     name: 'daily',
+    data: {},
+    opts: defaultJobOpts,
+  });
+
+  // 1st of each month, 05:00 UTC — auto-draft a Disbursement for the
+  // prior month. Finance staff review + submit via /admin.
+  const disb = new Queue(QUEUE_DISBURSEMENT_MONTHLY, { connection });
+  await disb.upsertJobScheduler('monthly-1st-0500', { pattern: '0 5 1 * *' }, {
+    name: 'monthly',
     data: {},
     opts: defaultJobOpts,
   });

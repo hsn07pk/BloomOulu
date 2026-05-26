@@ -92,11 +92,13 @@ based on the same flag.
 
 Real flow: donor lands on `/donate/pay` with IBAN + BIC + EPC069-12 QR.
 They use their bank app to scan the QR and complete the SEPA Credit
-Transfer. The Garden's accountant uploads daily camt.054 statements,
-and a cron job (TODO: scheduling) POSTs each row to
-`/webhooks/bank-transfer`. The `WebhooksController` does the fuzzy
-RF-prefix lookup against pending `Payment` rows and activates the
-matching adoption(s).
+Transfer. The Garden's accountant either:
+
+- uploads the daily camt.054 statement via `/admin → Reconciliation`
+  (role-guarded UI; no shared secret needed), or
+- runs an automated cron that POSTs each parsed row to
+  `POST /webhooks/bank-transfer` signed with HMAC-SHA256 over the raw
+  body using `BANK_TRANSFER_WEBHOOK_SECRET`.
 
 Configure in `/admin → SystemSetting`:
 
@@ -106,6 +108,43 @@ bankTransfer.bic              "OKOYFIHH"
 bankTransfer.beneficiaryName  "Oulun yliopiston kasvitieteellinen puutarha"
 bankTransfer.instructionsUrl  "https://bloomoulu.fi/en/donate/pay"
 ```
+
+Set in env:
+
+```
+BANK_TRANSFER_WEBHOOK_SECRET=<32+ char random>   # required if you wire the cron
+```
+
+The webhook fails closed: if `BANK_TRANSFER_WEBHOOK_SECRET` is unset,
+the route still accepts requests but refuses any that include an
+`Authorization` header (so a forgotten secret in prod returns 400
+rather than silently activating adoptions).
+
+## Recurring billing
+
+Three paths, all production-wired:
+
+- **MobilePay/Vipps**: native agreements. `createAgreement` returns a
+  Vipps confirmation URL; on `recurring.agreement-activated.v1` the
+  agreement id is stored in `Payment.providerCustomerId`. The
+  `renewal` cron (daily 04:00 UTC) charges `chargeAgreement` for any
+  adoption with `endsAt < now + 7d`. Failed charges write a failed
+  `Payment` row and surface to dunning.
+- **Paytrail tokenisation**: `createAgreement` POSTs `/payments` with
+  `getToken: true`. The donor pays + opts into recurring in one step;
+  the return URL carries `checkout-tokenization-id` which
+  `parseWebhook` exchanges (via `POST /tokenization/{id}`) for the
+  long-lived `token`. Renewals call `POST /payments/token/mit-charge`
+  against that token. Refund callbacks land on the same
+  `/webhooks/paytrail` endpoint via `PAYTRAIL_CALLBACK_URL`.
+- **Bank transfer**: reminder-based. The renewal cron creates a
+  pending Payment row with a fresh RF reference and emails the donor;
+  the accountant's CSV upload reconciles the inbound SCT.
+
+Dunning state machine (`apps/api/src/modules/jobs/processors/payment-retry.processor.ts`):
+3d → 7d → 14d → 21d grace → cancel. Each escalation is a `chargeAgreement`
+attempt for card / MobilePay rails; bank-transfer rails get a reminder
+email per step until the accountant reconciles.
 
 ## Code that's already production-grade
 

@@ -59,6 +59,14 @@ export interface PaytrailConfig {
   mockMode?: boolean;
   /** Public-facing web URL — used to compose the mock checkout link. */
   webBaseUrl?: string;
+  /**
+   * Refund callback URL on our api (e.g.
+   * `https://api.bloomoulu.fi/webhooks/paytrail`). Paytrail posts the
+   * async `refund.processed` event here. Required for refunds — without
+   * a reachable URL the refund still happens at Paytrail but the
+   * reconciliation cron has to detect it 24h later.
+   */
+  refundCallbackUrl?: string;
 }
 
 const DEFAULT_BASE = 'https://services.paytrail.com';
@@ -106,6 +114,30 @@ export class PaytrailGateway implements PaymentGateway {
       headers[k.toLowerCase()] = v;
     }
     return paytrailSignature(this.cfg.secret, headers, '');
+  }
+
+  /**
+   * Internal helper — build the standard set of Paytrail HMAC-signed
+   * request headers for outbound calls. Pass `method='GET'` for GETs
+   * (Paytrail still signs them); pass `transactionId` to scope the
+   * signature to a specific transaction (refunds, token-charges).
+   */
+  private buildOutboundHeaders(
+    bodyStr: string,
+    extra: { method?: 'POST' | 'GET'; transactionId?: string } = {},
+  ): Record<string, string> {
+    const headers: Record<string, string> = {
+      'checkout-account': this.cfg.merchantId,
+      'checkout-algorithm': 'sha256',
+      'checkout-method': extra.method ?? 'POST',
+      'checkout-nonce': randomUUID(),
+      'checkout-timestamp': new Date().toISOString(),
+      'content-type': 'application/json; charset=utf-8',
+      'platform-name': 'bloomoulu',
+    };
+    if (extra.transactionId) headers['checkout-transaction-id'] = extra.transactionId;
+    headers['signature'] = paytrailSignature(this.cfg.secret, headers, bodyStr);
+    return headers;
   }
 
   /** Initiate a Paytrail payment (one-off). */
@@ -195,62 +227,283 @@ export class PaytrailGateway implements PaymentGateway {
   }
 
   /**
-   * Paytrail does not have a first-class "agreement" concept like MobilePay.
-   * Recurring with Paytrail is implemented via "tokenization": the donor's
-   * first charge captures a card token; subsequent merchant-initiated charges
-   * use that token. For BloomOulu we deliberately route TRUE recurring
-   * (donor-confirmed multi-period agreement, SCA satisfied once) through
-   * MobilePay-direct; Paytrail is used for one-off charges that may then be
-   * re-attempted manually using the stored token.
+   * Recurring via Paytrail tokenisation. We use the standard two-step
+   * flow per the OpenAPI spec
+   * (https://github.com/paytrail/api-documentation):
+   *
+   *   1. POST /tokenization/addcard-form          — render add-card form
+   *   2. donor returns with checkout-tokenization-id
+   *   3. POST /tokenization/{checkout-tokenization-id}  — exchange for token
+   *   4. POST /payments/token/mit/charge          — first + future charges
+   *
+   * `createAgreement` performs step 1. Step 2 lands in `parseWebhook`,
+   * which exchanges and emits `agreement.activated` with the long-lived
+   * `token` as the agreement id. The orchestrator persists it in
+   * `Payment.providerCustomerId` and immediately enqueues the first
+   * `chargeAgreement` (step 4) — the dunning ladder takes over on
+   * failure.
+   *
+   * Note: the addcard-form endpoint expects checkout-* params in the
+   * **body** (NOT the request headers like other Paytrail endpoints),
+   * per AddCardFormRequest schema in the OpenAPI doc.
    */
-  async createAgreement(_: CreateAgreementInput): Promise<AgreementHandoff> {
+  async createAgreement(input: CreateAgreementInput): Promise<AgreementHandoff> {
+    if (this.cfg.mockMode) {
+      // Mock the hosted-checkout step. The paytrail-mock page signs a
+      // return URL with this.cfg.secret AND embeds a synthetic
+      // tokenization-id so the exchange path is exercised in dev.
+      const base = (this.cfg.webBaseUrl ?? 'http://localhost:3000').replace(/\/$/, '');
+      const url = new URL(`${base}/${input.donor.locale}/donate/paytrail-test`);
+      url.searchParams.set('orderId', input.orderId);
+      url.searchParams.set('amount', String(input.amountCents));
+      url.searchParams.set('description', input.productDescription);
+      url.searchParams.set('success', input.successUrl);
+      url.searchParams.set('cancel', input.cancelUrl);
+      url.searchParams.set('tokenize', '1');
+      return {
+        provider: this.id as any,
+        agreementId: '',
+        confirmationUrl: url.toString(),
+      };
+    }
+
+    // addcard-form has no "stamp" field that survives the callback, so
+    // we encode our orderId in the redirect URL ourselves. Paytrail
+    // appends `checkout-tokenization-id` + `signature` and bounces the
+    // donor back; /donate/complete forwards the full query to
+    // /webhooks/paytrail where parseWebhook reads `orderId` alongside
+    // the verified `checkout-tokenization-id`.
+    const withOrderId = (raw: string) => {
+      const u = new URL(raw);
+      u.searchParams.set('orderId', input.orderId);
+      return u.toString();
+    };
+    const successWithOrder = withOrderId(input.successUrl);
+    const cancelWithOrder = withOrderId(input.cancelUrl);
+
+    // The AddCardFormRequest body carries the checkout-* signing fields
+    // as JSON properties. The signature itself goes inside the body
+    // under "signature" too — not as a header, unlike other endpoints.
+    const bodyBase: Record<string, string | number> = {
+      'checkout-account': parseInt(this.cfg.merchantId, 10),
+      'checkout-algorithm': 'sha256',
+      'checkout-method': 'POST',
+      'checkout-nonce': randomUUID(),
+      'checkout-timestamp': new Date().toISOString(),
+      'checkout-redirect-success-url': successWithOrder,
+      'checkout-redirect-cancel-url': cancelWithOrder,
+      'checkout-callback-success-url': input.metadata['callbackSuccess'] ?? successWithOrder,
+      'checkout-callback-cancel-url': input.metadata['callbackCancel'] ?? cancelWithOrder,
+      language: input.donor.locale.toUpperCase(),
+    };
+    // Signature spans all checkout-* fields (sorted) joined as
+    // "key:value\n" — same algorithm as the request-header form, just
+    // with the body keys as input. Body is empty for this endpoint.
+    const sigInput: Record<string, string> = {};
+    for (const [k, v] of Object.entries(bodyBase)) {
+      if (k.toLowerCase().startsWith('checkout-')) sigInput[k] = String(v);
+    }
+    const signature = paytrailSignature(this.cfg.secret, sigInput, '');
+    const body = { ...bodyBase, signature };
+    const bodyStr = JSON.stringify(body);
+    const headers: Record<string, string> = {
+      'content-type': 'application/json; charset=utf-8',
+      'platform-name': 'bloomoulu',
+    };
+
+    const res = await request(`${this.base}/tokenization/addcard-form`, {
+      method: 'POST',
+      headers,
+      body: bodyStr,
+    });
+    // The endpoint returns 302 with Location pointing at the
+    // card-addition form. The undici request follows redirects by
+    // default for some methods but not POST — we read the location
+    // header.
+    if (res.statusCode === 302 || res.statusCode === 303) {
+      const loc = res.headers['location'];
+      if (!loc) {
+        throw new PaymentGatewayError(
+          this.id as any,
+          'paytrail.addcard.no_location',
+          'Paytrail addcard-form returned 302 without Location header',
+          true,
+        );
+      }
+      return {
+        provider: this.id as any,
+        agreementId: '',
+        confirmationUrl: Array.isArray(loc) ? loc[0]! : loc,
+      };
+    }
+    const text = await res.body.text();
     throw new PaymentGatewayError(
       this.id as any,
-      'paytrail.recurring.unsupported',
-      'Paytrail recurring via tokenisation: use createCheckout with saveCard flag, then chargeAgreement with the token. For true SCA-once agreements, use the MobilePay direct adapter.',
-      false,
+      `paytrail.addcard.${res.statusCode}`,
+      text,
+      res.statusCode >= 500,
     );
   }
 
-  async chargeAgreement(_: ChargeAgreementInput): Promise<ChargeResult> {
-    // TODO: implement once Garden enables Paytrail tokenised recurring;
-    // see https://docs.paytrail.com/#/?id=tokenization-features
+  /**
+   * Merchant-initiated charge against a stored Paytrail card token.
+   * Used for monthly/annual renewals and for dunning re-attempts.
+   *
+   * Endpoint: POST /payments/token/mit/charge (NB: slash, not hyphen —
+   * the popular "mit-charge" form is folklore; the OpenAPI spec is
+   * /payments/token/mit/charge).
+   *
+   * Required fields per TokenPaymentRequest schema:
+   *   stamp, reference, amount, currency, language, customer, items,
+   *   redirectUrls, token.
+   *
+   * Response 201: { transactionId: "uuid" }
+   *
+   * Docs: https://github.com/paytrail/api-documentation/blob/main/docs/paytrail-api.yaml
+   */
+  async chargeAgreement(input: ChargeAgreementInput): Promise<ChargeResult> {
+    const callback =
+      this.cfg.refundCallbackUrl ?? 'https://api.example.invalid/webhooks/paytrail';
+    const body = {
+      stamp: input.orderId,
+      reference: input.orderId.replace(/-/g, '').slice(0, 20),
+      amount: input.amountCents,
+      currency: 'EUR',
+      language: 'EN',
+      token: input.agreementId,
+      items: [
+        {
+          unitPrice: input.amountCents,
+          units: 1,
+          vatPercentage: 0,
+          productCode: 'adoption-renewal',
+          description: input.description.slice(0, 100),
+        },
+      ],
+      customer: { email: 'noreply+mit@bloomoulu.fi' },
+      // redirectUrls + callbackUrls are required by TokenPaymentRequest
+      // even for MIT charges where no donor redirect happens. They're
+      // used if Paytrail needs to fire any async result callback.
+      redirectUrls: { success: callback, cancel: callback },
+      callbackUrls: { success: callback, cancel: callback },
+    };
+    const bodyStr = JSON.stringify(body);
+    const headers = this.buildOutboundHeaders(bodyStr);
+
+    const res = await request(
+      `${this.base}/payments/token/mit/charge`,
+      { method: 'POST', headers, body: bodyStr },
+    );
+    const text = await res.body.text();
+    if (res.statusCode >= 300) {
+      return {
+        ok: false,
+        code: `paytrail.charge.${res.statusCode}`,
+        message: text,
+      };
+    }
+    const json = JSON.parse(text) as {
+      transactionId: string;
+    };
+    // Paytrail's MIT response only returns transactionId on 201
+    // (success). Settlement comes via the regular payment-status
+    // webhook later. Treat the 201 as "pending" (authorised) until the
+    // webhook flips it to succeeded.
     return {
-      ok: false,
-      code: 'paytrail.charge_agreement.not_implemented',
-      message:
-        'Paytrail tokenised charging requires merchant enablement; route recurring via MobilePay direct.',
+      ok: true,
+      chargeId: json.transactionId,
+      status: 'pending',
     };
   }
 
+  /**
+   * Cancel a Paytrail token (donor unsubscribes / removes payment
+   * method). Paytrail's API doesn't have an explicit "revoke token"
+   * endpoint — once we stop charging it, it expires naturally with
+   * the card. For audit completeness we still mark the local Adoption
+   * as cancelled.
+   */
   async cancelAgreement(_: CancelAgreementInput): Promise<void> {
     return;
   }
 
-  /** Refund — Paytrail Refund API. */
-  async refund(input: RefundInput): Promise<RefundResult> {
-    const body = {
-      refundStamp: input.orderId + '-refund-' + randomUUID().slice(0, 8),
-      refundReference: input.orderId.replace(/-/g, '').slice(0, 20),
-      amount: input.amountCents,
-      email: input.reason ? undefined : undefined,
-      callbackUrls: {
-        success: 'https://invalid/refund-success',
-        cancel: 'https://invalid/refund-cancel',
-      },
-    };
+  /**
+   * Exchange a `checkout-tokenization-id` for the long-lived `token`.
+   *
+   * Endpoint: POST /tokenization/{checkout-tokenization-id}
+   * Required header: checkout-tokenization-id (also in path).
+   * Required body: GetTokenRequest = { "checkout-tokenization-id": "uuid" }
+   * Response: TokenizationRequestResponse = { token, customer?, card? }
+   *
+   * Per the OpenAPI spec, the tokenization-id appears in BOTH the URL
+   * path AND the `checkout-tokenization-id` header AND the request
+   * body — Paytrail's signature includes the header so all three must
+   * line up.
+   */
+  async exchangeTokenizationId(
+    tokenizationId: string,
+  ): Promise<{ token: string; cardSummary: string }> {
+    const body = { 'checkout-tokenization-id': tokenizationId };
     const bodyStr = JSON.stringify(body);
-    const headers: Record<string, string> = {
+    // Build signing headers; the spec includes checkout-tokenization-id
+    // among them. Our buildOutboundHeaders only adds checkout-transaction-id
+    // explicitly, so we pass tokenizationId via that slot — but the
+    // canonicalised list-of-headers logic in paytrailSignature only
+    // picks up keys starting with "checkout-", which both qualify.
+    const baseHeaders: Record<string, string> = {
       'checkout-account': this.cfg.merchantId,
       'checkout-algorithm': 'sha256',
       'checkout-method': 'POST',
       'checkout-nonce': randomUUID(),
       'checkout-timestamp': new Date().toISOString(),
-      'checkout-transaction-id': input.providerPaymentRef,
+      'checkout-tokenization-id': tokenizationId,
       'content-type': 'application/json; charset=utf-8',
       'platform-name': 'bloomoulu',
     };
-    headers['signature'] = paytrailSignature(this.cfg.secret, headers, bodyStr);
+    baseHeaders['signature'] = paytrailSignature(this.cfg.secret, baseHeaders, bodyStr);
+
+    const res = await request(
+      `${this.base}/tokenization/${encodeURIComponent(tokenizationId)}`,
+      { method: 'POST', headers: baseHeaders, body: bodyStr },
+    );
+    const text = await res.body.text();
+    if (res.statusCode >= 300) {
+      throw new PaymentGatewayError(
+        this.id as any,
+        `paytrail.tokenization.${res.statusCode}`,
+        text,
+        res.statusCode >= 500,
+      );
+    }
+    const json = JSON.parse(text) as {
+      token: string;
+      card?: { type?: string; partial_pan?: string; expire_month?: string; expire_year?: string };
+    };
+    const cardSummary = json.card
+      ? `${json.card.type ?? 'card'} ****${json.card.partial_pan ?? '****'}`
+      : '';
+    return { token: json.token, cardSummary };
+  }
+
+  /** Refund — Paytrail Refund API. */
+  async refund(input: RefundInput): Promise<RefundResult> {
+    // Paytrail posts the async `refund.processed` event to these URLs.
+    // Both point at our /webhooks/paytrail; the same signature-verify +
+    // dedupe path that handles payments handles refunds. Without a
+    // reachable URL the refund still happens but the reconciliation
+    // cron catches it 24h later.
+    const callback =
+      this.cfg.refundCallbackUrl ?? 'https://api.example.invalid/webhooks/paytrail';
+    const body = {
+      refundStamp: input.orderId + '-refund-' + randomUUID().slice(0, 8),
+      refundReference: input.orderId.replace(/-/g, '').slice(0, 20),
+      amount: input.amountCents,
+      callbackUrls: { success: callback, cancel: callback },
+    };
+    const bodyStr = JSON.stringify(body);
+    const headers = this.buildOutboundHeaders(bodyStr, {
+      transactionId: input.providerPaymentRef,
+    });
 
     const res = await request(
       `${this.base}/payments/${encodeURIComponent(input.providerPaymentRef)}/refund`,
@@ -291,13 +544,50 @@ export class PaytrailGateway implements PaymentGateway {
         'Paytrail callback signature mismatch',
       );
     }
-    const stamp = headers['checkout-stamp']; // ← our orderId
+    const stamp = headers['checkout-stamp']; // ← our orderId (regular payment)
+    const orderIdParam = headers['orderid']; // ← our orderId (addcard-form return)
     const transactionId = headers['checkout-transaction-id'];
     const status = headers['checkout-status']; // ok | fail | pending | delayed
     const amount = parseInt(headers['checkout-amount'] ?? '0', 10);
+    // Paytrail appends `checkout-tokenization-id` on the return URL
+    // when the donor consented to tokenisation. With the addcard-form
+    // flow this is the ONLY meaningful Paytrail field on the return.
+    const tokenizationId = headers['checkout-tokenization-id'];
+
+    // Addcard-form return: tokenization-id present, no checkout-status
+    // (no payment was processed in this leg). Exchange for token and
+    // emit `agreement.activated`. orderId comes from our own redirect
+    // URL — see createAgreement for the binding rationale.
+    if (tokenizationId && !status && !stamp) {
+      const exchange = await this.exchangeTokenizationId(tokenizationId);
+      return {
+        kind: 'agreement.activated',
+        provider: this.id as any,
+        providerEventId: `addcard:${tokenizationId}`,
+        orderId: orderIdParam ?? '',
+        agreementId: exchange.token,
+        metadata: { cardSummary: exchange.cardSummary },
+      };
+    }
+
     const providerEventId = `${transactionId}:${status}:${headers['checkout-timestamp']}`;
 
     if (status === 'ok') {
+      // Exchange the tokenization-id for a long-lived token if present
+      // (Pay+Tokenize combined flow). Failures here don't block payment
+      // activation — the charge already succeeded; we just won't have a
+      // token for future MIT charges. The reconciliation processor
+      // surfaces this gap.
+      let agreementId: string | undefined;
+      if (tokenizationId) {
+        try {
+          const exchange = await this.exchangeTokenizationId(tokenizationId);
+          agreementId = exchange.token;
+        } catch {
+          // Swallow — see comment above. The orchestrator still marks
+          // the payment succeeded; providerCustomerId stays null.
+        }
+      }
       return {
         kind: 'checkout.completed',
         provider: this.id as any,
@@ -309,6 +599,7 @@ export class PaytrailGateway implements PaymentGateway {
         currency: 'EUR',
         paidAt: new Date(),
         metadata: {},
+        ...(agreementId ? { agreementId } : {}),
       };
     }
     if (status === 'fail') {

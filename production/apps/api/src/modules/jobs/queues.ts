@@ -16,6 +16,15 @@ export const QUEUE_GDPR_ERASE = 'gdpr-erase';
 export const QUEUE_KIOSK_WATCHDOG = 'kiosk-watchdog';
 export const QUEUE_PAYMENT_RETRY = 'payment-retry';
 export const QUEUE_RENEWAL = 'renewal';
+/// One-off "charge this specific recurring agreement right now". Fires
+/// after `agreement.activated` for Paytrail (which does not auto-charge
+/// on card-add). Same processor as the scheduled renewal sweep — just
+/// targeted at a single adoption.
+export const QUEUE_AGREEMENT_FIRST_CHARGE = 'agreement-first-charge';
+/// Monthly disbursement draft creation — fires on the 1st of each month
+/// and bundles every settled Payment from the prior month into a fresh
+/// draft Disbursement for the Garden's finance team to review.
+export const QUEUE_DISBURSEMENT_MONTHLY = 'disbursement-monthly';
 export const QUEUE_TAX_CERT_ANNUAL = 'tax-cert-annual';
 export const QUEUE_RAG_EVAL = 'rag-eval';
 export const QUEUE_AUDIT_GAP = 'audit-gap';
