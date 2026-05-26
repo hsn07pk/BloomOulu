@@ -132,7 +132,11 @@ async function fetchSaved(jwt: string): Promise<SavedRow[]> {
 
 interface AskHistoryRow {
   id: string;
-  prompt: string;
+  // The API field is `text` (matches AskMessage.text in Prisma). The
+  // page used to call this `prompt`, which crashed at runtime because
+  // q.prompt was undefined. Both this type and the JSX below now match
+  // the real /v1/ask/history shape.
+  text: string;
   createdAt: string;
   sessionId?: string | null;
   answer?: { text: string | null } | null;
@@ -1052,7 +1056,7 @@ export default async function GardenPage({
                   >
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
                       <span style={{ fontSize: 18, color: 'var(--forest-deep)', fontFamily: 'var(--f-display)', flex: 1, minWidth: 240 }}>
-                        {q.prompt.slice(0, 140)}{q.prompt.length > 140 ? '…' : ''}
+                        {q.text.slice(0, 140)}{q.text.length > 140 ? '…' : ''}
                       </span>
                       <span className="small muted">
                         {new Date(q.createdAt).toLocaleDateString(locale)}
