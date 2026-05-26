@@ -43,6 +43,15 @@ interface GardenView {
     nickname: string | null;
     dedication: string | null;
     startedAt: string | null;
+    createdAt: string;
+    // Gift / memorial fields — sourced from Adoption.intent + the
+    // Adoption gift / memorial columns. Drive the Gifts + In-memoriam
+    // cards below the adoptions grid.
+    intent: 'for_self' | 'gift' | 'memorial' | 'class' | 'corporate';
+    memorialOf: string | null;
+    giftDeliverOn: string | null;
+    giftAnonymous: boolean;
+    giftRecipient: { id: string; name: string | null; email: string } | null;
     plant: {
       id: string;
       slug: string;
@@ -561,6 +570,200 @@ export default async function GardenPage({
             </div>
           )}
         </section>
+
+        {/* ── Gifts sent + In memoriam ─────────────────────────────────
+            Both sections are derived purely from the adoption rows we
+            already fetched (intent='gift' and memorialOf!==null). No
+            extra API call, no new schema. The wrapper section only
+            renders when at least one card has content — new donors
+            with neither don't see an empty placeholder. */}
+        {(() => {
+          const gifts = garden.adoptions.filter((a) => a.intent === 'gift');
+          const memorials = garden.adoptions.filter((a) => a.memorialOf);
+          if (gifts.length === 0 && memorials.length === 0) return null;
+          const hasBoth = gifts.length > 0 && memorials.length > 0;
+          const dateFmt = new Intl.DateTimeFormat(
+            locale === 'fi' ? 'fi-FI' : locale === 'sv' ? 'sv-SE' : 'en-GB',
+            { year: 'numeric', month: 'short' },
+          );
+          const gT = (en: string, fi: string, sv: string) =>
+            locale === 'fi' ? fi : locale === 'sv' ? sv : en;
+          return (
+            <section
+              aria-labelledby="gifts-memorials-h"
+              style={{
+                marginBottom: 56,
+                display: 'grid',
+                gridTemplateColumns: hasBoth ? '1fr 1fr' : '1fr',
+                gap: 24,
+              }}
+            >
+              <h2
+                id="gifts-memorials-h"
+                className="sr-only"
+              >
+                {gT('Gifts and memorials', 'Lahjat ja muistot', 'Gåvor och minnen')}
+              </h2>
+
+              {gifts.length > 0 && (
+                <article
+                  className="card card-pad"
+                  aria-label={gT(
+                    "Gifts you've sent",
+                    'Antamasi lahjat',
+                    'Gåvor du har skickat',
+                  )}
+                >
+                  <div className="eyebrow">
+                    {gT(
+                      "Gifts you've sent",
+                      'Antamasi lahjat',
+                      'Gåvor du har skickat',
+                    )}
+                  </div>
+                  <div
+                    className="serif"
+                    style={{ fontSize: 26, marginTop: 8, marginBottom: 16 }}
+                  >
+                    {gifts.length}{' '}
+                    {gifts.length === 1
+                      ? gT('gift', 'lahja', 'gåva')
+                      : gT('gifts', 'lahjaa', 'gåvor')}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {gifts.map((g) => {
+                      const recipient = g.giftAnonymous
+                        ? gT('Sent anonymously', 'Lähetetty nimettömänä', 'Skickat anonymt')
+                        : g.giftRecipient?.name?.trim() ||
+                          g.giftRecipient?.email ||
+                          gT('Recipient pending', 'Vastaanottaja odottaa', 'Mottagare väntar');
+                      const future = g.giftDeliverOn
+                        ? new Date(g.giftDeliverOn) > new Date()
+                        : false;
+                      const statusKey = future
+                        ? gT('Scheduled', 'Ajastettu', 'Schemalagd')
+                        : g.status === 'active'
+                          ? gT('Active', 'Aktiivinen', 'Aktiv')
+                          : gT('Pending', 'Odottaa', 'Väntande');
+                      const latinName = g.plant.taxon?.latinName ?? g.plant.nameEn;
+                      return (
+                        <div
+                          key={g.id}
+                          style={{
+                            padding: 12,
+                            background: 'var(--cream-deep, rgba(31,58,44,0.04))',
+                            borderRadius: 10,
+                            fontSize: 13,
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'baseline',
+                              gap: 12,
+                            }}
+                          >
+                            <span style={{ fontWeight: 500 }}>{recipient}</span>
+                            <span className="badge badge-nt" style={{ flexShrink: 0 }}>
+                              {statusKey}
+                            </span>
+                          </div>
+                          <div className="small muted" style={{ marginTop: 4 }}>
+                            <Link
+                              href={`/${locale}/plants/${g.plant.slug}`}
+                              style={{ color: 'inherit', fontStyle: 'italic' }}
+                            >
+                              {latinName}
+                            </Link>{' '}
+                            · {dateFmt.format(new Date(g.createdAt))}
+                            {g.giftDeliverOn && future && (
+                              <>
+                                {' '}
+                                ·{' '}
+                                {gT('delivers', 'toimitetaan', 'levereras')}{' '}
+                                {dateFmt.format(new Date(g.giftDeliverOn))}
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </article>
+              )}
+
+              {memorials.length > 0 && (
+                <article
+                  className="card card-pad"
+                  aria-label={gT('In memoriam', 'Muistoksi', 'In memoriam')}
+                  style={{ background: 'linear-gradient(180deg, #fbf6e8 0%, var(--cream, #FAF7EE) 100%)' }}
+                >
+                  <div
+                    className="eyebrow eyebrow--rust"
+                    style={{ color: 'var(--rust-on-light)' }}
+                  >
+                    {gT('In memoriam', 'Muistoksi', 'In memoriam')}
+                  </div>
+                  <div
+                    className="serif"
+                    style={{ fontSize: 26, marginTop: 8, marginBottom: 16 }}
+                  >
+                    {memorials.length}{' '}
+                    {memorials.length === 1
+                      ? gT('dedication', 'omistautuminen', 'tillägnan')
+                      : gT('dedications', 'omistautumista', 'tillägnar')}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {memorials.map((m) => {
+                      const latinName = m.plant.taxon?.latinName ?? m.plant.nameEn;
+                      return (
+                        <div
+                          key={m.id}
+                          style={{
+                            padding: 14,
+                            background: 'var(--paper, #FFFFFF)',
+                            borderRadius: 10,
+                            fontSize: 13,
+                            lineHeight: 1.55,
+                          }}
+                        >
+                          <div
+                            className="serif"
+                            style={{ fontSize: 16, fontStyle: 'italic' }}
+                          >
+                            {gT('For', 'Muistolle', 'För')} {m.memorialOf}
+                          </div>
+                          {m.dedication && (
+                            <p
+                              className="small"
+                              style={{
+                                marginTop: 6,
+                                color: 'var(--ink-soft, #5A6E63)',
+                                fontStyle: 'italic',
+                              }}
+                            >
+                              &ldquo;{m.dedication}&rdquo;
+                            </p>
+                          )}
+                          <div className="small muted" style={{ marginTop: 6 }}>
+                            <Link
+                              href={`/${locale}/plants/${m.plant.slug}`}
+                              style={{ color: 'inherit' }}
+                            >
+                              {latinName}
+                            </Link>{' '}
+                            · {dateFmt.format(new Date(m.createdAt))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </article>
+              )}
+            </section>
+          );
+        })()}
 
         {/* Recent AskTheGarden conversations */}
         <section aria-labelledby="conversations-h" style={{ marginBottom: 56 }}>
