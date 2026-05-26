@@ -1,5 +1,6 @@
 /**
- * Payment provider port — shared types for Stripe and MobilePay adapters.
+ * Payment provider port — shared types for the Paytrail, Vipps MobilePay,
+ * and bank-transfer adapters.
  *
  * Design notes:
  *   * Money is always cents (Int). Currency is an ISO 4217 string ("EUR").
@@ -131,7 +132,7 @@ export interface CheckoutHandoff {
   provider: ProviderId;
   /** URL to redirect the donor to */
   redirectUrl: string;
-  /** Provider's id for this attempt (Stripe checkout session, MobilePay redirect) */
+  /** Provider's id for this attempt (Paytrail transactionId, MobilePay redirect) */
   providerSessionId: string;
 }
 

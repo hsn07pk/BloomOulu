@@ -248,6 +248,11 @@ interface AdoptWizardProps {
   enabledProviders: AdoptProvider[];
   /** Admin-editable knobs from SystemSetting. */
   adopt: AdoptSettings;
+  /** From /v1/settings/public — flags providers running against sandbox
+   *  endpoints. When `true`, the payment step renders an inline help
+   *  card with test card numbers / test app instructions so donors
+   *  doing UAT don't need to dig into the docs. */
+  testMode?: { paytrail?: boolean; mobilepay?: boolean };
 }
 
 export function AdoptWizard({
@@ -263,6 +268,7 @@ export function AdoptWizard({
   title,
   enabledProviders,
   adopt,
+  testMode,
 }: AdoptWizardProps) {
   const t = useTranslations('Adopt');
   // When the donor arrived from a plant-detail page's "Adopt this plant"
@@ -859,6 +865,7 @@ export function AdoptWizard({
             onSubmit={submit}
             cartItems={itemSummaries}
             allTiers={itemSummaries ? tiers : undefined}
+            testMode={testMode}
           />
         )}
       </div>
@@ -2213,6 +2220,7 @@ interface Step4Props {
   errorMessage: string | null;
   cartItems?: CartItemSummary[];
   allTiers?: AdoptTier[];
+  testMode?: { paytrail?: boolean; mobilepay?: boolean };
 }
 
 function Step4Pay({
@@ -2236,6 +2244,7 @@ function Step4Pay({
   errorMessage,
   cartItems,
   allTiers,
+  testMode,
 }: Step4Props) {
   const t = useTranslations('Adopt');
 
@@ -2286,6 +2295,9 @@ function Step4Pay({
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 40 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {(testMode?.paytrail || testMode?.mobilepay) && (
+            <TestModeHelp testMode={testMode} paymentMethod={paymentMethod} />
+          )}
           <fieldset className="card card-pad" style={{ border: '1px solid var(--line)' }}>
             <legend className="tiny" style={{ padding: '0 6px' }}>
               {t('paymentMethod')}
@@ -2869,6 +2881,74 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
     >
       <span className="muted">{label}</span>
       <span style={{ fontWeight: 500, textAlign: 'right' }}>{value}</span>
+    </div>
+  );
+}
+
+/**
+ * Sandbox-only help card. Renders only when /v1/settings/public reports
+ * the active rail is pointing at a provider sandbox. Real production
+ * credentials surface `testMode.paytrail === false` etc. and this
+ * component returns null — donors never see test cards on a real site.
+ */
+function TestModeHelp({
+  testMode,
+  paymentMethod,
+}: {
+  testMode: { paytrail?: boolean; mobilepay?: boolean };
+  paymentMethod: AdoptProvider;
+}) {
+  const showPaytrail = paymentMethod === 'paytrail' && testMode.paytrail;
+  const showMobilePay = paymentMethod === 'mobilepay' && testMode.mobilepay;
+  if (!showPaytrail && !showMobilePay) return null;
+
+  return (
+    <div
+      role="note"
+      aria-label="Test-mode help"
+      style={{
+        padding: '14px 16px',
+        background: 'rgba(232, 198, 106, 0.18)',
+        border: '1px solid #E8C66A',
+        borderRadius: 12,
+        fontSize: '0.867rem',
+        lineHeight: 1.55,
+        color: '#5C4500',
+      }}
+    >
+      <div
+        style={{
+          fontWeight: 700,
+          textTransform: 'uppercase',
+          letterSpacing: '0.08em',
+          fontSize: '0.7rem',
+          marginBottom: 6,
+        }}
+      >
+        Sandbox · no real money moves
+      </div>
+      {showPaytrail && (
+        <div>
+          Use Paytrail's public test card{' '}
+          <code style={{ fontFamily: 'var(--f-mono)', background: 'rgba(0,0,0,0.05)', padding: '0 4px', borderRadius: 4 }}>
+            4153&nbsp;0139&nbsp;9970&nbsp;0321
+          </code>
+          , expiry <code style={{ fontFamily: 'var(--f-mono)' }}>11/26</code>, CVC{' '}
+          <code style={{ fontFamily: 'var(--f-mono)' }}>321</code>.
+          3D-Secure auto-completes. Other test cards (decline, soft-decline,
+          insufficient funds) are in{' '}
+          <code style={{ fontSize: '0.85em' }}>docs/test-credentials/paytrail.md</code>.
+        </div>
+      )}
+      {showMobilePay && (
+        <div>
+          Sign in to the <strong>Vipps MobilePay MT</strong> app on your test
+          device with the test user from{' '}
+          <code style={{ fontSize: '0.85em' }}>portal.vippsmobilepay.com</code>{' '}
+          (PIN <code style={{ fontFamily: 'var(--f-mono)' }}>1236</code>). Full
+          setup in <code style={{ fontSize: '0.85em' }}>docs/test-credentials/mobilepay.md</code>.
+        </div>
+      )}
     </div>
   );
 }

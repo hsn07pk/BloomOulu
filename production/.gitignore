@@ -30,3 +30,9 @@ tsconfig.tsbuildinfo
 .env.gmail
 .env.gmail.local
 *.bak
+
+# Test-payments overlay + dev process artifacts (created by
+# scripts/payment-test-up.sh — see docs/TESTING.md). Both contain
+# tunnel URLs and a generated webhook secret; never commit.
+.env.test-payments
+.run/

@@ -58,6 +58,7 @@ interface PublicSettingsResponse {
   };
   adoption?: Partial<AdoptSettings>;
   features?: { corporateTier?: boolean };
+  testMode?: { paytrail?: boolean; mobilepay?: boolean };
 }
 
 async function fetchPublicSettings(): Promise<PublicSettingsResponse> {
@@ -166,6 +167,7 @@ export default async function AdoptPage({
         title={t('title')}
         enabledProviders={enabledProviders.length > 0 ? Array.from(enabledProviders) : [...DONOR_FACING_PROVIDERS]}
         adopt={adopt}
+        testMode={publicSettings.testMode}
       />
     </article>
   );

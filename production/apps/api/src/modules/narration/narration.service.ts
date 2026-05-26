@@ -100,9 +100,16 @@ export class NarrationService {
         const spoken = text.length > 600 ? text.slice(0, 600).replace(/\s\S+$/, '') + '…' : text;
 
         const { buffer, durationMs, voiceCredit } = await adapter.synthesize(spoken, locale);
-        const s3Key = `narrations/${plant.slug}/${locale}.m4a`;
-        await uploadToS3({ key: s3Key, body: buffer, contentType: 'audio/mp4' });
-        const refUrl = `s3://${process.env.S3_BUCKET ?? 'bloomoulu-assets'}/${s3Key}`;
+        const storageKey = `narrations/${plant.slug}/${locale}.m4a`;
+        // uploadToS3 returns a `local://<key>` URI in the local-storage
+        // backend (see apps/api/src/infra/storage.ts). Stored verbatim
+        // on AudioNarration.audioUrl and resolved to a browser URL by
+        // presign() at read time.
+        const refUrl = await uploadToS3({
+          key: storageKey,
+          body: buffer,
+          contentType: 'audio/mp4',
+        });
 
         await this.prisma.audioNarration.upsert({
           where: { plantId_locale: { plantId, locale: locale as 'en' | 'fi' | 'sv' } },

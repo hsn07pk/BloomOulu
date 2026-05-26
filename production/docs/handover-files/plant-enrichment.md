@@ -115,9 +115,9 @@ complementary.
 ## Requirements
 
 - **The API worker must be running** — jobs are processed there (the
-  `api-worker` service in `docker-compose.dev.yml`, or `node dist/worker.js`).
+  `api-worker` service in `docker-compose.yml`, or `node dist/worker.js`).
 - **Redis** (queue) + **Postgres** (data) + **MinIO** (photo hosting) — all in
-  `docker-compose.dev.yml`.
+  `docker-compose.yml`.
 - Env (`.env`): `DATABASE_URL`, `REDIS_URL`, `S3_*`. Photo hosting uses a
   dedicated public bucket — `S3_PUBLIC_BUCKET` (default `bloomoulu-public`),
   created with a public-read policy on first run, separate from the private

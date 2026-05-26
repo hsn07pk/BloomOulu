@@ -4,6 +4,12 @@ This is the operator playbook. All payment logic lives in
 `packages/payments/src/{paytrail,mobilepay,banktransfer}/gateway.ts`; the
 API wires it via `apps/api/src/modules/payments/`.
 
+Related docs:
+- [`TESTING.md`](./TESTING.md) — how to run end-to-end tests
+- [`test-credentials/paytrail.md`](./test-credentials/paytrail.md) — test cards + bank logins
+- [`test-credentials/mobilepay.md`](./test-credentials/mobilepay.md) — Vipps registration + MT app
+- [`PRE_LAUNCH_CHECKLIST.md`](./PRE_LAUNCH_CHECKLIST.md) — final pre-launch gate
+
 ## Providers
 
 | Provider       | When picked (router) | Fees       | Recurring |
@@ -130,13 +136,16 @@ Three paths, all production-wired:
   `renewal` cron (daily 04:00 UTC) charges `chargeAgreement` for any
   adoption with `endsAt < now + 7d`. Failed charges write a failed
   `Payment` row and surface to dunning.
-- **Paytrail tokenisation**: `createAgreement` POSTs `/payments` with
-  `getToken: true`. The donor pays + opts into recurring in one step;
-  the return URL carries `checkout-tokenization-id` which
-  `parseWebhook` exchanges (via `POST /tokenization/{id}`) for the
-  long-lived `token`. Renewals call `POST /payments/token/mit-charge`
-  against that token. Refund callbacks land on the same
-  `/webhooks/paytrail` endpoint via `PAYTRAIL_CALLBACK_URL`.
+- **Paytrail tokenisation**: `createAgreement` POSTs
+  `/tokenization/addcard-form` (per the Paytrail OpenAPI spec). The
+  donor adds their card on Paytrail's hosted form; the return URL
+  carries `checkout-tokenization-id` which `parseWebhook` exchanges
+  via `POST /tokenization/{id}` for the long-lived `token`. The
+  orchestrator stores the token in `Payment.providerCustomerId` and
+  immediately enqueues the first charge. Renewals (and the first
+  charge) call `POST /payments/token/mit/charge` against the token.
+  Refund callbacks land on the same `/webhooks/paytrail` endpoint via
+  `PAYTRAIL_CALLBACK_URL`.
 - **Bank transfer**: reminder-based. The renewal cron creates a
   pending Payment row with a fresh RF reference and emails the donor;
   the accountant's CSV upload reconciles the inbound SCT.

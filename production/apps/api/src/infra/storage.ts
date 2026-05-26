@@ -26,7 +26,6 @@ import { getBrowserApiUrl } from '@bloomoulu/constants';
 const STORAGE_DIR = path.resolve(
   process.env.STORAGE_DIR ?? path.join(process.cwd(), 'var', 'storage'),
 );
-const LEGACY_BUCKET = process.env.S3_BUCKET ?? 'bloomoulu-assets';
 
 /** Normalise a key into a safe relative path. Throws on traversal. */
 function safeKey(key: string): string {
@@ -148,4 +147,3 @@ function guessContentType(key: string): string {
 
 /** Exposed for tests + admin tooling — never call from request handlers. */
 export const __storageRoot = STORAGE_DIR;
-export const __legacyBucket = LEGACY_BUCKET;
