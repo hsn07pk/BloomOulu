@@ -45,6 +45,12 @@ export class UsersController {
             tier: true,
             plaque: true,
             payments: { orderBy: { createdAt: 'desc' }, take: 1 },
+            // Gift recipient join — needed by the "Gifts you've sent"
+            // card on MyGarden. Select only the recipient's display
+            // fields, never their PII (no address / phone / preferences).
+            // Returns null for non-gift adoptions; donor sees their own
+            // recipient list only via the gates enforced at line 18.
+            giftRecipient: { select: { id: true, name: true, email: true } },
           },
         },
         receipts: { orderBy: { issuedAt: 'desc' }, take: 50 },
