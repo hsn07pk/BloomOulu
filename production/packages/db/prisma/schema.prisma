@@ -479,6 +479,79 @@ model Adoption {
   @@index([status, showOnDonorWall, startedAt(sort: Desc)])
   @@index([tierId])
   @@index([bundleId])
+
+  // Backref to per-benefit fulfilment rows. Seeded on activation; the
+  // admin Benefit-fulfilment dashboard groups by status across all
+  // adoptions.
+  benefits        AdoptionBenefit[]
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Per-adoption tier benefit fulfilment
+// ────────────────────────────────────────────────────────────────────────────
+//
+// One row per (Adoption, benefitKey). Seeded automatically when an
+// Adoption activates — every entry in the tier's catalog
+// (packages/constants/src/benefits.ts) becomes a row, starting in either
+// 'pending' (manual workflow) or 'fulfilled' (auto: digital cert, story
+// page, donor wall, home-region pairing).
+//
+// The admin "Benefits" resource groups by status + category so finance /
+// curator staff have a unified to-do list across all adoptions.
+
+enum BenefitCategory {
+  digital
+  physical
+  event
+  recurring
+}
+
+enum BenefitStatus {
+  pending
+  in_progress
+  fulfilled
+  cancelled
+  not_applicable
+}
+
+model AdoptionBenefit {
+  id                  String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  adoptionId          String           @db.Uuid
+  adoption            Adoption         @relation(fields: [adoptionId], references: [id], onDelete: Cascade)
+
+  benefitKey          String
+  category            BenefitCategory
+  labelSnapshot       String
+  donorLabelSnapshot  String?
+
+  status              BenefitStatus    @default(pending)
+
+  shippingAddress     Json?
+  trackingNumber      String?
+  shippedAt           DateTime?
+  deliveredAt         DateTime?
+
+  eventName           String?
+  eventDate           DateTime?
+  rsvpStatus          String?
+  rsvpAt              DateTime?
+
+  lastSentAt          DateTime?
+  nextDueAt           DateTime?
+
+  notes               String?
+
+  fulfilledByUserId   String?          @db.Uuid
+  fulfilledAt         DateTime?
+
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  @@unique([adoptionId, benefitKey])
+  @@index([adoptionId])
+  @@index([status])
+  @@index([category, status])
+  @@index([nextDueAt])
 }
 
 model GiftCode {

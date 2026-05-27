@@ -118,26 +118,27 @@ wait_for_url_ngrok() {
   return 1
 }
 
+# Single tunnel design: only the web (Next.js) gets a public URL.
+# Client-side fetches to `/v1/*` and Paytrail/MobilePay webhooks to
+# `/webhooks/*` are same-origin — Next.js rewrites them server-side
+# to localhost:4000 (see apps/web/next.config.mjs). One tunnel means
+# zero CORS, no DNS-propagation gap on a second subdomain, and one
+# URL to register in the Paytrail/Vipps merchant portals.
 case "$TUNNEL" in
   cloudflared)
-    start_cloudflared 4000 "$API_LOG"
     start_cloudflared 3000 "$WEB_LOG"
     sleep 3
-    api_url=$(wait_for_url_cloudflared "$API_LOG") || { red "API tunnel failed; see $API_LOG"; exit 1; }
     web_url=$(wait_for_url_cloudflared "$WEB_LOG") || { red "WEB tunnel failed; see $WEB_LOG"; exit 1; }
     ;;
   ngrok)
-    start_ngrok 4000 "$API_LOG"
-    sleep 2
     start_ngrok 3000 "$WEB_LOG"
     sleep 2
-    api_url=$(wait_for_url_ngrok 4000) || { red "API tunnel failed"; exit 1; }
     web_url=$(wait_for_url_ngrok 3000) || { red "WEB tunnel failed"; exit 1; }
     ;;
 esac
 
-green "API tunnel: $api_url"
-green "WEB tunnel: $web_url"
+api_url="$web_url"   # api is reached via /v1/* on the same host
+green "Public tunnel: $web_url  (web + /v1/* api + /webhooks/*)"
 
 # ── 4. Write overlay ───────────────────────────────────────────────
 set_or_replace PAYTRAIL_MOCK                      false
@@ -145,20 +146,19 @@ set_or_replace PAYTRAIL_MERCHANT_ID               375917
 set_or_replace PAYTRAIL_SECRET                    SAIPPUAKAUPPIAS
 set_or_replace PAYTRAIL_WEBHOOK_SECRET            SAIPPUAKAUPPIAS
 set_or_replace PAYTRAIL_API_URL                   https://services.paytrail.com
-set_or_replace PAYTRAIL_CALLBACK_URL              "${api_url}/webhooks/paytrail"
+set_or_replace PAYTRAIL_CALLBACK_URL              "${web_url}/webhooks/paytrail"
 set_or_replace PAYTRAIL_RETURN_URL                "${web_url}/en/donate/complete"
 
 set_or_replace MOBILEPAY_API_URL                  https://apitest.vipps.no
 set_or_replace MOBILEPAY_RETURN_URL               "${web_url}/en/donate/complete"
-set_or_replace MOBILEPAY_CALLBACK_URL             "${api_url}/webhooks/mobilepay"
+set_or_replace MOBILEPAY_CALLBACK_URL             "${web_url}/webhooks/mobilepay"
 
-set_or_replace NEXT_PUBLIC_API_URL                "$api_url"
+# Both PUBLIC URLs point at the single tunnel; INTERNAL_API_URL stays
+# on localhost for SSR + the Next.js rewrite target (no tunnel hop).
+set_or_replace NEXT_PUBLIC_API_URL                "$web_url"
 set_or_replace NEXT_PUBLIC_WEB_URL                "$web_url"
-# Server-side fetches (Next.js RSC, server actions) should hit api
-# directly on localhost — going via the cloudflared tunnel for an
-# in-process call is slow, DNS-flaky for fresh trycloudflare.com
-# subdomains, and pointless. Only payment redirects need the tunnel.
 set_or_replace INTERNAL_API_URL                   "http://localhost:4000"
+set_or_replace API_REWRITE_TARGET                 "http://localhost:4000"
 
 set_or_replace PAYMENTS_PAYTRAIL_ENABLED          true
 # Bank-transfer is hidden from the donor UI by design; admins still

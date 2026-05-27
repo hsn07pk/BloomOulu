@@ -36,3 +36,7 @@ tsconfig.tsbuildinfo
 # tunnel URLs and a generated webhook secret; never commit.
 .env.test-payments
 .run/
+
+# Runtime local-disk storage — generated PDFs, plant images, narrations,
+# GDPR exports etc. STORAGE_DIR resolves here in dev; never commit.
+apps/api/var/

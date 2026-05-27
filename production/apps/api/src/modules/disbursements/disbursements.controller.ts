@@ -161,4 +161,18 @@ export class DisbursementsController {
     res.header('x-content-sha256', sha256);
     return csv;
   }
+
+  @Get(':id/export.pdf')
+  @ApiOperation({
+    summary: 'Download the signed PDF claim letter for UoO finance',
+  })
+  async exportPdf(@Param('id', ParseUUIDPipe) id: string, @Res() res: FastifyReply) {
+    const { pdf, filename } = await this.svc.exportPdf(id);
+    res
+      .code(200)
+      .header('content-type', 'application/pdf')
+      .header('content-disposition', `attachment; filename="${filename}"`)
+      .header('cache-control', 'private, no-cache')
+      .send(pdf);
+  }
 }

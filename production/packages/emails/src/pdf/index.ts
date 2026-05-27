@@ -103,6 +103,68 @@ const L = {
   },
 } as const;
 
+// Localised labels for the new personalisation block. Kept beside L so a
+// future translator only edits one file.
+const P = {
+  en: {
+    intentTitle: 'Adoption context',
+    intentLabel: 'Intent',
+    intentValues: {
+      for_self: 'Personal — for myself',
+      gift: 'Gift',
+      memorial: 'In memoriam',
+      class: 'Class / school',
+      corporate: 'Corporate',
+    },
+    billingLabel: 'Billing',
+    billingValues: { one_time: 'One-off', monthly: 'Monthly', annual: 'Annual' },
+    nicknameLabel: 'Plant nickname',
+    dedicationLabel: 'Dedication',
+    homeRegionLabel: 'I@H · home region',
+    giftRecipientLabel: 'Gift recipient',
+    memorialOfLabel: 'In memory of',
+    coAdoptersLabel: 'Co-adopters',
+  },
+  fi: {
+    intentTitle: 'Adoptiotiedot',
+    intentLabel: 'Tarkoitus',
+    intentValues: {
+      for_self: 'Itselleni',
+      gift: 'Lahja',
+      memorial: 'Muistolahjoitus',
+      class: 'Luokka / koulu',
+      corporate: 'Yritys',
+    },
+    billingLabel: 'Laskutus',
+    billingValues: { one_time: 'Kerralla', monthly: 'Kuukausittain', annual: 'Vuosittain' },
+    nicknameLabel: 'Kasvin lempinimi',
+    dedicationLabel: 'Omistus',
+    homeRegionLabel: 'I@H · kotialue',
+    giftRecipientLabel: 'Lahjansaaja',
+    memorialOfLabel: 'Muistolahjoitus',
+    coAdoptersLabel: 'Yhteislahjoittajat',
+  },
+  sv: {
+    intentTitle: 'Adoptionsdetaljer',
+    intentLabel: 'Avsikt',
+    intentValues: {
+      for_self: 'För mig själv',
+      gift: 'Gåva',
+      memorial: 'Till minne av',
+      class: 'Klass / skola',
+      corporate: 'Företag',
+    },
+    billingLabel: 'Fakturering',
+    billingValues: { one_time: 'Engångsbelopp', monthly: 'Månadsvis', annual: 'Årligen' },
+    nicknameLabel: 'Växtens smeknamn',
+    dedicationLabel: 'Dedikation',
+    homeRegionLabel: 'I@H · hemregion',
+    giftRecipientLabel: 'Gåvomottagare',
+    memorialOfLabel: 'Till minne av',
+    coAdoptersLabel: 'Medadoptörer',
+  },
+} as const;
+
 function money(cents: number, currency: string, locale: string): string {
   return new Intl.NumberFormat(locale === 'en' ? 'en-FI' : `${locale}-FI`, {
     style: 'currency',
@@ -159,8 +221,112 @@ const Receipt: React.FC<{ input: ReceiptPdfInput; org: OrgInfo }> = ({ input, or
             input.tierName
               ? React.createElement(Text, { style: styles.value }, `${l.tier}: ${input.tierName}`)
               : null,
+            // Nickname (the donor-chosen pet name for the plant) — only
+            // appears if explicitly set. Italic styling keeps it visibly
+            // distinct from the latin name above.
+            input.nickname
+              ? React.createElement(
+                  Text,
+                  { style: { ...styles.value, fontStyle: 'italic', color: '#4A6B40' } },
+                  `"${input.nickname}"`,
+                )
+              : null,
           )
         : null,
+      // Personalisation block — intent, billing cadence, dedication,
+      // gift/memorial context, co-adopters, home region. Only renders
+      // when at least one field is present, so the layout for a plain
+      // anonymous donation stays minimal.
+      (() => {
+        const hasAny = !!(
+          input.intent ||
+          input.billingInterval ||
+          input.dedication ||
+          input.homeRegion ||
+          input.giftRecipientName ||
+          input.giftRecipientEmail ||
+          input.memorialOf ||
+          (input.coAdopters && input.coAdopters.length > 0)
+        );
+        if (!hasAny) return null;
+        const p = P[input.locale] ?? P.en;
+        const rows: React.ReactNode[] = [];
+        rows.push(
+          React.createElement(Text, { style: styles.label, key: 'h' }, p.intentTitle),
+        );
+        if (input.intent) {
+          rows.push(
+            React.createElement(
+              Text,
+              { style: styles.value, key: 'in' },
+              `${p.intentLabel}: ${p.intentValues[input.intent] ?? input.intent}`,
+            ),
+          );
+        }
+        if (input.billingInterval) {
+          rows.push(
+            React.createElement(
+              Text,
+              { style: styles.value, key: 'bi' },
+              `${p.billingLabel}: ${p.billingValues[input.billingInterval] ?? input.billingInterval}`,
+            ),
+          );
+        }
+        if (input.dedication) {
+          rows.push(
+            React.createElement(
+              Text,
+              { style: { ...styles.value, fontStyle: 'italic' }, key: 'de' },
+              `${p.dedicationLabel}: "${input.dedication}"`,
+            ),
+          );
+        }
+        if (input.homeRegion) {
+          rows.push(
+            React.createElement(
+              Text,
+              { style: styles.value, key: 'hr' },
+              `${p.homeRegionLabel}: ${input.homeRegion}`,
+            ),
+          );
+        }
+        if (input.giftRecipientName || input.giftRecipientEmail) {
+          const label =
+            [input.giftRecipientName, input.giftRecipientEmail].filter(Boolean).join(' · ');
+          rows.push(
+            React.createElement(
+              Text,
+              { style: styles.value, key: 'gr' },
+              `${p.giftRecipientLabel}: ${label}`,
+            ),
+          );
+        }
+        if (input.memorialOf) {
+          rows.push(
+            React.createElement(
+              Text,
+              { style: styles.value, key: 'mo' },
+              `${p.memorialOfLabel}: ${input.memorialOf}`,
+            ),
+          );
+        }
+        if (input.coAdopters && input.coAdopters.length > 0) {
+          const list = input.coAdopters
+            .map((c) => c?.name ?? c?.email ?? '')
+            .filter(Boolean)
+            .join(', ');
+          if (list) {
+            rows.push(
+              React.createElement(
+                Text,
+                { style: styles.value, key: 'ca' },
+                `${p.coAdoptersLabel}: ${list}`,
+              ),
+            );
+          }
+        }
+        return React.createElement(View, { style: styles.box }, ...rows);
+      })(),
       React.createElement(
         View,
         { style: styles.box },

@@ -8,6 +8,9 @@
     ".": "./src/index.ts",
     "./pdf": "./src/pdf/index.ts",
     "./pdf/tax-certificate": "./src/pdf/tax-certificate.ts",
+    "./pdf/adoption-certificate": "./src/pdf/adoption-certificate.ts",
+    "./pdf/disbursement": "./src/pdf/disbursement.ts",
+    "./pdf/csr-quarterly": "./src/pdf/csr-quarterly.ts",
     "./render": "./src/render.ts",
     "./templates/seed": "./src/templates/seed.ts"
   },

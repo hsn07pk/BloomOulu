@@ -467,6 +467,45 @@ export class DisbursementsService {
     return { csv, sha256, filename };
   }
 
+  /**
+   * Render the human-readable PDF claim letter that goes alongside the
+   * CSV. We always re-export the CSV first (cheap, deterministic) so the
+   * PDF's footer hash matches the latest CSV bytes — guarantees the two
+   * artefacts are integrity-linked.
+   */
+  async exportPdf(id: string): Promise<{ pdf: Buffer; filename: string }> {
+    const { renderDisbursementPdf } = await import('@bloomoulu/emails/pdf/disbursement');
+    // Ensure the CSV hash on the row matches what we're about to render.
+    const { sha256 } = await this.exportCsv(id);
+    const d = await this.detail(id);
+    const pdf = await renderDisbursementPdf({
+      reference: d.reference,
+      locale: 'en',
+      periodStart: d.periodStart,
+      periodEnd: d.periodEnd,
+      status: d.status,
+      expectedCents: d.expectedCents,
+      feeCents: d.feeCents,
+      netCents: d.netCents,
+      currency: d.currency,
+      csvSha256: sha256,
+      issuedAt: new Date(),
+      entries: d.entries
+        .filter((e) => e.included)
+        .map((e) => ({
+          donorEmail: e.payment.donor.email,
+          donorName: e.payment.donor.name,
+          provider: e.payment.provider,
+          paidAt: e.payment.receivedAt,
+          amountCents: e.amountCents,
+          feeCents: e.feeCents,
+          netCents: e.netCents,
+          plantName: e.payment.adoption?.plant?.nameEn ?? null,
+        })),
+    });
+    return { pdf, filename: `${d.reference}.pdf` };
+  }
+
   // ── Helpers ───────────────────────────────────────────────────────
 
   private async transitionStatus(

@@ -24,3 +24,4 @@ export * from './locales.js';
 export * from './redlist.js';
 export * from './regions.js';
 export * from './urls.js';
+export * from './benefits.js';

@@ -17,6 +17,7 @@
     "@babel/plugin-syntax-import-assertions": "^7.27.1",
     "@bloomoulu/constants": "workspace:*",
     "@bloomoulu/db": "workspace:*",
+    "@bloomoulu/emails": "workspace:*",
     "@bloomoulu/rag": "workspace:*",
     "@fastify/cookie": "^9.4.0",
     "@fastify/session": "^10.9.0",

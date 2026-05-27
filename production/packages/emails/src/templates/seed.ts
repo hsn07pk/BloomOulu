@@ -183,4 +183,92 @@ export const EMAIL_TEMPLATES: ReadonlyArray<SeedTemplate> = [
     mjmlFi: wrap('Verotodistus vuodelta {{taxYear}}', '<mj-text>Lahjoituksesi yhteensä {{total}} € vuonna {{taxYear}} on koottu liitteenä olevaan todistukseen (TVL §57 / vuoden 2026 yksityishenkilön vähennysjärjestelmä).</mj-text>', { label: 'Avaa', href: '{{url}}' }),
     mjmlSv: wrap('Skatteintyg för {{taxYear}}', '<mj-text>Din totala donation på {{total}} € för {{taxYear}} sammanfattas i det bifogade intyget.</mj-text>', { label: 'Öppna', href: '{{url}}' }),
   },
+  // ── Recurring-benefit emails ─────────────────────────────────────────
+  // Triggered by the recurring-benefits worker every cadenceMonths. Each
+  // benefit type has its own template so the donor sees a thoughtful,
+  // contextually relevant note rather than a generic "your perk is here".
+  {
+    slug: 'quarterly-notes',
+    subjectEn: 'Quarterly grower’s notes from BloomOulu',
+    subjectFi: 'Kasvattajan vuosineljänneskuulumiset',
+    subjectSv: 'Kvartalsbrev från trädgården',
+    mjmlEn: wrap(
+      'Quarterly notes · {{plantName}}',
+      '<mj-text>Hello {{donorName}},<br/><br/>Your adopted plant, <em>{{plantName}}</em>, is doing well. Our curator has put together a short seasonal note covering what we’ve observed this quarter, including bloom progress, repotting news, and how the broader collection is faring under current conditions.<br/><br/>This quarterly mailing is one of the perks of your {{tierName}} adoption. Thank you for the continued support — every adoption keeps the Garden running.</mj-text>',
+      { label: 'Open your plant page', href: 'https://bloom-oulu.vercel.app/en/plants/{{plantSlug}}' },
+    ),
+    mjmlFi: wrap(
+      'Vuosineljänneksen tiedote · {{plantName}}',
+      '<mj-text>Hei {{donorName}},<br/><br/>Adoptoimasi kasvi <em>{{plantName}}</em> voi hyvin. Kuraattorimme on koonnut lyhyen kausitiedotteen tämän vuosineljänneksen havainnoista, mukaan lukien kukinnan eteneminen ja uudet havainnot kokoelmassamme.<br/><br/>Tämä vuosineljänneskirje on osa {{tierName}}-tason etujasi. Kiitos jatkuvasta tuestasi.</mj-text>',
+      { label: 'Avaa kasvisivu', href: 'https://bloom-oulu.vercel.app/fi/plants/{{plantSlug}}' },
+    ),
+    mjmlSv: wrap(
+      'Kvartalsanteckningar · {{plantName}}',
+      '<mj-text>Hej {{donorName}},<br/><br/>Din adopterade växt <em>{{plantName}}</em> mår bra. Vår kurator har sammanställt ett kort säsongsbrev med observationer från detta kvartal.<br/><br/>Detta kvartalsbrev är en av förmånerna i din {{tierName}}-adoption.</mj-text>',
+      { label: 'Öppna växtsidan', href: 'https://bloom-oulu.vercel.app/sv/plants/{{plantSlug}}' },
+    ),
+  },
+  {
+    slug: 'seasonal-photos',
+    subjectEn: 'Seasonal photos of {{plantName}}',
+    subjectFi: 'Vuodenaikakuvia kasvistasi {{plantName}}',
+    subjectSv: 'Säsongsbilder av {{plantName}}',
+    mjmlEn: wrap(
+      'Seasonal photos · {{plantName}}',
+      '<mj-text>Hello {{donorName}},<br/><br/>A small album of <em>{{plantName}}</em> from this season is now on its story page. Bloom timing, new growth, the angle of the leaves under low winter light — captured at the Garden so you can see what your adoption supports, no matter where you are.<br/><br/>This is a Rooted+ tier perk; the photographs are taken by our curatorial team.</mj-text>',
+      { label: 'View the album', href: 'https://bloom-oulu.vercel.app/en/plants/{{plantSlug}}' },
+    ),
+    mjmlFi: wrap(
+      'Vuodenaikakuvia · {{plantName}}',
+      '<mj-text>Hei {{donorName}},<br/><br/>Olemme lisänneet kasvisivulle pienen kuva-albumin kasvista <em>{{plantName}}</em> tältä kaudelta. Kukinta, uusi kasvu, lehtien asento talven matalassa valossa.<br/><br/>Tämä on Rooted+-tason etu.</mj-text>',
+      { label: 'Avaa albumi', href: 'https://bloom-oulu.vercel.app/fi/plants/{{plantSlug}}' },
+    ),
+    mjmlSv: wrap(
+      'Säsongsbilder · {{plantName}}',
+      '<mj-text>Hej {{donorName}},<br/><br/>Vi har lagt till ett litet bildalbum av <em>{{plantName}}</em> från denna säsong på växtsidan.</mj-text>',
+      { label: 'Öppna albumet', href: 'https://bloom-oulu.vercel.app/sv/plants/{{plantSlug}}' },
+    ),
+  },
+  {
+    slug: 'annual-seed-packet',
+    subjectEn: 'Your annual seed packet is on the way',
+    subjectFi: 'Vuosittainen siemenpussisi on lähdössä',
+    subjectSv: 'Din årliga fröpåse är på väg',
+    mjmlEn: wrap(
+      'Annual seed packet · {{plantName}}',
+      '<mj-text>Hello {{donorName}},<br/><br/>As part of your Endangered-tier adoption, we’re preparing your annual seed packet — a small hand-collected batch from the Garden’s own propagation programme. We’ll dispatch via Posti within the next two weeks; expect delivery 7-10 days after that.<br/><br/>If your shipping address has changed, please update it under My Garden → Profile so we don’t send it to the wrong place.<br/><br/>Next year’s packet will arrive around {{nextDate}}.</mj-text>',
+      { label: 'My Garden', href: 'https://bloom-oulu.vercel.app/en/garden' },
+    ),
+    mjmlFi: wrap(
+      'Vuosittainen siemenpussi · {{plantName}}',
+      '<mj-text>Hei {{donorName}},<br/><br/>Endangered-tason adoptiosi osana valmistelemme vuosittaista siemenpussiasi. Lähetämme Postin kautta kahden viikon kuluessa.<br/><br/>Jos toimitusosoitteesi on muuttunut, päivitä se kohdassa Oma puutarha → Profiili.<br/><br/>Seuraava pussi saapuu noin {{nextDate}}.</mj-text>',
+      { label: 'Oma puutarha', href: 'https://bloom-oulu.vercel.app/fi/garden' },
+    ),
+    mjmlSv: wrap(
+      'Årlig fröpåse · {{plantName}}',
+      '<mj-text>Hej {{donorName}},<br/><br/>Som en del av din Endangered-adoption förbereder vi din årliga fröpåse. Vi skickar via Posti inom två veckor.<br/><br/>Nästa påse anländer cirka {{nextDate}}.</mj-text>',
+      { label: 'Min trädgård', href: 'https://bloom-oulu.vercel.app/sv/garden' },
+    ),
+  },
+  {
+    slug: 'csr-quarterly-report',
+    subjectEn: 'Your quarterly CSR impact report',
+    subjectFi: 'Yritysadoptiosi neljännesvuosiraportti',
+    subjectSv: 'Er kvartalsvis CSR-rapport',
+    mjmlEn: wrap(
+      'Quarterly impact · {{plantName}}',
+      '<mj-text>Hello {{donorName}},<br/><br/>Your quarterly CSR impact report covering {{quarterLabel}} is attached. You funded <strong>€{{amount}}</strong> in conservation activity this quarter, allocated across direct ex-situ work, seed-bank deposits, garden operations, and platform infrastructure per the published funds-flow policy.<br/><br/>The PDF is CSRD-formatted so you can attach it directly to your sustainability reporting.</mj-text>',
+      { label: 'Download report', href: '{{url}}' },
+    ),
+    mjmlFi: wrap(
+      'Neljännesvuoden vaikuttavuusraportti',
+      '<mj-text>Hei {{donorName}},<br/><br/>Liitteenä on yrityksenne CSR-vaikuttavuusraportti jaksolta {{quarterLabel}}. Tukenne tällä neljänneksellä oli <strong>{{amount}} €</strong>.</mj-text>',
+      { label: 'Lataa raportti', href: '{{url}}' },
+    ),
+    mjmlSv: wrap(
+      'Kvartalsvis effektrapport',
+      '<mj-text>Hej {{donorName}},<br/><br/>Er kvartalsvis CSR-effektrapport för {{quarterLabel}} är bifogad. Ert bidrag detta kvartal var <strong>{{amount}} €</strong>.</mj-text>',
+      { label: 'Ladda ner rapport', href: '{{url}}' },
+    ),
+  },
 ];

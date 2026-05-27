@@ -7,37 +7,64 @@
 import type { Job } from 'bullmq';
 import { prisma } from '@bloomoulu/db';
 import { renderReceiptPdf } from '@bloomoulu/emails/pdf';
-import { uploadToS3 } from '../../../infra/storage.js';
+import { uploadToS3, readFile } from '../../../infra/storage.js';
 import { enqueueEmail } from '../enqueue.js';
 import { createHash } from 'node:crypto';
 
 export interface ReceiptJob {
   paymentId: string;
+  /** Force regeneration even if a Receipt row + blob already exist.
+   *  Used by the admin "Resend receipt" action. */
+  resend?: boolean;
 }
 
 export async function processReceipt(job: Job<ReceiptJob>): Promise<void> {
-  const { paymentId } = job.data;
+  const { paymentId, resend } = job.data;
 
   const payment = await prisma.payment.findUnique({
     where: { id: paymentId },
     include: {
       donor: { select: { id: true, email: true, name: true, locale: true, postalAddress: true } },
-      adoption: { include: { plant: true, tier: true } },
+      // Pull every Adoption field the receipt renderer might surface:
+      // intent, billing cadence, nickname, dedication, gift / memorial
+      // context, co-adopters, home region. Receipt PDF only renders the
+      // ones with content, so this fans out cheaply.
+      adoption: {
+        include: {
+          plant: true,
+          tier: true,
+          giftRecipient: { select: { name: true, email: true } },
+        },
+      },
     },
   });
   if (!payment) throw new Error(`No payment ${paymentId}`);
   if (payment.status !== 'succeeded') throw new Error(`Payment ${paymentId} not succeeded`);
 
-  // Idempotency: existing receipt? return it.
+  // Self-healing idempotency:
+  //   - If a Receipt row exists AND the PDF blob is on disk AND we're not
+  //     in a deliberate resend, skip the render but still re-fire the
+  //     email job (the donor may have asked to resend it).
+  //   - If the DB row points at a missing blob (e.g. STORAGE_DIR was
+  //     wiped, or the bucket migrated), regenerate the PDF in place and
+  //     keep the same receipt number.
   const existing = await prisma.receipt.findUnique({ where: { paymentId } });
-  if (existing?.pdfUrl) return;
+  if (existing?.pdfUrl && !resend) {
+    const blob = await readFile(existing.pdfUrl);
+    if (blob) return; // happy path: receipt + blob both present, nothing to do.
+  }
 
-  const number = await nextReceiptNumber();
+  const number = existing?.number ?? (await nextReceiptNumber());
 
+  const adoption = payment.adoption;
+  const coAdoptersRaw = (adoption?.coAdopters ?? null) as
+    | Array<{ name?: string | null; email?: string | null }>
+    | null;
   const pdfBuffer = await renderReceiptPdf({
     number,
     locale: payment.donor.locale,
     donorName: payment.donor.name ?? payment.donor.email,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     donorAddress: payment.donor.postalAddress as any,
     amountCents: payment.amountCents,
     currency: payment.currency,
@@ -45,9 +72,20 @@ export async function processReceipt(job: Job<ReceiptJob>): Promise<void> {
     vatCents: payment.vatCents,
     netCents: payment.netCents,
     paidAt: payment.receivedAt ?? new Date(),
-    plantName: payment.adoption?.plant?.nameEn ?? null,
-    tierName: payment.adoption?.tier?.name ?? null,
+    plantName: adoption?.plant?.nameEn ?? null,
+    tierName: adoption?.tier?.name ?? null,
     orderId: payment.orderId,
+    // ── Personalisation passthrough ──────────────────────────────────
+    intent: adoption?.intent ?? undefined,
+    billingInterval: adoption?.billingInterval ?? undefined,
+    recurring: adoption?.recurring ?? undefined,
+    nickname: adoption?.nickname ?? null,
+    dedication: adoption?.dedication ?? null,
+    homeRegion: adoption?.homeRegion ?? null,
+    giftRecipientName: adoption?.giftRecipient?.name ?? null,
+    giftRecipientEmail: adoption?.giftRecipient?.email ?? null,
+    memorialOf: adoption?.memorialOf ?? null,
+    coAdopters: Array.isArray(coAdoptersRaw) ? coAdoptersRaw : null,
   });
 
   const key = `receipts/${number}.pdf`;

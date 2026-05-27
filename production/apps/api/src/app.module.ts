@@ -17,6 +17,7 @@ import { AdoptionLifecycleModule } from './modules/adoptions/adoption-lifecycle.
 import { PaymentsModule } from './modules/payments/payments.module.js';
 import { WebhooksModule } from './modules/webhooks/webhooks.module.js';
 import { ReceiptsModule } from './modules/receipts/receipts.module.js';
+import { TaxCertsModule } from './modules/tax-certs/tax-certs.module.js';
 import { AskModule } from './modules/ask/ask.module.js';
 import { KioskModule } from './modules/kiosk/kiosk.module.js';
 import { GdprModule } from './modules/gdpr/gdpr.module.js';
@@ -98,6 +99,7 @@ const isProd = process.env.NODE_ENV === 'production';
     PaymentsModule,
     WebhooksModule,
     ReceiptsModule,
+    TaxCertsModule,
     AskModule,
     KioskModule,
     GdprModule,

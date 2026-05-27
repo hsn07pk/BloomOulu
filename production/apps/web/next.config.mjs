@@ -80,6 +80,19 @@ const nextConfig = {
       },
     ];
   },
+  // Same-origin proxy for /v1/* and /webhooks/* so client-side fetches
+  // and Paytrail callbacks both land on the same hostname as the web
+  // app — no CORS, no DNS lag for a second tunnel subdomain. When
+  // running behind Cloudflare Tunnel / Caddy / Vercel the public host
+  // proxies these straight to the api container; in local dev Next.js
+  // rewrites them to localhost:4000.
+  async rewrites() {
+    const target = process.env.API_REWRITE_TARGET ?? 'http://localhost:4000';
+    return [
+      { source: '/v1/:path*',       destination: `${target}/v1/:path*` },
+      { source: '/webhooks/:path*', destination: `${target}/webhooks/:path*` },
+    ];
+  },
 };
 
 export default withNextIntl(nextConfig);

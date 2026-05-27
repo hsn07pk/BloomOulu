@@ -213,6 +213,7 @@ function jobRowToCreateDto(row: BulkAddJobRow): AssistantPlantDto {
 
 const queueConn = { connection: { url: process.env.REDIS_URL ?? 'redis://localhost:6379' } };
 const emailQueue = new Queue('email', queueConn);
+const receiptQueue = new Queue('receipt', queueConn);
 const eraseQueue = new Queue('gdpr-erase', queueConn);
 const enrichQueue = new Queue('plant-enrich', queueConn);
 
@@ -354,10 +355,225 @@ function restrictTo(...allowed: Role[]) {
   };
 }
 
+// ── camt.054 reconciliation (inline, no extra deps) ────────────────────
+// Pure XML tag-extractor. camt.054 is well-formed enough that a regex
+// pass nets every field we care about (Ntry, Amt, BookgDt, EndToEndId,
+// CdtrRefInf/Ref, Ustrd). Duplicated here instead of in @bloomoulu/db so
+// the admin process stays self-contained — same logic also lives in
+// apps/api/src/modules/reconciliation/camt054.ts for API-side use.
+async function reconcileCamt054Inline(xml: string): Promise<{
+  totalEntries: number;
+  matched: number;
+  unmatched: number;
+  duplicates: number;
+  matches: Array<{
+    paymentId: string;
+    orderId: string;
+    amountCents: number;
+    endToEndId: string | null;
+  }>;
+}> {
+  if (!/camt\.054|BkToCstmrDbtCdtNtfctn|<Ntry/i.test(xml)) {
+    throw new Error('Not a camt.054 document');
+  }
+  const tag = (s: string, name: string): string | null => {
+    const m = new RegExp(`<${name}[^>]*>([^<]+)</${name}>`).exec(s);
+    return m ? m[1]!.trim() : null;
+  };
+  const blocks: string[] = [];
+  for (const m of xml.matchAll(/<Ntry[^>]*>([\s\S]*?)<\/Ntry>/g)) blocks.push(m[1]!);
+
+  let matched = 0;
+  let duplicates = 0;
+  const matches: Array<{ paymentId: string; orderId: string; amountCents: number; endToEndId: string | null }> = [];
+  let unmatched = 0;
+
+  for (const block of blocks) {
+    const cdtDbtInd = tag(block, 'CdtDbtInd');
+    if (cdtDbtInd && cdtDbtInd.toUpperCase() !== 'CRDT') continue;
+    const am = /<Amt[^>]*Ccy="([A-Z]{3})"[^>]*>([0-9.,]+)<\/Amt>/.exec(block);
+    if (!am) continue;
+    const amountCents = Math.round(Number.parseFloat(am[2]!.replace(',', '.')) * 100);
+    const bookedAt = new Date(tag(block, 'BookgDt') ?? tag(block, 'ValDt') ?? new Date().toISOString());
+    const endToEndId = tag(block, 'EndToEndId');
+    const refM = /<CdtrRefInf>[\s\S]*?<Ref>([^<]+)<\/Ref>[\s\S]*?<\/CdtrRefInf>/.exec(block);
+    const rfReference = refM ? refM[1]!.trim() : null;
+    const unstructured = tag(block, 'Ustrd');
+
+    if (endToEndId) {
+      const dup = await prisma.payment.findFirst({
+        where: { providerPaymentRef: endToEndId },
+        select: { id: true },
+      });
+      if (dup) {
+        duplicates++;
+        continue;
+      }
+    }
+
+    let payment: { id: string; orderId: string } | null = null;
+    if (rfReference) {
+      const cleaned = rfReference.replace(/\s/g, '').toUpperCase();
+      payment = await prisma.payment.findFirst({
+        where: {
+          status: 'pending',
+          provider: 'bank_transfer',
+          OR: [{ orderId: { contains: cleaned.slice(4) } }, { providerPaymentRef: cleaned }],
+        },
+        select: { id: true, orderId: true },
+      });
+    }
+    if (!payment && unstructured) {
+      const uuid = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i.exec(unstructured);
+      if (uuid) {
+        payment = await prisma.payment.findFirst({
+          where: { status: 'pending', provider: 'bank_transfer', orderId: uuid[1]!.toLowerCase() },
+          select: { id: true, orderId: true },
+        });
+      }
+    }
+
+    if (!payment) {
+      unmatched++;
+      continue;
+    }
+    await prisma.$transaction(async (tx) => {
+      await tx.payment.update({
+        where: { id: payment.id },
+        data: { status: 'succeeded', receivedAt: bookedAt, providerPaymentRef: endToEndId },
+      });
+      await tx.auditLog.create({
+        data: {
+          action: 'reconcile.camt054.matched',
+          resource: `Payment/${payment.id}`,
+          after: { endToEndId, rfReference, amountCents, bookedAt: bookedAt.toISOString() },
+        },
+      });
+    });
+    matched++;
+    matches.push({ paymentId: payment.id, orderId: payment.orderId, amountCents, endToEndId });
+  }
+
+  return { totalEntries: blocks.length, matched, unmatched, duplicates, matches };
+}
+
 // Shorthand presets for each ADR-0007 surface.
 const CURATOR_OR_ADMIN = ['curator', 'admin'] as const;
 const FINANCE_OR_ADMIN = ['finance', 'admin'] as const;
 const ADMIN_ONLY = ['admin'] as const;
+
+// ── Disbursement helpers (used by the manual-draft admin actions) ────
+// Each returns a [start, end] window in UTC; createDraft uses these to
+// scope the included Payments. Pure functions — no side effects.
+function prevMonthRange(): { start: Date; end: Date } {
+  const now = new Date();
+  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+  const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1) - 1);
+  return { start, end };
+}
+function prevWeekRange(): { start: Date; end: Date } {
+  const now = new Date();
+  // ISO week, Monday-anchored. End = last Sunday 23:59:59.999.
+  const dow = now.getUTCDay() || 7;
+  const endOfPrevWeek = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - dow));
+  endOfPrevWeek.setUTCHours(23, 59, 59, 999);
+  const start = new Date(endOfPrevWeek.getTime() - 6 * 86_400_000);
+  start.setUTCHours(0, 0, 0, 0);
+  return { start, end: endOfPrevWeek };
+}
+function monthToDateRange(): { start: Date; end: Date } {
+  const now = new Date();
+  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  return { start, end: now };
+}
+
+/**
+ * Allocates a gapless year-prefixed reference and creates a draft
+ * Disbursement covering every succeeded Payment in [start, end] that
+ * isn't already in a non-cancelled disbursement. Returns an AdminJS
+ * notice describing the outcome.
+ */
+async function draftForRange(
+  ctx: any,
+  range: { start: Date; end: Date },
+  label: string,
+): Promise<{ notice: { message: string; type: 'success' | 'info' | 'error' } }> {
+  const actorUserId = (ctx?.currentAdmin?.id as string | undefined) ?? null;
+  // Allocate DISB-YYYY-NNN sequentially. The year prefix is taken from
+  // periodEnd so a Jan disbursement covering December stays in the prior
+  // year's counter — matches the api's allocateReference logic.
+  const year = range.end.getUTCFullYear();
+  const result = await prisma.$transaction(async (tx) => {
+    const count = await tx.disbursement.count({
+      where: { reference: { startsWith: `DISB-${year}-` } },
+    });
+    const reference = `DISB-${year}-${String(count + 1).padStart(3, '0')}`;
+    const eligible = await tx.payment.findMany({
+      where: {
+        status: 'succeeded',
+        receivedAt: { gte: range.start, lte: range.end },
+        NOT: {
+          disbursementEntries: {
+            some: {
+              included: true,
+              disbursement: { status: { not: 'cancelled' } },
+            },
+          },
+        },
+      },
+      select: { id: true, amountCents: true, feeCents: true },
+    });
+    if (eligible.length === 0) {
+      return { reference, count: 0, totalCents: 0 } as const;
+    }
+    const expected = eligible.reduce((s, p) => s + p.amountCents, 0);
+    const fees = eligible.reduce((s, p) => s + p.feeCents, 0);
+    const net = expected - fees;
+    const d = await tx.disbursement.create({
+      data: {
+        reference,
+        periodStart: range.start,
+        periodEnd: range.end,
+        status: 'draft',
+        expectedCents: expected,
+        feeCents: fees,
+        netCents: net,
+        createdByUserId: actorUserId,
+        entries: {
+          create: eligible.map((p) => ({
+            paymentId: p.id,
+            amountCents: p.amountCents,
+            feeCents: p.feeCents,
+            netCents: p.amountCents - p.feeCents,
+          })),
+        },
+      },
+    });
+    await tx.auditLog.create({
+      data: {
+        actorUserId,
+        action: 'admin.disbursement.draft',
+        resource: `Disbursement/${d.id}`,
+      },
+    });
+    return { reference: d.reference, count: eligible.length, totalCents: expected } as const;
+  });
+
+  if (result.count === 0) {
+    return {
+      notice: {
+        message: `No succeeded payments in window (${label}). Nothing drafted.`,
+        type: 'info',
+      },
+    };
+  }
+  return {
+    notice: {
+      message: `Drafted ${result.reference} covering ${result.count} payment(s) totalling €${(result.totalCents / 100).toFixed(2)} (${label}).`,
+      type: 'success',
+    },
+  };
+}
 
 /**
  * Builds the handler for the Plant "Enrich" record actions. Enqueues a
@@ -410,6 +626,10 @@ const TranslationsPage = componentLoader.add('Translations', path.join(here, 'pa
 const BackupsPage = componentLoader.add('Backups', path.join(here, 'pages/Backups'));
 const ReconciliationPage = componentLoader.add('Reconciliation', path.join(here, 'pages/Reconciliation'));
 const DashboardPage = componentLoader.add('Dashboard', path.join(here, 'pages/Dashboard'));
+// Tiny stub component — useEffect → window.location.assign('/admin/downloads')
+// so the sidebar Downloads entry bails out of the SPA into the static
+// Fastify-rendered page that actually has working download links.
+const DownloadsRedirectPage = componentLoader.add('DownloadsRedirect', path.join(here, 'pages/DownloadsRedirect'));
 const IngestDocPage = componentLoader.add('IngestDoc', path.join(here, 'pages/IngestDoc'));
 const GardenIdentityPage = componentLoader.add('GardenIdentity', path.join(here, 'pages/GardenIdentity'));
 const PaymentProvidersPage = componentLoader.add('PaymentProviders', path.join(here, 'pages/PaymentProviders'));
@@ -645,7 +865,19 @@ const adminConfig = new AdminJS({
       resource: { model: getModelByName('Adoption'), client: prisma },
       options: {
         navigation: { name: 'Donors', icon: 'Heart' },
-        listProperties: ['createdAt', 'donorId', 'plantId', 'tierId', 'status', 'intent', 'amountCents'],
+        listProperties: ['createdAt', 'donorId', 'plantId', 'tierId', 'status', 'intent', 'billingInterval', 'amountCents'],
+        // Explicit show order — groups financial data, then personalisation,
+        // then gift / memorial fields. Avoids AdminJS picking a default that
+        // leaves blank labels for nullable relation fields.
+        showProperties: [
+          'id', 'createdAt', 'updatedAt', 'status',
+          'donorId', 'plantId', 'tierId',
+          'amountCents', 'currency', 'recurring', 'billingInterval',
+          'intent', 'nickname', 'dedication', 'homeRegion',
+          'giftRecipientId', 'giftDeliverOn', 'giftAnonymous', 'giftWrap', 'memorialOf',
+          'coAdopters', 'publicName', 'showOnDonorWall', 'marketingOptIn',
+          'bundleId', 'giftCodeId', 'startedAt', 'endsAt',
+        ],
         filterProperties: ['status', 'intent', 'tierId', 'recurring', 'billingInterval', 'createdAt', 'donorId', 'bundleId'],
         sort: { sortBy: 'createdAt', direction: 'desc' as const },
         properties: {
@@ -656,13 +888,21 @@ const adminConfig = new AdminJS({
           recurring: { description: 'Whether the adoption auto-renews. one_time intervals have recurring=false.' },
           billingInterval: { description: 'monthly · annual · one_time. Allowed values controlled by adoption.intervalsEnabled.' },
           bundleId: { description: 'Set when the donor checked out multiple plants together; siblings share this id and activate as a group.' },
-          giftRecipientId: { description: 'Recipient User row for gift adoptions. Donor still pays; recipient sees the plant in My Garden.' },
           giftCodeId: { description: 'Single-use redemption code if the gift hasn\'t been claimed yet.' },
           memorialOf: { description: 'Name of the person being honoured. Shown on the plant page and the donor wall.' },
           coAdopters: { description: 'JSON array of {name?, email?} co-adopter entries — the split-the-gift feature.' },
           marketingOptIn: { description: 'Did the donor agree to seasonal newsletter emails at checkout?' },
           showOnDonorWall: { description: 'When true, the donor\'s name appears on the plant\'s donor wall. False = anonymous.' },
           dedication: { description: 'Optional public message (≤240 chars) the donor wrote for this adoption.' },
+          nickname: { description: 'Pet name the donor gave the plant. Shown on the plant page and the digital certificate.' },
+          homeRegion: { description: 'Internationalisation@Home — the donor\'s home region. Drives "plant from your home region" surfacing.' },
+          publicName: { description: 'Override of donor.name on the public donor wall. Honour wishes (e.g. "Mira & family").' },
+          // FK references — AdminJS uses these to render a clickable
+          // chip linking to the related record. Without it those fields
+          // show as blank labels.
+          donorId: { description: 'The donor (User) who paid for this adoption.', reference: 'User' },
+          plantId: { description: 'The Plant being adopted.', reference: 'Plant' },
+          giftRecipientId: { description: 'Recipient User row for gift adoptions. Donor still pays; recipient sees the plant in My Garden.', reference: 'User' },
         },
         actions: {
           ...restrictTo(...FINANCE_OR_ADMIN),
@@ -711,7 +951,11 @@ const adminConfig = new AdminJS({
         filterProperties: ['email', 'name', 'role', 'locale', 'createdAt', 'emailVerified', 'deactivatedAt'],
         sort: { sortBy: 'createdAt', direction: 'desc' as const },
         properties: {
-          email: { description: 'Donor email — also the unique sign-in identifier. Type to search.' },
+          // isTitle marks the property AdminJS uses when rendering a
+          // reference chip to a User (e.g. on the Payment show view).
+          // Without it, FK fields like Payment.donorId render as blank
+          // labels instead of "user@example.com".
+          email: { isTitle: true, description: 'Donor email — also the unique sign-in identifier. Type to search.' },
           name: { description: 'Display name shown on receipts and the donor wall.' },
           role: { description: 'donor / curator / finance / admin. Changing a role takes effect on the next session refresh.' },
           locale: { description: 'Preferred language for emails and receipts (en / fi / sv).' },
@@ -794,14 +1038,59 @@ const adminConfig = new AdminJS({
       options: {
         navigation: { name: 'Finance', icon: 'Dollar' },
         listProperties: ['createdAt', 'provider', 'amountCents', 'status', 'donorId', 'orderId'],
+        // Explicit show list — leaves out the bare relation fields
+        // ("donor" / "adoption") which the Prisma adapter cannot render
+        // without a titleProperty, and which were rendering as blank
+        // labels in the show view. The FK UUIDs below are clickable
+        // references to the related resource instead.
+        showProperties: [
+          'id',
+          'createdAt',
+          'updatedAt',
+          'status',
+          'provider',
+          'orderId',
+          'providerSessionId',
+          'providerPaymentRef',
+          'providerCustomerId',
+          'donorId',
+          'adoptionId',
+          'amountCents',
+          'netCents',
+          'vatCents',
+          'vatRateBp',
+          'feeCents',
+          'refundedCents',
+          'currency',
+          'receivedAt',
+          'refundedAt',
+          'failureCode',
+          'failureMessage',
+        ],
         filterProperties: ['provider', 'status', 'createdAt', 'amountCents', 'donorId', 'orderId'],
         sort: { sortBy: 'createdAt', direction: 'desc' as const },
         properties: {
           orderId: { description: 'Our idempotency key sent to the payment provider. Search by full or partial id.' },
-          providerPaymentRef: { description: 'Provider-side reference (Paytrail transactionId / MobilePay agreement id).' },
+          providerPaymentRef: { description: 'Provider-side reference (Paytrail transactionId / MobilePay agreement id). Populated when the provider confirms the charge.' },
+          providerCustomerId: { description: 'Token / stored-credential id returned after a tokenisation flow. Populated only for recurring or saved-card payments.' },
+          providerSessionId: { description: 'Provider-side checkout/session id (Paytrail transactionId, MobilePay paymentId). Set when we redirect the donor.' },
           provider: { description: 'paytrail · mobilepay · bank_transfer.' },
-          status: { description: 'pending · succeeded · failed · refunded · cancelled.' },
+          status: { description: 'pending · succeeded · failed · refunded · cancelled. Pending stays until the webhook fires — see PAYTRAIL_CALLBACK_URL in .env.' },
           amountCents: { description: 'Gross amount in cents (€25 = 2500).' },
+          netCents: { description: 'Net amount after VAT split (donation portion) in cents. Equals amountCents for pure donations.' },
+          vatCents: { description: 'VAT amount in cents. Zero for pure donations under the Finnish yleishyödyllinen yhteisö rules.' },
+          vatRateBp: { description: 'VAT rate in basis points (2400 = 24%). Zero for donations; non-zero only for the benefits portion of a Seedling-tier adoption.' },
+          feeCents: { description: 'Provider fee in cents (set from the provider webhook payload on succeeded).' },
+          refundedCents: { description: 'Total amount refunded in cents. Non-zero only after a refund action.' },
+          receivedAt: { description: 'Webhook arrival timestamp. Empty while the payment is still pending.' },
+          refundedAt: { description: 'When a refund was issued, if any.' },
+          failureCode: { description: 'Provider-side error code (e.g. card_declined, insufficient_funds). Empty unless status=failed.' },
+          failureMessage: { description: 'Human-readable failure reason from the provider. Empty unless status=failed.' },
+          // Linked-resource references — AdminJS uses these to render the
+          // FK UUID as a clickable chip pointing at the related record's
+          // show page, instead of leaving the field blank.
+          donorId: { description: 'Donor (the User who paid). Click to open the donor record.', reference: 'User' },
+          adoptionId: { description: 'Adoption this payment funded (null for one-off donations).', reference: 'Adoption' },
         },
         // Financial rows MUST be immutable from the UI: deletes break
         // reconciliation + audit trail. Refunds use the dedicated
@@ -811,6 +1100,55 @@ const adminConfig = new AdminJS({
           delete: { isAccessible: false },
           bulkDelete: { isAccessible: false },
           new: { isAccessible: false },
+          // ── Resend receipt ─────────────────────────────────────────────
+          // Fires the receipt processor with `resend: true`, which
+          // regenerates the PDF if its blob has gone missing and always
+          // enqueues the donor-facing email job. Idempotent — duplicate
+          // clicks just stack identical jobs (BullMQ dedupes by jobId
+          // suffix when fired within a few ms; otherwise nodemailer
+          // sends twice, which is the desired behaviour when the donor
+          // explicitly asks "can you send the receipt again?").
+          resendReceipt: {
+            actionType: 'record',
+            label: 'Resend receipt',
+            icon: 'Mail',
+            component: false,
+            isAccessible: ({
+              currentAdmin,
+              record,
+            }: {
+              currentAdmin?: { role?: string };
+              record?: { params?: Record<string, unknown> };
+            }) => {
+              const role = currentAdmin?.role as string | undefined;
+              if (!['admin', 'finance'].includes(role ?? '')) return false;
+              const status = record?.params?.['status'] as string | undefined;
+              return status === 'succeeded';
+            },
+            handler: async (_req: any, _res: any, ctx: any) => {
+              const paymentId = ctx.record!.params['id'];
+              const actorUserId = ctx.currentAdmin?.id ?? null;
+              await receiptQueue.add(
+                'render',
+                { paymentId, resend: true },
+                {
+                  // Unique jobId per click so BullMQ doesn't dedupe a
+                  // legitimate retry against a still-cached completed job.
+                  jobId: `receipt-${paymentId}-resend-${Date.now()}`,
+                  attempts: 5,
+                  backoff: { type: 'exponential', delay: 5_000 },
+                },
+              );
+              await prisma.auditLog.create({
+                data: {
+                  actorUserId,
+                  action: 'admin.receipt.resend',
+                  resource: `Payment/${paymentId}`,
+                },
+              });
+              return { record: ctx.record!.toJSON(ctx.currentAdmin) };
+            },
+          },
         },
       },
     },
@@ -841,19 +1179,107 @@ const adminConfig = new AdminJS({
       resource: { model: getModelByName('TaxCertificate'), client: prisma },
       options: {
         navigation: { name: 'Finance', icon: 'Award' },
-        listProperties: ['year', 'donorId', 'totalCents', 'issuedAt', 'pdfUrl'],
-        filterProperties: ['year', 'donorId', 'issuedAt'],
-        sort: { sortBy: 'year', direction: 'desc' as const },
+        // Schema column is `taxYear`, not `year` — the old config referenced
+        // a non-existent property which rendered as blank in the list view.
+        listProperties: ['taxYear', 'donorId', 'totalCents', 'scheme', 'issuedAt'],
+        filterProperties: ['taxYear', 'donorId', 'issuedAt', 'scheme'],
+        sort: { sortBy: 'taxYear', direction: 'desc' as const },
         properties: {
-          year: { description: 'Tax year covered (e.g. 2026 = donations from 1 Jan 2026 to 31 Dec 2026).' },
+          taxYear: { description: 'Tax year covered (e.g. 2026 = donations from 1 Jan 2026 to 31 Dec 2026).' },
           totalCents: { description: 'Sum of deductible donations for that year, in cents.' },
-          pdfUrl: { description: 'Local /v1/files/* URL — served directly from STORAGE_DIR.' },
+          scheme: { description: 'Which Finnish-tax scheme this certificate falls under (TVL §57 corporate · individual 2026 · informational).' },
+          pdfUrl: { description: 'local:// URI — viewable via /v1/files/<key>.' },
+          // Same FK-display trick as Payment.donorId — without `reference`,
+          // AdminJS renders the FK column blank in the show view.
+          donorId: { description: 'Donor receiving the certificate. Click to open the donor record.', reference: 'User' },
         },
         actions: {
           ...restrictTo(...FINANCE_OR_ADMIN),
           delete: { isAccessible: false },
           bulkDelete: { isAccessible: false },
           new: { isAccessible: false },
+          // ── Generate annual sweep ──────────────────────────────────
+          // Resource-level action — appears at the top of the list. Runs
+          // the tax-cert-annual processor for the year specified in a
+          // ?year=YYYY query string (defaults to "previous year" if
+          // unspecified, which matches the cron's behaviour).
+          generate: {
+            actionType: 'resource',
+            label: 'Generate annual sweep',
+            icon: 'Calendar',
+            component: false,
+            isAccessible: ({ currentAdmin }: { currentAdmin?: { role?: string } }) =>
+              ['admin', 'finance'].includes((currentAdmin?.role as string) ?? ''),
+            handler: async (req: any, _res: any, ctx: any) => {
+              const yearStr = req?.query?.['year'] ?? req?.payload?.['year'];
+              const taxYear = Number.parseInt(yearStr ?? '', 10) || (new Date().getUTCFullYear() - 1);
+              const actorUserId = ctx.currentAdmin?.id ?? null;
+              const taxCertQ = new Queue('tax-cert-annual', queueConn);
+              const job = await taxCertQ.add(
+                'admin-manual',
+                { taxYear },
+                {
+                  jobId: `tax-cert-manual-${taxYear}-all-${Date.now()}`,
+                  attempts: 3,
+                  backoff: { type: 'exponential', delay: 5_000 },
+                },
+              );
+              await prisma.auditLog.create({
+                data: {
+                  actorUserId,
+                  action: 'admin.taxCert.generate',
+                  resource: `TaxYear/${taxYear}`,
+                },
+              });
+              return {
+                notice: {
+                  message: `Tax cert sweep enqueued for ${taxYear} (job ${job.id}). Refresh in ~10s.`,
+                  type: 'success',
+                },
+              };
+            },
+          },
+          // ── Regenerate single certificate ──────────────────────────
+          // Record-level action — re-runs the processor scoped to this
+          // donor + year. Use when a PDF is missing or the schema needs
+          // to be re-applied (e.g. address change after issuance).
+          regenerate: {
+            actionType: 'record',
+            label: 'Regenerate PDF',
+            icon: 'RefreshCw',
+            component: false,
+            isAccessible: ({ currentAdmin }: { currentAdmin?: { role?: string } }) =>
+              ['admin', 'finance'].includes((currentAdmin?.role as string) ?? ''),
+            handler: async (_req: any, _res: any, ctx: any) => {
+              const taxYear = Number(ctx.record!.params['taxYear']);
+              const donorId = ctx.record!.params['donorId'] as string;
+              const actorUserId = ctx.currentAdmin?.id ?? null;
+              // The processor's idempotency check skips when a cert already
+              // exists with a pdfUrl. Strip pdfUrl first so it regenerates.
+              await prisma.taxCertificate.updateMany({
+                where: { donorId, taxYear },
+                data: { pdfUrl: null },
+              });
+              const taxCertQ = new Queue('tax-cert-annual', queueConn);
+              const job = await taxCertQ.add(
+                'admin-regen',
+                { taxYear, donorId },
+                {
+                  jobId: `tax-cert-regen-${donorId}-${taxYear}-${Date.now()}`,
+                  attempts: 3,
+                  backoff: { type: 'exponential', delay: 5_000 },
+                },
+              );
+              await prisma.auditLog.create({
+                data: {
+                  actorUserId,
+                  action: 'admin.taxCert.regenerate',
+                  resource: `TaxCertificate/${ctx.record!.params['id']}`,
+                },
+              });
+              return { record: ctx.record!.toJSON(ctx.currentAdmin) };
+            },
+          },
         },
       },
     },
@@ -861,12 +1287,17 @@ const adminConfig = new AdminJS({
       resource: { model: getModelByName('ProcessedEvent'), client: prisma },
       options: {
         navigation: { name: 'Finance', icon: 'GitBranch' },
-        listProperties: ['provider', 'providerEventId', 'paymentId', 'createdAt'],
-        filterProperties: ['provider', 'createdAt'],
-        sort: { sortBy: 'createdAt', direction: 'desc' as const },
+        // Schema column is `processedAt`, NOT `createdAt`. Wrong field
+        // name on listProperties/sort breaks the AdminJS records fetch
+        // with "There was an error fetching records".
+        listProperties: ['provider', 'providerEventId', 'paymentId', 'processedAt'],
+        filterProperties: ['provider', 'processedAt'],
+        sort: { sortBy: 'processedAt', direction: 'desc' as const },
         properties: {
           provider: { description: 'Source provider of the webhook event.' },
           providerEventId: { description: 'Idempotency key — a duplicate delivery is silently swallowed.' },
+          processedAt: { description: 'When the webhook was received + recorded. Newest first.' },
+          paymentId: { description: 'The Payment this event applied to (null for replayed/no-op events).', reference: 'Payment' },
         },
         actions: restrictTo(...FINANCE_OR_ADMIN),
       },
@@ -905,6 +1336,150 @@ const adminConfig = new AdminJS({
           // entries get bundled atomically. Disable the admin shortcut so
           // staff don't create empty rows by accident.
           new: { isAccessible: false },
+          // ── Manual draft generators ────────────────────────────────
+          // Three convenience buttons matching the three most common
+          // cadences. Each calls the disbursements service with a
+          // pre-computed [periodStart, periodEnd] window — staff can
+          // adjust entries (uncheck refunded items) before marking
+          // the draft Ready. Arbitrary ranges still go through the
+          // public POST /v1/disbursements/draft.
+          generatePrevMonth: {
+            actionType: 'resource',
+            label: 'Last month',
+            icon: 'Calendar',
+            component: false,
+            isAccessible: ({ currentAdmin }: { currentAdmin?: { role?: string } }) =>
+              ['admin', 'finance'].includes((currentAdmin?.role as string) ?? ''),
+            handler: async (_req: any, _res: any, ctx: any) =>
+              draftForRange(ctx, prevMonthRange(), 'last month'),
+          },
+          generatePrevWeek: {
+            actionType: 'resource',
+            label: 'Last week',
+            icon: 'Calendar',
+            component: false,
+            isAccessible: ({ currentAdmin }: { currentAdmin?: { role?: string } }) =>
+              ['admin', 'finance'].includes((currentAdmin?.role as string) ?? ''),
+            handler: async (_req: any, _res: any, ctx: any) =>
+              draftForRange(ctx, prevWeekRange(), 'last week'),
+          },
+          generateMonthToDate: {
+            actionType: 'resource',
+            label: 'Month-to-date',
+            icon: 'Calendar',
+            component: false,
+            isAccessible: ({ currentAdmin }: { currentAdmin?: { role?: string } }) =>
+              ['admin', 'finance'].includes((currentAdmin?.role as string) ?? ''),
+            handler: async (_req: any, _res: any, ctx: any) =>
+              draftForRange(ctx, monthToDateRange(), 'month-to-date'),
+          },
+          generateCustomRange: {
+            actionType: 'resource',
+            label: 'Custom range',
+            icon: 'Sliders',
+            component: false,
+            isAccessible: ({ currentAdmin }: { currentAdmin?: { role?: string } }) =>
+              ['admin', 'finance'].includes((currentAdmin?.role as string) ?? ''),
+            handler: async (req: any, _res: any, ctx: any) => {
+              const start = req?.query?.['start'] ?? req?.payload?.['start'];
+              const end = req?.query?.['end'] ?? req?.payload?.['end'];
+              if (!start || !end) {
+                return {
+                  notice: {
+                    message: 'Pass ?start=YYYY-MM-DD&end=YYYY-MM-DD on the URL or via payload.',
+                    type: 'error',
+                  },
+                };
+              }
+              const s = new Date(`${start}T00:00:00Z`);
+              const e = new Date(`${end}T23:59:59.999Z`);
+              if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime()) || e <= s) {
+                return {
+                  notice: { message: 'Invalid date range.', type: 'error' },
+                };
+              }
+              return draftForRange(ctx, { start: s, end: e }, `${start} → ${end}`);
+            },
+          },
+          // ── Download CSV / PDF ──────────────────────────────────────
+          // Record actions exposed on a Disbursement's show view. Both
+          // redirect to the api routes through the same-origin /v1/*
+          // proxy registered on the admin Fastify (so the admin session
+          // cookie travels and the api auth-check passes).
+          // ── Download CSV / PDF — link to the Downloads page ────────
+          // AdminJS's `redirectUrl` goes through react-router's
+          // history.push() which TREATS THE URL AS A RELATIVE PATH and
+          // concatenates it to the current location, producing nonsense
+          // like /admin/resources/.../show/http://localhost.../...
+          // After extensive testing, the only reliable way to download
+          // is the static /admin/downloads page (rendered outside
+          // AdminJS). These two record-action buttons therefore just
+          // redirect the user to that page where the file links work.
+          downloadCsv: {
+            actionType: 'record',
+            label: 'Open downloads',
+            icon: 'Download',
+            component: false,
+            isAccessible: ({ currentAdmin }: { currentAdmin?: { role?: string } }) =>
+              ['admin', 'finance'].includes((currentAdmin?.role as string) ?? ''),
+            handler: async (_req: any, _res: any, ctx: any) => ({
+              redirectUrl: '/admin/downloads',
+              record: ctx.record!.toJSON(ctx.currentAdmin),
+              notice: {
+                message: 'Opening the downloads centre…',
+                type: 'success' as const,
+              },
+            }),
+          },
+          // ── Lifecycle transitions ──────────────────────────────────
+          markReady: {
+            actionType: 'record',
+            label: 'Mark ready',
+            icon: 'CheckCircle',
+            component: false,
+            isAccessible: ({
+              currentAdmin,
+              record,
+            }: {
+              currentAdmin?: { role?: string };
+              record?: { params?: Record<string, unknown> };
+            }) => {
+              if (!['admin', 'finance'].includes((currentAdmin?.role as string) ?? '')) return false;
+              return record?.params?.['status'] === 'draft';
+            },
+            handler: async (_req: any, _res: any, ctx: any) => {
+              const id = ctx.record!.params['id'];
+              return {
+                redirectUrl: `/v1/disbursements/${id}/ready`,
+                record: ctx.record!.toJSON(ctx.currentAdmin),
+                notice: { message: 'Marked ready', type: 'success' as const },
+              };
+            },
+          },
+          markSubmitted: {
+            actionType: 'record',
+            label: 'Mark submitted',
+            icon: 'Send',
+            component: false,
+            isAccessible: ({
+              currentAdmin,
+              record,
+            }: {
+              currentAdmin?: { role?: string };
+              record?: { params?: Record<string, unknown> };
+            }) => {
+              if (!['admin', 'finance'].includes((currentAdmin?.role as string) ?? '')) return false;
+              return record?.params?.['status'] === 'ready';
+            },
+            handler: async (_req: any, _res: any, ctx: any) => {
+              const id = ctx.record!.params['id'];
+              return {
+                redirectUrl: `/v1/disbursements/${id}/submit`,
+                record: ctx.record!.toJSON(ctx.currentAdmin),
+                notice: { message: 'Marked submitted', type: 'success' as const },
+              };
+            },
+          },
         },
       },
     },
@@ -1143,6 +1718,162 @@ const adminConfig = new AdminJS({
         },
       },
     },
+    // ── Tier-benefit fulfilment ─────────────────────────────────────────
+    // The unified to-do list for staff: every benefit owed across every
+    // active adoption, grouped by status + category. Auto-fulfil benefits
+    // (digital certificate, story page, donor wall) come pre-marked done
+    // by `activateAdoption`. Everything else starts in 'pending'.
+    {
+      resource: { model: getModelByName('AdoptionBenefit'), client: prisma },
+      options: {
+        navigation: { name: 'Donors', icon: 'CheckSquare' },
+        listProperties: [
+          'status', 'category', 'labelSnapshot', 'adoptionId',
+          'shippedAt', 'eventDate', 'nextDueAt', 'createdAt',
+        ],
+        showProperties: [
+          'id', 'adoptionId', 'benefitKey', 'category', 'labelSnapshot', 'donorLabelSnapshot',
+          'status', 'notes',
+          'shippingAddress', 'trackingNumber', 'shippedAt', 'deliveredAt',
+          'eventName', 'eventDate', 'rsvpStatus', 'rsvpAt',
+          'lastSentAt', 'nextDueAt',
+          'fulfilledByUserId', 'fulfilledAt', 'createdAt', 'updatedAt',
+        ],
+        filterProperties: ['status', 'category', 'adoptionId', 'benefitKey', 'createdAt'],
+        sort: { sortBy: 'createdAt', direction: 'desc' as const },
+        properties: {
+          status: { description: 'pending → in_progress → fulfilled. cancelled / not_applicable are terminal.' },
+          category: { description: 'digital · physical · event · recurring. Drives the staff to-do grouping.' },
+          benefitKey: { description: 'Machine id from packages/constants/src/benefits.ts — never edit directly.' },
+          labelSnapshot: { description: 'Ops-facing label captured at activation time. Surveys what to actually do.' },
+          donorLabelSnapshot: { description: 'Donor-facing label shown on My Garden.' },
+          shippingAddress: { description: 'Snapshot of the donor postal address at dispatch (so future address changes don\'t rewrite history).' },
+          trackingNumber: { description: 'Carrier tracking number (Posti, DHL, etc.) — surfaced to donor if set.' },
+          eventName: { description: 'Event name for event-category rows (e.g. "Adopters\' Open Day 2026").' },
+          eventDate: { description: 'When the event happens. Used to gate RSVP transitions.' },
+          rsvpStatus: { description: 'invited · accepted · declined · attended.' },
+          lastSentAt: { description: 'Most recent send timestamp for recurring items (quarterly notes etc.).' },
+          nextDueAt: { description: 'When the next recurring send is due. Worker cron sweeps this.' },
+          notes: { description: 'Free-form staff notes (e.g. "Engraver booked for week 23, plaque ready 2026-06-10").' },
+          adoptionId: { description: 'The Adoption row this benefit attaches to.', reference: 'Adoption' },
+          fulfilledByUserId: { description: 'Staff user who marked it done.', reference: 'User' },
+        },
+        actions: {
+          ...restrictTo(...FINANCE_OR_ADMIN, 'curator'),
+          new: { isAccessible: false },
+          delete: { isAccessible: false },
+          bulkDelete: { isAccessible: false },
+          // ── Status transitions ──────────────────────────────────────
+          markInProgress: {
+            actionType: 'record',
+            label: 'Mark in progress',
+            icon: 'PlayCircle',
+            component: false,
+            isAccessible: ({
+              currentAdmin,
+              record,
+            }: {
+              currentAdmin?: { role?: string };
+              record?: { params?: Record<string, unknown> };
+            }) => {
+              const role = (currentAdmin?.role as string) ?? '';
+              if (!['admin', 'finance', 'curator'].includes(role)) return false;
+              return record?.params?.['status'] === 'pending';
+            },
+            handler: async (_req: any, _res: any, ctx: any) => {
+              const id = ctx.record!.params['id'];
+              await prisma.adoptionBenefit.update({
+                where: { id },
+                data: { status: 'in_progress' },
+              });
+              await prisma.auditLog.create({
+                data: {
+                  actorUserId: ctx.currentAdmin?.id ?? null,
+                  action: 'admin.benefit.in_progress',
+                  resource: `AdoptionBenefit/${id}`,
+                },
+              });
+              return { record: ctx.record!.toJSON(ctx.currentAdmin) };
+            },
+          },
+          markFulfilled: {
+            actionType: 'record',
+            label: 'Mark fulfilled',
+            icon: 'CheckCircle',
+            component: false,
+            isAccessible: ({
+              currentAdmin,
+              record,
+            }: {
+              currentAdmin?: { role?: string };
+              record?: { params?: Record<string, unknown> };
+            }) => {
+              const role = (currentAdmin?.role as string) ?? '';
+              if (!['admin', 'finance', 'curator'].includes(role)) return false;
+              const s = record?.params?.['status'];
+              return s === 'pending' || s === 'in_progress';
+            },
+            handler: async (_req: any, _res: any, ctx: any) => {
+              const id = ctx.record!.params['id'];
+              const actorUserId = ctx.currentAdmin?.id ?? null;
+              await prisma.adoptionBenefit.update({
+                where: { id },
+                data: {
+                  status: 'fulfilled',
+                  fulfilledAt: new Date(),
+                  fulfilledByUserId: actorUserId,
+                  // For recurring items, fulfilment also stamps lastSentAt
+                  // and bumps nextDueAt by the cadence — see the worker
+                  // for the long-term re-enqueue logic.
+                  lastSentAt: new Date(),
+                },
+              });
+              await prisma.auditLog.create({
+                data: {
+                  actorUserId,
+                  action: 'admin.benefit.fulfilled',
+                  resource: `AdoptionBenefit/${id}`,
+                },
+              });
+              return { record: ctx.record!.toJSON(ctx.currentAdmin) };
+            },
+          },
+          markCancelled: {
+            actionType: 'record',
+            label: 'Mark cancelled',
+            icon: 'XCircle',
+            component: false,
+            isAccessible: ({
+              currentAdmin,
+              record,
+            }: {
+              currentAdmin?: { role?: string };
+              record?: { params?: Record<string, unknown> };
+            }) => {
+              const role = (currentAdmin?.role as string) ?? '';
+              if (!['admin', 'finance', 'curator'].includes(role)) return false;
+              const s = record?.params?.['status'];
+              return s === 'pending' || s === 'in_progress';
+            },
+            handler: async (_req: any, _res: any, ctx: any) => {
+              const id = ctx.record!.params['id'];
+              await prisma.adoptionBenefit.update({
+                where: { id },
+                data: { status: 'cancelled' },
+              });
+              await prisma.auditLog.create({
+                data: {
+                  actorUserId: ctx.currentAdmin?.id ?? null,
+                  action: 'admin.benefit.cancelled',
+                  resource: `AdoptionBenefit/${id}`,
+                },
+              });
+              return { record: ctx.record!.toJSON(ctx.currentAdmin) };
+            },
+          },
+        },
+      },
+    },
   ],
   // Sidebar pages — kept deliberately small. Each entry below is a hub
   // that contains tabs for related sub-workflows, so the sidebar stays
@@ -1184,6 +1915,24 @@ const adminConfig = new AdminJS({
       handler: async () => ({}),
       component: ObservabilityPage,
     },
+    // The Downloads page is rendered outside AdminJS by the Fastify
+    // onRequest hook (/admin/downloads). The pages registry expects a
+    // React component; we use `handler` that returns a redirect via the
+    // ` notice` channel — when the user clicks the sidebar entry, the
+    // AdminJS frontend opens the static page in a new tab via the
+    // bottom-bar redirectUrl. Even with the SPA-routing quirk, the
+    // /admin/downloads URL is rendered by the Fastify hook before
+    // AdminJS sees it, so the browser gets HTML directly.
+    downloads: {
+      label: 'Downloads',
+      icon: 'Download',
+      handler: async () => ({}),
+      // The component immediately window.location.assigns to
+      // /admin/downloads — the static HTML page rendered by the
+      // Fastify hook. This bypasses AdminJS's broken redirectUrl SPA
+      // navigation and gets the user to working file-download links.
+      component: DownloadsRedirectPage,
+    },
   },
 } as any);
 
@@ -1215,6 +1964,518 @@ async function bootstrap() {
     ) {
       reply.header('cache-control', 'public, max-age=86400').code(204).send();
       return;
+    }
+    // ── Catch AdminJS's broken redirectUrl concatenation ──────────────
+    // When a record action returns `redirectUrl: 'http://…/admin/dl/…'`
+    // AdminJS's react-router treats it as a relative path and tacks the
+    // whole URL onto the current location, producing nonsense like
+    //   /admin/resources/X/records/Y/show/http://localhost:4100/admin/dl/…
+    // The browser then ends up at that URL after login (history.back).
+    // Detect the pattern and redirect to the embedded download URL —
+    // or fall back to /admin/downloads if extraction fails. Either way
+    // the user lands somewhere useful instead of a 404 page.
+    {
+      const mangled = /^\/admin\/resources\/[^/]+\/records\/[^/]+\/show\/(http:\/\/[^?]+(?:\?[^#]*)?)$/.exec(
+        req.url ?? '',
+      );
+      if (mangled) {
+        const embedded = decodeURIComponent(mangled[1]!);
+        // Strip the bogus ?refresh=true that AdminJS appends.
+        const clean = embedded.replace(/[?&]refresh=true(&|$)/, (_, sep) => (sep === '&' ? '?' : ''));
+        reply
+          .code(302)
+          .header('location', clean.replace(/\?$/, ''))
+          .send();
+        return;
+      }
+    }
+    // ── camt.054 bank-statement reconciliation ──────────────────────
+    // Accepts an ISO 20022 camt.054 XML document as the request body.
+    // Parses every credit entry, matches against pending bank_transfer
+    // Payments by RF reference (or orderId UUID in unstructured), flips
+    // matches to `succeeded`. Idempotent — duplicate endToEndId values
+    // are skipped. Returns a JSON summary.
+    if (req.url === '/admin/dl/reconcile-camt054' && req.method === 'POST') {
+      try {
+        const chunks: Buffer[] = [];
+        await new Promise<void>((resolve, reject) => {
+          req.raw.on('data', (c) => chunks.push(Buffer.from(c as Uint8Array)));
+          req.raw.on('end', resolve);
+          req.raw.on('error', reject);
+        });
+        const xml = Buffer.concat(chunks).toString('utf-8');
+        if (!xml.trim()) {
+          reply.code(400).send({ error: 'empty body' });
+          return;
+        }
+        const result = await reconcileCamt054Inline(xml);
+        reply.header('content-type', 'application/json').send(result);
+        return;
+      } catch (err) {
+        reply
+          .code(400)
+          .send({ error: 'parse_failed', message: (err as Error).message });
+        return;
+      }
+    }
+    // ── Admin download centre ───────────────────────────────────────
+    // Plain HTML page listing every downloadable artefact: disbursement
+    // CSV/PDFs, receipt PDFs, tax certificate PDFs, GDPR exports. The
+    // AdminJS SPA hijacks `redirectUrl` from record actions and routes
+    // through react-router so clicks never actually download. This page
+    // is rendered outside AdminJS — plain Fastify → plain <a href>
+    // anchors → browser triggers download per Content-Disposition. The
+    // user can bookmark this URL.
+    if (req.url === '/admin/downloads' && req.method === 'GET') {
+      try {
+        const [disbursements, receipts, taxCerts, gdprExports] = await Promise.all([
+          prisma.disbursement.findMany({
+            orderBy: { createdAt: 'desc' },
+            select: {
+              id: true,
+              reference: true,
+              status: true,
+              periodStart: true,
+              periodEnd: true,
+              expectedCents: true,
+              netCents: true,
+            },
+          }),
+          prisma.receipt.findMany({
+            orderBy: { issuedAt: 'desc' },
+            take: 50,
+            select: {
+              id: true,
+              number: true,
+              amountCents: true,
+              issuedAt: true,
+              pdfUrl: true,
+              donor: { select: { email: true, name: true } },
+            },
+          }),
+          prisma.taxCertificate.findMany({
+            orderBy: { taxYear: 'desc' },
+            select: {
+              id: true,
+              taxYear: true,
+              totalCents: true,
+              scheme: true,
+              pdfUrl: true,
+              donor: { select: { email: true, name: true } },
+            },
+          }),
+          prisma.dataExportRequest.findMany({
+            orderBy: { createdAt: 'desc' },
+            take: 30,
+            select: {
+              id: true,
+              status: true,
+              exportUrl: true,
+              createdAt: true,
+              completedAt: true,
+              userId: true,
+            },
+          }),
+        ]);
+        const escapeHtml = (s: string): string =>
+          s
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+        const eur = (cents: number): string => `€${(cents / 100).toFixed(2)}`;
+        const date = (d: Date | null | string): string => {
+          if (!d) return '—';
+          const dt = typeof d === 'string' ? new Date(d) : d;
+          return dt.toISOString().slice(0, 10);
+        };
+
+        const apiBase = (process.env.API_URL ?? 'http://localhost:4000').replace(/\/$/, '');
+
+        const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>BloomOulu Admin · Downloads</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root {
+    --bo-ink: #1F3C2D;
+    --bo-forest-mid: #2D5440;
+    --bo-paper: #FCFAF3;
+    --bo-cream: #FAF7EE;
+    --bo-line: #E5E2D8;
+    --bo-line-soft: #EFECDF;
+    --bo-ink-mute: #6F7E70;
+    --bo-accent: #A86A2B;
+    --bo-sage-pale: #F2F0E8;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bo-paper);
+    color: var(--bo-ink);
+    margin: 0;
+    padding: 32px 24px 64px;
+    line-height: 1.5;
+  }
+  .wrap { max-width: 1200px; margin: 0 auto; }
+  h1 { font-size: 32px; margin: 0 0 4px; color: var(--bo-forest-mid); font-weight: 700; }
+  .lead { color: var(--bo-ink-mute); margin: 0 0 32px; font-size: 15px; }
+  .back { display: inline-block; margin-bottom: 16px; color: var(--bo-accent); text-decoration: none; }
+  .back:hover { text-decoration: underline; }
+  section { margin: 40px 0; }
+  h2 { font-size: 20px; color: var(--bo-forest-mid); margin: 0 0 12px; }
+  .count { font-weight: 400; color: var(--bo-ink-mute); font-size: 14px; margin-left: 8px; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    border: 1px solid var(--bo-line);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  th, td {
+    padding: 10px 14px;
+    text-align: left;
+    border-bottom: 1px solid var(--bo-line-soft);
+    font-size: 14px;
+  }
+  th {
+    background: var(--bo-sage-pale);
+    font-weight: 600;
+    color: var(--bo-forest-mid);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  tr:last-child td { border-bottom: none; }
+  .ref { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+  .btn {
+    display: inline-block;
+    padding: 6px 12px;
+    background: var(--bo-forest-mid);
+    color: white;
+    text-decoration: none;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    margin-right: 4px;
+  }
+  .btn:hover { background: var(--bo-ink); }
+  .btn-secondary { background: white; color: var(--bo-ink); border: 1px solid var(--bo-line); }
+  .btn-secondary:hover { background: var(--bo-cream); }
+  .status {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .status-draft { background: #E8EEDE; color: var(--bo-forest-mid); }
+  .status-ready { background: #FBE9B0; color: #8B6914; }
+  .status-submitted { background: #C4DDF5; color: #1A5490; }
+  .status-paid { background: #B8D8B8; color: #2D5430; }
+  .status-reconciled { background: var(--bo-sage-pale); color: var(--bo-ink-mute); }
+  .status-cancelled { background: #F4D8D0; color: #8B3A2C; }
+  .empty { color: var(--bo-ink-mute); font-style: italic; padding: 16px; text-align: center; }
+  .pill {
+    display: inline-block;
+    padding: 1px 8px;
+    background: var(--bo-sage-pale);
+    border-radius: 10px;
+    font-size: 11px;
+    color: var(--bo-ink-mute);
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a href="/admin" class="back">← Back to dashboard</a>
+  <h1>Downloads</h1>
+  <p class="lead">
+    All artefacts available to finance + admin staff. Click any link to download —
+    the browser will trigger a Save dialog. Files are regenerated on request, so
+    they always reflect current state.
+  </p>
+
+  <section>
+    <h2>Disbursement claims <span class="count">${disbursements.length}</span></h2>
+    ${disbursements.length === 0
+      ? '<p class="empty">No disbursements yet. Use /admin/resources/Disbursement → "Last month" / "Custom range" to create one.</p>'
+      : `<table>
+      <thead><tr>
+        <th>Reference</th>
+        <th>Period</th>
+        <th>Status</th>
+        <th>Net</th>
+        <th>Downloads</th>
+      </tr></thead>
+      <tbody>
+        ${disbursements
+          .map(
+            (d) => `<tr>
+          <td class="ref">${escapeHtml(d.reference)}</td>
+          <td>${date(d.periodStart)} → ${date(d.periodEnd)}</td>
+          <td><span class="status status-${escapeHtml(d.status)}">${escapeHtml(d.status)}</span></td>
+          <td>${eur(d.netCents)}</td>
+          <td>
+            <a href="/admin/dl/disbursement-csv/${d.id}" class="btn" download>CSV</a>
+            <a href="/admin/dl/disbursement-pdf/${d.id}" class="btn" download>PDF</a>
+            <a href="/admin/resources/Disbursement/records/${d.id}/show" class="btn btn-secondary">Open</a>
+          </td>
+        </tr>`,
+          )
+          .join('')}
+      </tbody>
+    </table>`
+    }
+  </section>
+
+  <section>
+    <h2>Donation receipts <span class="count">${receipts.length}</span></h2>
+    ${receipts.length === 0
+      ? '<p class="empty">No receipts yet.</p>'
+      : `<table>
+      <thead><tr>
+        <th>Number</th>
+        <th>Issued</th>
+        <th>Donor</th>
+        <th>Amount</th>
+        <th>Download</th>
+      </tr></thead>
+      <tbody>
+        ${receipts
+          .map(
+            (r) => `<tr>
+          <td class="ref">${escapeHtml(r.number)}</td>
+          <td>${date(r.issuedAt)}</td>
+          <td>${escapeHtml(r.donor.name ?? r.donor.email)}</td>
+          <td>${eur(r.amountCents)}</td>
+          <td>${r.pdfUrl
+            ? `<a href="${apiBase}/v1/files/receipts/${escapeHtml(r.number)}.pdf" class="btn" download target="_blank" rel="noopener">PDF</a>`
+            : '<span class="pill">pending</span>'}</td>
+        </tr>`,
+          )
+          .join('')}
+      </tbody>
+    </table>`
+    }
+  </section>
+
+  <section>
+    <h2>Tax certificates <span class="count">${taxCerts.length}</span></h2>
+    ${taxCerts.length === 0
+      ? '<p class="empty">No tax certificates issued yet. /admin/resources/TaxCertificate → "Generate annual sweep" to create.</p>'
+      : `<table>
+      <thead><tr>
+        <th>Tax Year</th>
+        <th>Donor</th>
+        <th>Scheme</th>
+        <th>Total</th>
+        <th>Download</th>
+      </tr></thead>
+      <tbody>
+        ${taxCerts
+          .map(
+            (c) => `<tr>
+          <td class="ref">${c.taxYear}</td>
+          <td>${escapeHtml(c.donor.name ?? c.donor.email)}</td>
+          <td><span class="pill">${escapeHtml(c.scheme)}</span></td>
+          <td>${eur(c.totalCents)}</td>
+          <td>${c.pdfUrl
+            ? `<a href="${apiBase}/v1/files/tax-certs/${c.taxYear}/CERT-${c.taxYear}-${c.id.replace(/-/g, '').slice(0, 8).toUpperCase()}.pdf" class="btn" download target="_blank" rel="noopener">PDF</a>`
+            : '<span class="pill">pending</span>'}</td>
+        </tr>`,
+          )
+          .join('')}
+      </tbody>
+    </table>`
+    }
+  </section>
+
+  <section>
+    <h2>GDPR data exports <span class="count">${gdprExports.length}</span></h2>
+    ${gdprExports.length === 0
+      ? '<p class="empty">No GDPR exports yet. Donors trigger these from My Garden → "Request a copy of my data".</p>'
+      : `<table>
+      <thead><tr>
+        <th>Request</th>
+        <th>Requested</th>
+        <th>Status</th>
+        <th>Completed</th>
+        <th>Download</th>
+      </tr></thead>
+      <tbody>
+        ${gdprExports
+          .map(
+            (e) => `<tr>
+          <td class="ref">${e.id.slice(0, 8)}…</td>
+          <td>${date(e.createdAt)}</td>
+          <td><span class="status status-${escapeHtml(e.status)}">${escapeHtml(e.status)}</span></td>
+          <td>${date(e.completedAt)}</td>
+          <td>${e.exportUrl
+            ? `<a href="${escapeHtml(e.exportUrl)}?download=1" class="btn" target="_blank" rel="noopener">JSON</a>`
+            : '<span class="pill">pending</span>'}</td>
+        </tr>`,
+          )
+          .join('')}
+      </tbody>
+    </table>`
+    }
+  </section>
+
+  <p style="margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--bo-line); color: var(--bo-ink-mute); font-size: 12px;">
+    Bookmark this page (Cmd-D / Ctrl-D) — it's the canonical home for every downloadable artefact.
+  </p>
+</div>
+</body>
+</html>`;
+        reply
+          .header('content-type', 'text/html; charset=utf-8')
+          .header('cache-control', 'no-store')
+          .send(html);
+        return;
+      } catch (err) {
+        reply
+          .code(500)
+          .header('content-type', 'text/html')
+          .send(`<h1>Error</h1><pre>${(err as Error).message}</pre>`);
+        return;
+      }
+    }
+
+    // ── Disbursement file downloads ───────────────────────────────────
+    // The api routes (/v1/disbursements/:id/export.{csv,pdf}) require a
+    // Bearer JWT and the admin's cookie is `bloomoulu_admin`, not the
+    // api-side `bloomoulu.session`. Rather than mint a JWT here on every
+    // click, we just regenerate the file in-process — admin already has
+    // Prisma + the email package available.
+    {
+      const m = /^\/admin\/dl\/disbursement-(csv|pdf)\/([0-9a-f-]{36})\/?$/.exec(req.url ?? '');
+      if (m) {
+        const [, kind, id] = m;
+        try {
+          const d = await prisma.disbursement.findUnique({
+            where: { id },
+            include: {
+              entries: {
+                include: {
+                  payment: {
+                    include: {
+                      donor: { select: { email: true, name: true } },
+                      adoption: { include: { plant: { select: { nameEn: true, slug: true } } } },
+                    },
+                  },
+                },
+              },
+            },
+          });
+          if (!d) {
+            reply.code(404).send({ error: 'Disbursement not found' });
+            return;
+          }
+          if (kind === 'csv') {
+            // Build CSV identical to the api's exportCsv shape.
+            const csvField = (s: string | null | undefined): string => {
+              if (s == null) return '';
+              const v = String(s);
+              return /[",\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+            };
+            const rows: string[] = [];
+            rows.push('reference,periodStart,periodEnd,status,expectedNetEUR,paidEUR,entries');
+            rows.push(
+              [
+                csvField(d.reference),
+                csvField(d.periodStart.toISOString().slice(0, 10)),
+                csvField(d.periodEnd.toISOString().slice(0, 10)),
+                csvField(d.status),
+                (d.netCents / 100).toFixed(2),
+                (d.paidCents / 100).toFixed(2),
+                String(d.entries.filter((e) => e.included).length),
+              ].join(','),
+            );
+            rows.push('');
+            rows.push(
+              'paymentOrderId,provider,donorEmail,donorName,plantSlug,plantName,paidAt,grossEUR,feeEUR,netEUR,included,excludedReason',
+            );
+            for (const e of d.entries) {
+              const p = e.payment;
+              rows.push(
+                [
+                  csvField(p.orderId),
+                  csvField(p.provider),
+                  csvField(p.donor.email),
+                  csvField(p.donor.name ?? ''),
+                  csvField(p.adoption?.plant.slug ?? ''),
+                  csvField(p.adoption?.plant.nameEn ?? ''),
+                  csvField(p.receivedAt?.toISOString() ?? ''),
+                  (e.amountCents / 100).toFixed(2),
+                  (e.feeCents / 100).toFixed(2),
+                  (e.netCents / 100).toFixed(2),
+                  e.included ? 'yes' : 'no',
+                  csvField(e.excludedReason ?? ''),
+                ].join(','),
+              );
+            }
+            const csv = rows.join('\r\n') + '\r\n';
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const { createHash } = await import('node:crypto');
+            const sha = createHash('sha256').update(csv).digest('hex');
+            await prisma.disbursement.update({ where: { id }, data: { csvSha256: sha } });
+            reply
+              .header('content-type', 'text/csv; charset=utf-8')
+              .header('content-disposition', `attachment; filename="${d.reference}.csv"`)
+              .header('x-content-sha256', sha)
+              .send(csv);
+            return;
+          }
+          // pdf
+          const { renderDisbursementPdf } = await import('@bloomoulu/emails/pdf/disbursement');
+          const { createHash } = await import('node:crypto');
+          // Mini-CSV inline (avoid duplicating but we need the sha for the PDF).
+          const csvForHash =
+            `reference,${d.reference}\nperiod,${d.periodStart.toISOString().slice(0, 10)}-${d.periodEnd.toISOString().slice(0, 10)}\nentries,${d.entries.length}\n`;
+          const sha = createHash('sha256').update(csvForHash).digest('hex');
+          const pdfBuf = await renderDisbursementPdf({
+            reference: d.reference,
+            locale: 'en',
+            periodStart: d.periodStart,
+            periodEnd: d.periodEnd,
+            status: d.status,
+            expectedCents: d.expectedCents,
+            feeCents: d.feeCents,
+            netCents: d.netCents,
+            currency: d.currency,
+            csvSha256: sha,
+            issuedAt: new Date(),
+            entries: d.entries
+              .filter((e) => e.included)
+              .map((e) => ({
+                donorEmail: e.payment.donor.email,
+                donorName: e.payment.donor.name,
+                provider: e.payment.provider,
+                paidAt: e.payment.receivedAt,
+                amountCents: e.amountCents,
+                feeCents: e.feeCents,
+                netCents: e.netCents,
+                plantName: e.payment.adoption?.plant?.nameEn ?? null,
+              })),
+          });
+          reply
+            .header('content-type', 'application/pdf')
+            .header('content-disposition', `attachment; filename="${d.reference}.pdf"`)
+            .send(pdfBuf);
+          return;
+        } catch (err) {
+          reply
+            .code(500)
+            .send({ error: 'Download failed', message: (err as Error).message });
+          return;
+        }
+      }
     }
     // BloomOulu admin design-system stylesheet. Injected on every page
     // via AdminJSOptions.assets.styles. Same onRequest-precedence

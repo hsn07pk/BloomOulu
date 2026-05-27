@@ -44,6 +44,8 @@ import { processKioskWatchdog } from './modules/jobs/processors/kiosk-watchdog.p
 import { makeProcessPaymentRetry } from './modules/jobs/processors/payment-retry.processor.js';
 import { makeProcessRenewal } from './modules/jobs/processors/renewal.processor.js';
 import { processDisbursementMonthly } from './modules/jobs/processors/disbursement-monthly.processor.js';
+import { processRecurringBenefits } from './modules/jobs/processors/recurring-benefits.processor.js';
+import { processCsrQuarterly } from './modules/jobs/processors/csr-quarterly.processor.js';
 import {
   BankTransferGateway,
   MobilePayGateway,
@@ -129,6 +131,8 @@ const QUEUES: ReadonlyArray<QueueDef> = [
   // Reuses the renewal processor — passing {adoptionId} narrows to one row.
   { name: QUEUE_AGREEMENT_FIRST_CHARGE, concurrency: 4, handler: makeProcessRenewal({ gatewayFor }) },
   { name: QUEUE_DISBURSEMENT_MONTHLY, concurrency: 1, handler: processDisbursementMonthly },
+  { name: 'recurring-benefits',   concurrency: 1, handler: processRecurringBenefits },
+  { name: 'csr-quarterly',        concurrency: 1, handler: processCsrQuarterly },
   { name: QUEUE_TAX_CERT_ANNUAL, concurrency: 1, handler: processTaxCertAnnual },
   { name: QUEUE_RAG_EVAL,       concurrency: 1,  handler: processRagEval },
   { name: QUEUE_AUDIT_GAP,      concurrency: 1,  handler: processAuditGap },

@@ -64,6 +64,23 @@ interface GardenView {
     };
     tier: { id: string; name: string; nameFi: string; nameSv: string; color: string };
     plaque: { status: string; engravedText: string; photoUrl: string | null } | null;
+    // Per-tier benefit fulfilment status — visible to the donor so they
+    // can see what's already been delivered (digital cert, story page),
+    // what's queued (printed cert / postcard / plaque), and what's on a
+    // cadence (quarterly notes, annual seed packet).
+    benefits: Array<{
+      id: string;
+      benefitKey: string;
+      category: 'digital' | 'physical' | 'event' | 'recurring';
+      donorLabelSnapshot: string | null;
+      labelSnapshot: string;
+      status: 'pending' | 'in_progress' | 'fulfilled' | 'cancelled' | 'not_applicable';
+      shippedAt: string | null;
+      eventDate: string | null;
+      nextDueAt: string | null;
+      fulfilledAt: string | null;
+      trackingNumber: string | null;
+    }>;
   }>;
   receipts: Array<{
     id: string;
@@ -648,7 +665,7 @@ export default async function GardenPage({
                         : "{a.plaque.engravedText}"
                       </p>
                     )}
-                    <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
+                    <div style={{ marginTop: 16, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                       <Link
                         href={`/${locale}/plants/${a.plant.slug}`}
                         className="btn btn-secondary"
@@ -656,7 +673,116 @@ export default async function GardenPage({
                       >
                         {locale === 'fi' ? 'Avaa sivu' : 'View page'}
                       </Link>
+                      {/* Digital certificate — rendered server-side on
+                          demand from Adoption + Plant + Tier + donor name.
+                          Only active adoptions get the button; pending
+                          rows haven't been paid for yet. */}
+                      {a.status === 'active' && (
+                        <a
+                          href={`/api/adoptions/${encodeURIComponent(a.id)}/certificate.pdf`}
+                          target="_blank"
+                          rel="noopener"
+                          className="btn btn-ghost"
+                          style={{ padding: '8px 14px', fontSize: 13, border: '1px solid var(--line)' }}
+                        >
+                          {locale === 'fi'
+                            ? 'Lataa todistus'
+                            : locale === 'sv'
+                              ? 'Ladda ner bevis'
+                              : 'Download certificate'}
+                        </a>
+                      )}
                     </div>
+                    {/* Tier-benefit fulfilment summary — collapses into a
+                        details/summary so the card stays compact for donors
+                        who don't care, but expands to the full list for
+                        anyone curious about what they're owed. */}
+                    {a.status === 'active' && a.benefits && a.benefits.length > 0 && (
+                      <details
+                        style={{
+                          marginTop: 14,
+                          borderTop: '1px solid var(--line-soft)',
+                          paddingTop: 12,
+                        }}
+                      >
+                        <summary
+                          style={{
+                            cursor: 'pointer',
+                            fontSize: 12,
+                            color: 'var(--ink-mute)',
+                            listStyle: 'none',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                          }}
+                        >
+                          <span aria-hidden="true">▸</span>
+                          {locale === 'fi'
+                            ? `Tason edut · ${a.benefits.filter((b) => b.status === 'fulfilled').length}/${a.benefits.length}`
+                            : locale === 'sv'
+                              ? `Nivåförmåner · ${a.benefits.filter((b) => b.status === 'fulfilled').length}/${a.benefits.length}`
+                              : `Tier benefits · ${a.benefits.filter((b) => b.status === 'fulfilled').length} of ${a.benefits.length}`}
+                        </summary>
+                        <ul
+                          style={{
+                            listStyle: 'none',
+                            padding: 0,
+                            margin: '10px 0 0',
+                            fontSize: 12,
+                            color: 'var(--ink-soft)',
+                          }}
+                        >
+                          {a.benefits.map((b) => {
+                            const icon =
+                              b.status === 'fulfilled'
+                                ? '✓'
+                                : b.status === 'in_progress'
+                                  ? '◐'
+                                  : b.status === 'cancelled' || b.status === 'not_applicable'
+                                    ? '·'
+                                    : '○';
+                            const color =
+                              b.status === 'fulfilled'
+                                ? 'var(--moss, #3D6A52)'
+                                : b.status === 'in_progress'
+                                  ? '#C99524'
+                                  : b.status === 'cancelled' || b.status === 'not_applicable'
+                                    ? 'var(--ink-faint)'
+                                    : 'var(--ink-mute)';
+                            return (
+                              <li
+                                key={b.id}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'baseline',
+                                  gap: 8,
+                                  padding: '4px 0',
+                                  lineHeight: 1.4,
+                                }}
+                              >
+                                <span aria-hidden="true" style={{ color, fontWeight: 600, minWidth: 14, textAlign: 'center' }}>
+                                  {icon}
+                                </span>
+                                <span style={{ flex: 1 }}>
+                                  {b.donorLabelSnapshot ?? b.labelSnapshot}
+                                  {b.trackingNumber ? (
+                                    <span className="tiny" style={{ marginLeft: 6, color: 'var(--ink-mute)' }}>
+                                      · {b.trackingNumber}
+                                    </span>
+                                  ) : null}
+                                  {b.nextDueAt && b.status !== 'fulfilled' ? (
+                                    <span className="tiny" style={{ marginLeft: 6, color: 'var(--ink-mute)' }}>
+                                      · {locale === 'fi' ? 'seuraavaksi' : locale === 'sv' ? 'nästa' : 'next'}{' '}
+                                      {new Date(b.nextDueAt).toLocaleDateString(locale === 'en' ? 'en-GB' : `${locale}-FI`, { day: 'numeric', month: 'short' })}
+                                    </span>
+                                  ) : null}
+                                </span>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </details>
+                    )}
                   </div>
                 </article>
               ))}
@@ -1275,7 +1401,12 @@ export default async function GardenPage({
                       <div className="tiny" style={{ marginTop: 4 }}>{c.scheme}</div>
                       {c.pdfUrl && (
                         <a
-                          href={c.pdfUrl}
+                          // Route through the auth-gated proxy so the
+                          // donor's session is checked and the local://
+                          // storage URI is resolved server-side. Raw
+                          // pdfUrl on TaxCertificate is `local://...`
+                          // which a browser cannot fetch directly.
+                          href={`/api/tax-certs/${encodeURIComponent(c.id)}/pdf`}
                           target="_blank"
                           rel="noopener"
                           className="btn btn-ghost"

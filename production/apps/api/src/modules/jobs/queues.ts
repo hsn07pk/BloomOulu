@@ -32,6 +32,13 @@ export const QUEUE_PLANT_ENRICH = 'plant-enrich';
 /// 24/7 enrichment scheduler — cron tick scans EnrichmentSchedule for
 /// `nextDueAt <= now()` and seeds the plant-enrich queue with a small batch.
 export const QUEUE_ENRICHMENT_SWEEP = 'enrichment-sweep';
+/// Daily sweep of AdoptionBenefit rows where category=recurring AND
+/// nextDueAt <= now. Each due row triggers a templated email + bumps the
+/// next-due timestamp by `cadenceMonths`.
+export const QUEUE_RECURRING_BENEFITS = 'recurring-benefits';
+/// Monthly CSR quarterly impact report — fires for every active
+/// Corporate-tier adoption. Generates a PDF, emails the donor.
+export const QUEUE_CSR_QUARTERLY = 'csr-quarterly';
 
 export const defaultJobOpts: JobsOptions = {
   attempts: 5,

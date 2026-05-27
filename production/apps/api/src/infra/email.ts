@@ -40,12 +40,24 @@ function getTransporter(): Transporter {
   return transporter;
 }
 
+/**
+ * One outbound message. Attachments may be supplied as either:
+ *   • `path` — a filesystem path or http(s) URL nodemailer can fetch
+ *   • `content` — an in-memory Buffer (used for local-disk blobs that
+ *     don't have an external URL)
+ * Exactly one of those must be present per attachment.
+ */
 export interface OutboundEmail {
   to: string;
   subject: string;
   html: string;
   text?: string;
-  attachments?: Array<{ filename: string; url: string }>;
+  attachments?: Array<{
+    filename: string;
+    path?: string;
+    content?: Buffer;
+    contentType?: string;
+  }>;
 }
 
 export async function sendEmail(msg: OutboundEmail): Promise<void> {
@@ -56,7 +68,12 @@ export async function sendEmail(msg: OutboundEmail): Promise<void> {
     subject: msg.subject,
     html: msg.html,
     text: msg.text ?? htmlToText(msg.html),
-    attachments: msg.attachments?.map((a) => ({ filename: a.filename, path: a.url })),
+    attachments: msg.attachments?.map((a) => ({
+      filename: a.filename,
+      path: a.path,
+      content: a.content,
+      contentType: a.contentType,
+    })),
   });
 }
 

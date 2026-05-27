@@ -95,6 +95,9 @@ importers:
       '@bloomoulu/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@bloomoulu/emails':
+        specifier: workspace:*
+        version: link:../../packages/emails
       '@bloomoulu/rag':
         specifier: workspace:*
         version: link:../../packages/rag
@@ -432,6 +435,9 @@ importers:
 
   packages/db:
     dependencies:
+      '@bloomoulu/constants':
+        specifier: workspace:*
+        version: link:../constants
       '@bloomoulu/emails':
         specifier: workspace:*
         version: link:../emails
