@@ -4,12 +4,14 @@
 #   docker compose up -d
 #
 # That's it. One command brings up the full platform: Postgres + pgvector,
-# Redis, MinIO, MailHog (or Gmail if .env points there), the API, the web
+# Redis, the API, the web
 # app, the admin panel, the kiosk, the reranker, the LGTM observability
 # stack, and Caddy as the local reverse proxy.
 #
 # Configuration is driven entirely from .env (auto-loaded by Compose):
-#   • SMTP_* — defaults to MailHog. Set SMTP_HOST=smtp.gmail.com for Gmail.
+#   • SMTP_* — required to send mail. Gmail App Password example:
+#       SMTP_HOST=smtp.gmail.com  SMTP_PORT=465  SMTP_SECURE=true
+#       SMTP_USER=<you>@gmail.com  SMTP_PASS=<16-char-app-password>
 #   • AUTH_OULU_OIDC_* — production SSO credentials. Empty = SSO disabled.
 #   • PAYTRAIL_*, MOBILEPAY_* — payment provider credentials.
 #
@@ -62,10 +64,6 @@ services:
         NEXT_PUBLIC_GARDEN_NAME_EN: ${NEXT_PUBLIC_GARDEN_NAME_EN:-BloomOulu — University of Oulu Botanical Garden}
         NEXT_PUBLIC_GARDEN_NAME_FI: ${NEXT_PUBLIC_GARDEN_NAME_FI:-Oulun yliopiston kasvitieteellinen puutarha}
         NEXT_PUBLIC_GARDEN_NAME_SV: ${NEXT_PUBLIC_GARDEN_NAME_SV:-Uleåborgs universitets botaniska trädgård}
-        # Browser-reachable MinIO endpoint (api uses INTERNAL_API_URL to
-        # presign with hostname `minio:9000`; web rewrites the host so
-        # the donor's browser can actually fetch the bytes).
-        NEXT_PUBLIC_S3_ENDPOINT: ${NEXT_PUBLIC_S3_ENDPOINT:-http://localhost:9000}
     <<: *restart
     environment:
       NODE_ENV: production
@@ -78,7 +76,6 @@ services:
       NEXT_PUBLIC_GARDEN_NAME_EN: ${NEXT_PUBLIC_GARDEN_NAME_EN:-BloomOulu — University of Oulu Botanical Garden}
       NEXT_PUBLIC_GARDEN_NAME_FI: ${NEXT_PUBLIC_GARDEN_NAME_FI:-Oulun yliopiston kasvitieteellinen puutarha}
       NEXT_PUBLIC_GARDEN_NAME_SV: ${NEXT_PUBLIC_GARDEN_NAME_SV:-Uleåborgs universitets botaniska trädgård}
-      NEXT_PUBLIC_S3_ENDPOINT: ${NEXT_PUBLIC_S3_ENDPOINT:-http://localhost:9000}
       INTERNAL_API_URL: http://api:4000
       AUTH_URL: ${NEXT_PUBLIC_WEB_URL:-http://localhost:3000}
       AUTH_SECRET: ${AUTH_SECRET}
@@ -87,7 +84,6 @@ services:
       AUTH_OULU_OIDC_CLIENT_SECRET: ${AUTH_OULU_OIDC_CLIENT_SECRET:-}
       DATABASE_URL: postgresql://${POSTGRES_USER:-bloomoulu}:${POSTGRES_PASSWORD:-bloomoulu}@postgres:5432/${POSTGRES_DB:-bloomoulu}?schema=public
       REDIS_URL: redis://redis:6379
-      S3_ENDPOINT: http://minio:9000
     ports:
       - "${WEB_PORT:-3000}:3000"
     healthcheck:
@@ -103,23 +99,15 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       redis:    { condition: service_healthy }
-      minio:    { condition: service_started }
-      mailhog:  { condition: service_started }
     environment:
       NODE_ENV: production
       DATABASE_URL: postgresql://${POSTGRES_USER:-bloomoulu}:${POSTGRES_PASSWORD:-bloomoulu}@postgres:5432/${POSTGRES_DB:-bloomoulu}?schema=public
       DIRECT_URL: postgresql://${POSTGRES_USER:-bloomoulu}:${POSTGRES_PASSWORD:-bloomoulu}@postgres:5432/${POSTGRES_DB:-bloomoulu}?schema=public
       REDIS_URL: redis://redis:6379
-      # Internal endpoint — the API container PUTs objects via the docker
-      # network hostname. The public endpoint below is the URL browsers
-      # actually load, baked into hostPlantImage()'s returned URL and into
-      # the PlantImage rows the public site reads.
-      S3_ENDPOINT: http://minio:9000
-      S3_PUBLIC_ENDPOINT: ${NEXT_PUBLIC_S3_ENDPOINT:-http://localhost:9000}
-      S3_REGION: ${S3_REGION:-eu-north-1}
-      S3_BUCKET: ${S3_BUCKET:-bloomoulu-assets}
-      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-minioadmin}
-      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-minioadmin}
+      # Local-disk storage root for receipts, audio narrations, rehosted
+      # plant images, GDPR exports, etc. Persisted via the api_storage
+      # named volume so the data survives container rebuilds.
+      STORAGE_DIR: /data/storage
       AUTH_SECRET: ${AUTH_SECRET}
       AUTH_URL: ${NEXT_PUBLIC_WEB_URL:-http://localhost:3000}
       NEXT_PUBLIC_WEB_URL: ${NEXT_PUBLIC_WEB_URL:-http://localhost:3000}
@@ -136,15 +124,17 @@ services:
       EMBED_MODEL: bge-m3
       LLM_MODEL: gemma3:4b
       RERANKER_URL: http://reranker:8080
-      # SMTP — defaults to MailHog. Set SMTP_HOST=smtp.gmail.com in .env
-      # (plus SMTP_USER/PASS) to send via real Gmail instead.
-      SMTP_HOST: ${SMTP_HOST:-mailhog}
-      SMTP_PORT: ${SMTP_PORT:-1025}
+      # Real SMTP — pass these through from .env. The api throws on
+      # send if SMTP_HOST is unset, so configure these before going
+      # live. Gmail App Password example:
+      #   SMTP_HOST=smtp.gmail.com  SMTP_PORT=465  SMTP_SECURE=true
+      #   SMTP_USER=<you>@gmail.com  SMTP_PASS=<16-char-app-password>
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
       SMTP_SECURE: ${SMTP_SECURE:-false}
-      SMTP_FROM: ${SMTP_FROM:-BloomOulu <noreply@bloomoulu.localhost>}
-      EMAIL_FROM: ${EMAIL_FROM:-BloomOulu <noreply@bloomoulu.localhost>}
+      EMAIL_FROM: ${EMAIL_FROM:-BloomOulu <no-reply@bloomoulu.fi>}
       EMAIL_REPLY_TO: ${EMAIL_REPLY_TO:-}
       PAYTRAIL_MERCHANT_ID: ${PAYTRAIL_MERCHANT_ID:-375917}
       PAYTRAIL_SECRET: ${PAYTRAIL_SECRET:-SAIPPUAKAUPPIAS}
@@ -194,6 +184,11 @@ services:
       PAYMENTS_BANK_TRANSFER_ENABLED: ${PAYMENTS_BANK_TRANSFER_ENABLED:-true}
       PAYMENTS_PAYTRAIL_ENABLED: ${PAYMENTS_PAYTRAIL_ENABLED:-true}
       PAYMENTS_MOBILEPAY_ENABLED: ${PAYMENTS_MOBILEPAY_ENABLED:-false}
+      # Shared HMAC secret protecting `/webhooks/bank-transfer`. When
+      # unset (dev), the webhook still works but accepts only requests
+      # WITHOUT an Authorization header (fail-closed). In prod this MUST
+      # be set or the accountant's reconciliation cron is rejected.
+      BANK_TRANSFER_WEBHOOK_SECRET: ${BANK_TRANSFER_WEBHOOK_SECRET:-}
       # Adoption flow knobs.
       ADOPTION_GIFT_WRAP_CENTS: ${ADOPTION_GIFT_WRAP_CENTS:-400}
       ADOPTION_DONATION_SHARE_BP: ${ADOPTION_DONATION_SHARE_BP:-7200}
@@ -228,6 +223,8 @@ services:
       - "host.docker.internal:host-gateway"
     ports:
       - "${API_PORT:-4000}:4000"
+    volumes:
+      - api_storage:/data/storage
     healthcheck:
       <<: *healthcheck
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:4000/healthz"]
@@ -242,20 +239,19 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       redis:    { condition: service_healthy }
-      mailhog:  { condition: service_started }
     environment:
       NODE_ENV: production
       JOBS_MODE: "true"
       DATABASE_URL: postgresql://${POSTGRES_USER:-bloomoulu}:${POSTGRES_PASSWORD:-bloomoulu}@postgres:5432/${POSTGRES_DB:-bloomoulu}?schema=public
       DIRECT_URL: postgresql://${POSTGRES_USER:-bloomoulu}:${POSTGRES_PASSWORD:-bloomoulu}@postgres:5432/${POSTGRES_DB:-bloomoulu}?schema=public
       REDIS_URL: redis://redis:6379
-      # See `api` service above — internal hostname for PUTs, browser-
-      # facing hostname for the URLs stored in PlantImage.
-      S3_ENDPOINT: http://minio:9000
-      S3_PUBLIC_ENDPOINT: ${NEXT_PUBLIC_S3_ENDPOINT:-http://localhost:9000}
+      # Worker shares the same local-disk storage volume as the api so
+      # receipt PDFs, audio narrations, GDPR exports etc. land in the
+      # same place.
+      STORAGE_DIR: /data/storage
       AUTH_SECRET: ${AUTH_SECRET}
-      SMTP_HOST: ${SMTP_HOST:-mailhog}
-      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
       SMTP_SECURE: ${SMTP_SECURE:-false}
@@ -267,8 +263,35 @@ services:
       OLLAMA_EMBED_MODEL: bge-m3
       EMBED_MODEL: bge-m3
       LLM_MODEL: gemma3:4b
+      # Payment env — dunning + renewal workers construct gateway
+      # adapters here. Must mirror the `api` service's payment env so
+      # background charges hit the same merchant. The defaults match
+      # the api block so `docker compose up` works out of the box.
+      PAYTRAIL_MERCHANT_ID: ${PAYTRAIL_MERCHANT_ID:-375917}
+      PAYTRAIL_SECRET: ${PAYTRAIL_SECRET:-SAIPPUAKAUPPIAS}
+      PAYTRAIL_API_URL: ${PAYTRAIL_API_URL:-https://services.paytrail.com}
+      PAYTRAIL_WEBHOOK_SECRET: ${PAYTRAIL_WEBHOOK_SECRET:-SAIPPUAKAUPPIAS}
+      PAYTRAIL_CALLBACK_URL: ${PAYTRAIL_CALLBACK_URL:-http://localhost:4000/webhooks/paytrail}
+      PAYTRAIL_MOCK: ${PAYTRAIL_MOCK:-true}
+      MOBILEPAY_API_URL: ${MOBILEPAY_API_URL:-https://apitest.vipps.no}
+      MOBILEPAY_CLIENT_ID: ${MOBILEPAY_CLIENT_ID:-}
+      MOBILEPAY_CLIENT_SECRET: ${MOBILEPAY_CLIENT_SECRET:-}
+      MOBILEPAY_SUBSCRIPTION_KEY: ${MOBILEPAY_SUBSCRIPTION_KEY:-}
+      MOBILEPAY_MERCHANT_SERIAL_NUMBER: ${MOBILEPAY_MERCHANT_SERIAL_NUMBER:-}
+      MOBILEPAY_WEBHOOK_SECRET: ${MOBILEPAY_WEBHOOK_SECRET:-}
+      MOBILEPAY_RETURN_URL: ${MOBILEPAY_RETURN_URL:-${NEXT_PUBLIC_WEB_URL:-http://localhost:3000}/en/donate/complete}
+      MOBILEPAY_CALLBACK_URL: ${MOBILEPAY_CALLBACK_URL:-${NEXT_PUBLIC_API_URL:-http://localhost:4000}/webhooks/mobilepay}
+      GARDEN_IBAN: ${GARDEN_IBAN:-FI00 0000 0000 0000 00}
+      GARDEN_BIC: ${GARDEN_BIC:-NDEAFIHH}
+      GARDEN_ORG_NAME: ${GARDEN_ORG_NAME:-Oulun yliopiston kasvitieteellinen puutarha}
+      GARDEN_DONATE_URL: ${GARDEN_DONATE_URL:-${NEXT_PUBLIC_WEB_URL:-http://localhost:3000}/en/donate/pay}
+      NEXT_PUBLIC_WEB_URL: ${NEXT_PUBLIC_WEB_URL:-http://localhost:3000}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
+      BANK_TRANSFER_WEBHOOK_SECRET: ${BANK_TRANSFER_WEBHOOK_SECRET:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    volumes:
+      - api_storage:/data/storage
     healthcheck:
       <<: *healthcheck
       test: ["CMD", "node", "-e", "require('net').createConnection({host:'redis',port:6379}).on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))"]
@@ -282,6 +305,7 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       redis:    { condition: service_healthy }
+      api:      { condition: service_started }
     environment:
       # Stays "development" on localhost so the AdminJS session cookie
       # isn't marked Secure (plain http://localhost otherwise drops it).
@@ -289,6 +313,11 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-bloomoulu}:${POSTGRES_PASSWORD:-bloomoulu}@postgres:5432/${POSTGRES_DB:-bloomoulu}?schema=public
       DIRECT_URL: postgresql://${POSTGRES_USER:-bloomoulu}:${POSTGRES_PASSWORD:-bloomoulu}@postgres:5432/${POSTGRES_DB:-bloomoulu}?schema=public
       REDIS_URL: redis://redis:6379
+      # The /v1/* same-origin proxy in apps/admin/src/server.ts forwards
+      # browser requests to the api. Inside the bloomoulu docker network
+      # the api hostname is `api` (not `localhost`).
+      API_URL: http://api:4000
+      INTERNAL_API_URL: http://api:4000
       AUTH_SECRET: ${AUTH_SECRET}
       ADMIN_BOOTSTRAP_EMAIL: ${ADMIN_BOOTSTRAP_EMAIL:-admin@admin.com}
       ADMIN_BOOTSTRAP_PASSWORD_HASH: ${ADMIN_BOOTSTRAP_PASSWORD_HASH}
@@ -315,6 +344,11 @@ services:
     <<: *restart
     environment:
       NODE_ENV: production
+      # Next.js standalone server reads PORT (defaults to 3000); set
+      # it explicitly so the container listener matches the host port
+      # mapping below. HOSTNAME=0.0.0.0 makes it reachable from outside.
+      PORT: 3100
+      HOSTNAME: 0.0.0.0
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
     ports:
       - "${KIOSK_PORT:-3100}:3100"
@@ -351,23 +385,6 @@ services:
       test: ["CMD", "redis-cli", "ping"]
     networks: [internal]
 
-  minio:
-    image: minio/minio:latest
-    <<: *restart
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER:     ${S3_ACCESS_KEY_ID:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${S3_SECRET_ACCESS_KEY:-minioadmin}
-    volumes:
-      - minio_data:/data
-    ports:
-      - "${MINIO_PORT:-9000}:9000"
-      - "${MINIO_CONSOLE_PORT:-9001}:9001"
-    healthcheck:
-      <<: *healthcheck
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-    networks: [internal]
-
   # ── ML / embeddings ────────────────────────────────────────────────────
   # The Ollama LLM lives on the macOS host (for Metal GPU). The reranker
   # runs in-cluster because BAAI/bge-reranker-v2-m3 is CPU-friendly.
@@ -384,15 +401,6 @@ services:
       - reranker_data:/data
     ports:
       - "${RERANKER_PORT:-8081}:8080"
-    networks: [internal]
-
-  # ── Email (dev capture-all; real SMTP via .env variables) ──────────────
-  mailhog:
-    image: mailhog/mailhog
-    <<: *restart
-    ports:
-      - "${MAILHOG_SMTP_PORT:-1025}:1025"
-      - "${MAILHOG_UI_PORT:-8025}:8025"
     networks: [internal]
 
   # ── Observability (LGTM stack, minimal) ────────────────────────────────
@@ -417,8 +425,6 @@ services:
     volumes:
       - ./infra/alertmanager/alertmanager.localhost.yml:/etc/alertmanager/alertmanager.yml:ro
       - alertmanager_data:/alertmanager
-    depends_on:
-      mailhog: { condition: service_started }
     healthcheck:
       <<: *healthcheck
       test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:9093/-/healthy | grep -q OK"]
@@ -477,7 +483,7 @@ volumes:
   caddy_config: {}
   postgres_data: {}
   redis_data: {}
-  minio_data: {}
+  api_storage: {}
   reranker_data: {}
   alertmanager_data: {}
   prometheus_data: {}

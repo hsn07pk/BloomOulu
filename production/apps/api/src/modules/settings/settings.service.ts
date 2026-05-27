@@ -201,9 +201,12 @@ function envStr(key: string, fallback: string): string {
 export function buildSettingsDefaults(): BloomOuluSettings {
   return {
     payments: {
+      // Defaults align with docker-compose.yml + docs/ENV.md so a fresh
+      // checkout has Paytrail on (card method is the dominant FI rail)
+      // and MobilePay off (requires Vipps merchant KYC).
       bank_transfer: envBool('PAYMENTS_BANK_TRANSFER_ENABLED', true),
-      paytrail: envBool('PAYMENTS_PAYTRAIL_ENABLED', false),
-      mobilepay: envBool('PAYMENTS_MOBILEPAY_ENABLED', true),
+      paytrail: envBool('PAYMENTS_PAYTRAIL_ENABLED', true),
+      mobilepay: envBool('PAYMENTS_MOBILEPAY_ENABLED', false),
     },
     bankTransfer: {
       iban: envStr('GARDEN_IBAN', 'FI00 0000 0000 0000 00'),

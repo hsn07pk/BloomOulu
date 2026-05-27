@@ -27,7 +27,10 @@ export class WebhooksController {
   @Throttle({ short: { ttl: 1000, limit: 100 }, mid: { ttl: 60_000, limit: 5000 } })
   async paytrail(@Req() req: FastifyRequest, @Headers() headers: Record<string, string>) {
     const raw = (req as any).rawBody ?? '';
-    return this.process('paytrail', raw, headers);
+    return this.process('paytrail', raw, headers, {
+      'http.method': req.method,
+      'http.path': req.url,
+    });
   }
 
   /**
@@ -42,12 +45,15 @@ export class WebhooksController {
    */
   @Get('paytrail')
   @Throttle({ short: { ttl: 1000, limit: 100 }, mid: { ttl: 60_000, limit: 5000 } })
-  async paytrailReturn(@Query() query: Record<string, string>) {
+  async paytrailReturn(@Req() req: FastifyRequest, @Query() query: Record<string, string>) {
     const headers: Record<string, string> = {};
     for (const [k, v] of Object.entries(query)) {
       if (typeof v === 'string') headers[k.toLowerCase()] = v;
     }
-    return this.process('paytrail', '', headers);
+    return this.process('paytrail', '', headers, {
+      'http.method': req.method,
+      'http.path': req.url,
+    });
   }
 
   @Post('mobilepay')
@@ -55,24 +61,32 @@ export class WebhooksController {
   @Throttle({ short: { ttl: 1000, limit: 100 }, mid: { ttl: 60_000, limit: 5000 } })
   async mobilepay(@Req() req: FastifyRequest, @Headers() headers: Record<string, string>) {
     const raw = (req as any).rawBody ?? '';
-    return this.process('mobilepay', raw, headers);
+    return this.process('mobilepay', raw, headers, {
+      'http.method': req.method,
+      'http.path': req.url,
+    });
   }
 
   /** Bank transfer reconciliation — staff posts a CSV row or JSON entry. */
   @Post('bank-transfer')
   @HttpCode(200)
-  async bankTransfer(@Body() body: any, @Headers() headers: Record<string, string>) {
-    return this.process('bank_transfer', JSON.stringify(body), headers);
+  async bankTransfer(@Req() req: FastifyRequest, @Body() body: any, @Headers() headers: Record<string, string>) {
+    const raw = (req as any).rawBody ?? JSON.stringify(body);
+    return this.process('bank_transfer', raw, headers, {
+      'http.method': req.method,
+      'http.path': req.url,
+    });
   }
 
   private async process(
     provider: 'paytrail' | 'mobilepay' | 'bank_transfer',
     rawBody: string,
     headers: Record<string, string>,
+    metadata: Record<string, string> = {},
   ) {
     try {
       const gateway = this.gateways.for(provider);
-      const event = await gateway.parseWebhook({ rawBody, headers });
+      const event = await gateway.parseWebhook({ rawBody, headers, metadata });
       // Bank-transfer RF references are derived from the canonical
       // orderId (uppercase + no dashes + truncated to 21 chars). The
       // gateway can't reverse that lossy transform on its own, so we

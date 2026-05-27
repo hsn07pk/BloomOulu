@@ -11,6 +11,7 @@ import {
   QUEUE_GDPR_ERASE,
   QUEUE_PAYMENT_RETRY,
   QUEUE_PLANT_ENRICH,
+  QUEUE_AGREEMENT_FIRST_CHARGE,
   defaultJobOpts,
 } from './queues.js';
 import type { EmailJob } from './processors/email.processor.js';
@@ -68,4 +69,21 @@ export const enqueuePlantEnrich = (data: PlantEnrichJob) =>
     jobId: `enrich-${data.plantId}`,
     removeOnComplete: true,
     removeOnFail: true,
+  });
+
+/**
+ * Enqueue an immediate first charge against a freshly-activated
+ * agreement (Paytrail tokenisation post-addcard). The processor is
+ * shared with the renewal cron — it accepts an explicit adoptionId to
+ * target a single row.
+ *
+ * Idempotency: jobId is bound to the adoption; re-running while a job
+ * is in flight is a no-op. Once it completes, a deliberate re-enqueue
+ * works (e.g. donor signed up again with a fresh agreement).
+ */
+export const enqueueAgreementFirstCharge = (data: { adoptionId: string }) =>
+  q(QUEUE_AGREEMENT_FIRST_CHARGE).add('charge', data, {
+    ...defaultJobOpts,
+    jobId: `first-charge-${data.adoptionId}`,
+    removeOnComplete: { age: 7 * 86_400, count: 100 },
   });

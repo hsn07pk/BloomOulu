@@ -1,18 +1,12 @@
 /**
  * /api/receipts/[number]/pdf — donor-facing receipt PDF download.
  *
- * Why this exists: the api stores `Receipt.pdfUrl` as `s3://bucket/key`
- * so the browser can't fetch it directly. This route:
+ * Flow:
  *   1. Reads the bloomoulu.session cookie + verifies the JWT.
  *   2. Calls api `GET /v1/receipts/{number}/pdf` with a Bearer token.
  *   3. The api enforces ownership (donor of the Receipt or staff) and
- *      302s to a short-lived pre-signed S3/MinIO URL.
+ *      302s to a `/v1/files/<key>` URL served from local storage.
  *   4. We forward that redirect to the browser.
- *
- * MinIO note: pre-signed URLs reference the internal `http://minio:9000`
- * hostname. From the browser the host is unreachable; we rewrite the
- * hostname to the public S3_PUBLIC_ENDPOINT (e.g. http://localhost:9000)
- * before redirecting.
  */
 import { cookies } from 'next/headers';
 import { getInternalApiUrl } from '@bloomoulu/constants';
@@ -23,10 +17,6 @@ const COOKIE = 'bloomoulu.session';
 
 function apiBase(): string {
   return getInternalApiUrl();
-}
-
-function publicS3(): string {
-  return process.env.NEXT_PUBLIC_S3_ENDPOINT ?? 'http://localhost:9000';
 }
 
 async function readSession(): Promise<{ sub: string; locale: string; token: string } | null> {
@@ -66,18 +56,6 @@ export async function GET(
     if (res.status === 302 || res.status === 303 || res.status === 307) {
       const target = res.headers.get('location');
       if (target) {
-        // Rewrite internal MinIO host → public-reachable host so the
-        // browser can actually load the bytes.
-        try {
-          const u = new URL(target);
-          if (u.hostname === 'minio') {
-            const pub = new URL(publicS3());
-            u.hostname = pub.hostname;
-            u.port = pub.port;
-            u.protocol = pub.protocol;
-            return NextResponse.redirect(u.toString(), { status: 302 });
-          }
-        } catch {/* fall through, return as-is */}
         return NextResponse.redirect(target, { status: 302 });
       }
     }

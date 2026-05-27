@@ -14,7 +14,10 @@ PGPASSWORD="${POSTGRES_PASSWORD}" pg_dump -h postgres -U "${POSTGRES_USER}" -d "
   > /backup-staging/db.dump
 
 echo "Backing up..."
-restic backup /backup-staging /srcdata/minio \
+# /srcdata/storage is the local-disk file store (api_storage volume),
+# mounted in by docker-compose --profile backup. Holds receipts, audio
+# narrations, rehosted plant images, GDPR exports.
+restic backup /backup-staging /srcdata/storage \
   --tag "$(date +%F)" \
   --tag bloomoulu \
   --exclude-caches

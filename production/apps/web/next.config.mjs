@@ -64,8 +64,9 @@ const nextConfig = {
       { protocol: 'https', hostname: 'upload.wikimedia.org' },
       { protocol: 'https', hostname: 'commons.wikimedia.org' },
       { protocol: 'https', hostname: 'files.bloomoulu.fi' },
-      // Local MinIO object store — serves re-hosted plant images in dev.
-      { protocol: 'http', hostname: 'localhost', port: '9000' },
+      // Local API serves rehosted plant images at /v1/files/* (the new
+      // local-disk storage backend — see apps/api/src/infra/storage.ts).
+      { protocol: 'http', hostname: 'localhost', port: '4000' },
     ],
   },
   async headers() {
@@ -77,6 +78,19 @@ const nextConfig = {
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
         ],
       },
+    ];
+  },
+  // Same-origin proxy for /v1/* and /webhooks/* so client-side fetches
+  // and Paytrail callbacks both land on the same hostname as the web
+  // app — no CORS, no DNS lag for a second tunnel subdomain. When
+  // running behind Cloudflare Tunnel / Caddy / Vercel the public host
+  // proxies these straight to the api container; in local dev Next.js
+  // rewrites them to localhost:4000.
+  async rewrites() {
+    const target = process.env.API_REWRITE_TARGET ?? 'http://localhost:4000';
+    return [
+      { source: '/v1/:path*',       destination: `${target}/v1/:path*` },
+      { source: '/webhooks/:path*', destination: `${target}/webhooks/:path*` },
     ];
   },
 };

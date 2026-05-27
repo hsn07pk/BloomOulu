@@ -1,5 +1,6 @@
 /**
- * Payment provider port — shared types for Stripe and MobilePay adapters.
+ * Payment provider port — shared types for the Paytrail, Vipps MobilePay,
+ * and bank-transfer adapters.
  *
  * Design notes:
  *   * Money is always cents (Int). Currency is an ISO 4217 string ("EUR").
@@ -116,6 +117,12 @@ export type RefundInput = z.infer<typeof RefundInput>;
 export const ParseWebhookInput = z.object({
   rawBody: z.string(),
   headers: z.record(z.string()),
+  /** Provider-specific context that the api passes through to the
+   *  adapter. Today: Vipps webhook signing requires the HTTP method +
+   *  path-and-query, which Fastify exposes via `req.method` / `req.url`.
+   *  Pure gateway adapters can't read the request directly, so the
+   *  WebhooksController populates these explicitly. */
+  metadata: z.record(z.string()).optional(),
 });
 export type ParseWebhookInput = z.infer<typeof ParseWebhookInput>;
 
@@ -125,7 +132,7 @@ export interface CheckoutHandoff {
   provider: ProviderId;
   /** URL to redirect the donor to */
   redirectUrl: string;
-  /** Provider's id for this attempt (Stripe checkout session, MobilePay redirect) */
+  /** Provider's id for this attempt (Paytrail transactionId, MobilePay redirect) */
   providerSessionId: string;
 }
 
@@ -157,6 +164,19 @@ export type NormalisedEvent =
       currency: 'EUR';
       paidAt: Date;
       metadata: Record<string, string>;
+      /**
+       * Long-lived agreement / token credential captured alongside this
+       * checkout (Paytrail tokenisation). The orchestrator persists it
+       * in `Payment.providerCustomerId` so later renewals can call
+       * `chargeAgreement` against it. Absent for one-off charges.
+       */
+      agreementId?: string;
+      /**
+       * Provider's reported fee in cents for this charge, if available.
+       * Paytrail exposes this on the receipt object; MobilePay does not
+       * surface it in webhooks (settlement reports only).
+       */
+      feeCents?: number;
     }
   | {
       kind: 'payment.succeeded';
@@ -168,6 +188,8 @@ export type NormalisedEvent =
       currency: 'EUR';
       paidAt: Date;
       metadata: Record<string, string>;
+      agreementId?: string;
+      feeCents?: number;
     }
   | {
       kind: 'payment.failed';

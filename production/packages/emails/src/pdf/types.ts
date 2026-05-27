@@ -18,6 +18,22 @@ export interface ReceiptPdfInput {
   plantName?: string | null;
   tierName?: string | null;
   orderId: string;
+
+  // ── Personalisation (set when the Payment is linked to an Adoption) ──
+  // Each of these is optional — the renderer only shows a block when
+  // there's content. Keeps single-line donations clean while letting
+  // gift / memorial / class / corporate receipts carry the full context
+  // a donor expects to see on the official document.
+  intent?: 'for_self' | 'gift' | 'memorial' | 'class' | 'corporate';
+  billingInterval?: 'one_time' | 'monthly' | 'annual';
+  recurring?: boolean;
+  nickname?: string | null;
+  dedication?: string | null;
+  homeRegion?: string | null;
+  giftRecipientName?: string | null;
+  giftRecipientEmail?: string | null;
+  memorialOf?: string | null;
+  coAdopters?: Array<{ name?: string | null; email?: string | null }> | null;
 }
 
 export interface OrgInfo {

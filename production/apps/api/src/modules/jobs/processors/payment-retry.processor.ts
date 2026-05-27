@@ -27,7 +27,10 @@ import { getWebUrl } from '@bloomoulu/constants';
 import { Logger } from '@nestjs/common';
 import { v7 as uuidv7 } from 'uuid';
 import { prisma, cancelAdoption, recoverAdoption } from '@bloomoulu/db';
-import { enqueueEmail, enqueuePaymentRetry } from '../enqueue.js';
+import { PaymentStatus } from '@prisma/client';
+import type { PaymentGateway, ProviderId } from '@bloomoulu/payments';
+import { rfCreditorReference } from '@bloomoulu/payments';
+import { enqueueEmail, enqueuePaymentRetry, enqueueReceipt } from '../enqueue.js';
 
 const logger = new Logger('PaymentRetry');
 
@@ -49,8 +52,26 @@ export interface PaymentRetryJob {
   reason: 'first_failure' | 'retry' | 'cancel_paused';
 }
 
-export async function processPaymentRetry(job: Job<PaymentRetryJob>): Promise<void> {
-  const { adoptionId, attempt, reason } = job.data;
+export interface PaymentRetryDeps {
+  /** Resolve a stateless `PaymentGateway` adapter for a provider id.
+   *  Injected so the worker process can wire it from env without Nest DI. */
+  gatewayFor: (provider: ProviderId) => PaymentGateway;
+}
+
+/** Backwards-compatible default deps: throws if the worker hasn't wired
+ *  a real gateway factory. Used by tests/legacy callers. */
+const NO_GATEWAY: PaymentRetryDeps = {
+  gatewayFor: (provider) => {
+    throw new Error(`No gateway wired for provider ${provider} — pass deps to makeProcessPaymentRetry`);
+  },
+};
+
+export const processPaymentRetry = (job: Job<PaymentRetryJob>) =>
+  makeProcessPaymentRetry(NO_GATEWAY)(job);
+
+export function makeProcessPaymentRetry(deps: PaymentRetryDeps) {
+  return async function processPaymentRetryWithDeps(job: Job<PaymentRetryJob>): Promise<void> {
+    const { adoptionId, attempt, reason } = job.data;
 
   const adoption = await prisma.adoption.findUnique({
     where: { id: adoptionId },
@@ -114,11 +135,12 @@ export async function processPaymentRetry(job: Job<PaymentRetryJob>): Promise<vo
     return;
   }
 
-  // Attempt the charge. The actual provider call is the gateway adapter's job.
-  // For the test rail (bank_transfer) we simply email a fresh RF reference;
-  // the donor pays manually. For Paytrail/MobilePay the gateway charges the
-  // saved agreement / token.
-  const result = await attemptCharge(adoption);
+  // Attempt the charge. For Paytrail/MobilePay the gateway adapter
+  // charges the saved agreement / token MIT-style; for bank_transfer
+  // we email a fresh RF reference (donor pays manually). The
+  // attemptCharge helper handles all three and records a new Payment
+  // row capturing the attempt outcome.
+  const result = await attemptCharge(deps, adoption);
 
   if (result.ok) {
     await prisma.$transaction((tx) => recoverAdoption(tx, adoption.id));
@@ -169,39 +191,195 @@ export async function processPaymentRetry(job: Job<PaymentRetryJob>): Promise<vo
     { adoptionId: adoption.id, attempt: nextAttempt, reason: 'retry' },
     { delay: nextDelay },
   );
+  };
 }
 
 /**
- * Best-effort charge against the last successful payment's provider. The
- * actual provider call is wired through the gateway adapter — in this
- * processor we record the attempt as a new Payment row. The gateway returns
- * either success (PaymentsService.handleEvent will be called via webhook) or
- * a synchronous failure; we record the synchronous failure as a failed
- * Payment so the dunning ladder continues.
+ * Best-effort charge against the last successful payment's stored
+ * agreement / token. Creates a fresh Payment row capturing the attempt
+ * — succeeded if the provider confirms synchronously, failed
+ * otherwise. The dunning ladder reads that row on the next escalation.
  *
- * Bank-transfer adoptions don't have an agreement to charge — they are
- * reminder-based, so a failure here means "we sent the reminder but the
- * donor hasn't paid yet" — handled by the renewal processor instead.
+ * Per-rail behaviour:
+ *   - paytrail   → POST /payments/token/mit-charge against the stored token
+ *   - mobilepay  → POST /recurring/v3/agreements/{id}/charges
+ *   - bank_transfer → email donor a fresh RF reference; mark attempt
+ *                     `pending` so the ladder keeps escalating until
+ *                     the accountant uploads the next CSV
  */
-async function attemptCharge(adoption: { id: string }): Promise<{ ok: boolean; reason?: string }> {
-  // The latest Payment on this adoption gives us the provider + agreement.
+async function attemptCharge(
+  deps: PaymentRetryDeps,
+  adoption: {
+    id: string;
+    donorId: string;
+    amountCents: number;
+    plant: { nameEn: string };
+    donor: { email: string; locale: string; name: string | null };
+  },
+): Promise<{ ok: boolean; reason?: string }> {
   const last = await prisma.payment.findFirst({
     where: { adoptionId: adoption.id },
     orderBy: { createdAt: 'desc' },
   });
   if (!last) return { ok: false, reason: 'no_prior_payment' };
 
+  const newOrderId = uuidv7();
+  const description = `Recurring adoption: ${adoption.plant.nameEn}`;
+
   if (last.provider === 'bank_transfer') {
-    // Reminder path is handled in renewal.processor; here we just say the
-    // attempt is "in flight" so the ladder continues escalating until the
-    // accountant reconciles the next bank statement.
+    // Reminder path — the donor must initiate the SCT themselves. We
+    // create a pending Payment row keyed to a fresh RF reference and
+    // mail the donor. The accountant's daily reconciliation matches
+    // the inbound payment via PaymentsService.handleEvent, which
+    // flips this row to succeeded and triggers recoverAdoption.
+    await prisma.$transaction(async (tx) => {
+      await tx.payment.create({
+        data: {
+          orderId: newOrderId,
+          adoptionId: adoption.id,
+          donorId: adoption.donorId,
+          provider: 'bank_transfer' as const,
+          amountCents: adoption.amountCents,
+          currency: 'EUR',
+          netCents: adoption.amountCents,
+          vatRateBp: 0,
+          vatCents: 0,
+          status: PaymentStatus.pending,
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          actorUserId: adoption.donorId,
+          action: 'payment.dunning.reminder',
+          resource: `Adoption/${adoption.id}`,
+          after: { orderId: newOrderId, amountCents: adoption.amountCents, channel: 'bank_transfer' },
+        },
+      });
+    });
+    await enqueueEmail({
+      template: 'bank-transfer-reminder',
+      to: adoption.donor.email,
+      locale: adoption.donor.locale as 'en' | 'fi' | 'sv',
+      variables: {
+        donorName: adoption.donor.name ?? '',
+        plantName: adoption.plant.nameEn,
+        amount: (adoption.amountCents / 100).toFixed(2),
+        reference: rfCreditorReference(newOrderId),
+      },
+    });
     return { ok: false, reason: 'awaiting_bank_reconciliation' };
   }
 
-  // For Paytrail/MobilePay the gateway adapter would call chargeAgreement
-  // here. We don't have live merchant credentials in dev, so this stub
-  // returns a synthetic failure that lets us exercise the state-machine
-  // transitions in tests. In production this branch issues the real
-  // chargeAgreement and returns ok=true only when the provider confirms.
-  return { ok: false, reason: 'gateway_unavailable_in_dev' };
+  // Card / MobilePay: charge the stored credential MIT-style.
+  if (!last.providerCustomerId) {
+    // We don't have a usable agreement / token. Either the donor
+    // never opted into recurring or the token expired. Mark the
+    // attempt failed so the ladder escalates.
+    await recordFailedAttempt(adoption, last, newOrderId, 'no_agreement_credential');
+    return { ok: false, reason: 'no_agreement_credential' };
+  }
+
+  let gateway: PaymentGateway;
+  try {
+    gateway = deps.gatewayFor(last.provider as ProviderId);
+  } catch (err) {
+    logger.error(`No gateway for ${last.provider}: ${(err as Error).message}`);
+    await recordFailedAttempt(adoption, last, newOrderId, 'gateway_unavailable');
+    return { ok: false, reason: 'gateway_unavailable' };
+  }
+
+  const result = await gateway.chargeAgreement({
+    orderId: newOrderId,
+    agreementId: last.providerCustomerId,
+    amountCents: adoption.amountCents,
+    currency: 'EUR',
+    description,
+  });
+
+  if (!result.ok) {
+    await recordFailedAttempt(adoption, last, newOrderId, result.code, result.message);
+    return { ok: false, reason: result.code };
+  }
+
+  // Provider confirmed the charge synchronously. Write a succeeded
+  // Payment row, run the same downstream effects as a webhook (audit
+  // log, receipt enqueue) — but skip lifecycle.activate; the dunning
+  // caller does `recoverAdoption` for us when we return ok=true.
+  await prisma.$transaction(async (tx) => {
+    await tx.payment.create({
+      data: {
+        orderId: newOrderId,
+        adoptionId: adoption.id,
+        donorId: adoption.donorId,
+        provider: last.provider,
+        providerCustomerId: last.providerCustomerId,
+        providerPaymentRef: result.chargeId,
+        amountCents: adoption.amountCents,
+        currency: 'EUR',
+        netCents: adoption.amountCents,
+        vatRateBp: 0,
+        vatCents: 0,
+        status: result.status === 'succeeded' ? PaymentStatus.succeeded : PaymentStatus.pending,
+        receivedAt: result.status === 'succeeded' ? new Date() : null,
+      },
+    });
+    await tx.auditLog.create({
+      data: {
+        actorUserId: adoption.donorId,
+        action: 'payment.dunning.charged',
+        resource: `Adoption/${adoption.id}`,
+        after: {
+          orderId: newOrderId,
+          provider: last.provider,
+          chargeId: result.chargeId,
+          status: result.status,
+          amountCents: adoption.amountCents,
+        },
+      },
+    });
+  });
+  if (result.status === 'succeeded') {
+    const created = await prisma.payment.findUniqueOrThrow({
+      where: { orderId: newOrderId },
+      select: { id: true },
+    });
+    await enqueueReceipt({ paymentId: created.id });
+  }
+  return { ok: result.status === 'succeeded' };
+}
+
+async function recordFailedAttempt(
+  adoption: { id: string; donorId: string; amountCents: number },
+  last: { provider: 'paytrail' | 'mobilepay' | 'bank_transfer'; providerCustomerId: string | null },
+  newOrderId: string,
+  code: string,
+  message?: string,
+) {
+  await prisma.$transaction(async (tx) => {
+    await tx.payment.create({
+      data: {
+        orderId: newOrderId,
+        adoptionId: adoption.id,
+        donorId: adoption.donorId,
+        provider: last.provider,
+        providerCustomerId: last.providerCustomerId,
+        amountCents: adoption.amountCents,
+        currency: 'EUR',
+        netCents: adoption.amountCents,
+        vatRateBp: 0,
+        vatCents: 0,
+        status: PaymentStatus.failed,
+        failureCode: code,
+        failureMessage: message ?? null,
+      },
+    });
+    await tx.auditLog.create({
+      data: {
+        actorUserId: adoption.donorId,
+        action: 'payment.dunning.attempt_failed',
+        resource: `Adoption/${adoption.id}`,
+        after: { orderId: newOrderId, provider: last.provider, code, message: message ?? null },
+      },
+    });
+  });
 }

@@ -292,7 +292,13 @@ export class AdoptionsService {
           ? `Adopt ${plant.nameEn} (${tier.name}) + linen gift-wrap`
           : `Adopt ${plant.nameEn} (${tier.name})`,
         adoptionId: adoption.id,
-        successUrl: `${webUrl}/${donor.locale}/garden?orderId={ORDER_ID}`,
+        // Paytrail appends ?checkout-stamp=...&checkout-status=ok&signature=...
+        // to this URL. /donate/complete reads them, verifies the signature
+        // via GET /webhooks/paytrail, and only then redirects to /garden.
+        // Sending the donor straight to /garden skips that verification leg
+        // and leaves the Payment stuck in 'pending' when the server-to-server
+        // callback also fails to fire (e.g. dev tunnels with DNS lag).
+        successUrl: `${webUrl}/${donor.locale}/donate/complete?adoption=${adoption.id}`,
         cancelUrl: `${webUrl}/${donor.locale}/adopt?plant=${plant.slug}`,
       },
       actorIp,

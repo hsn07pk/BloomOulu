@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
+    "@bloomoulu/constants": "workspace:*",
     "@bloomoulu/emails": "workspace:*"
   },
   "devDependencies": {

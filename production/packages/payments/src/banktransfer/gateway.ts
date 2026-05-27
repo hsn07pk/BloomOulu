@@ -21,8 +21,8 @@
  * refunded; the system credits the receipt and triggers the credit-note PDF.
  */
 
-import { randomUUID } from 'node:crypto';
-import { PaymentGatewayError } from '../types.js';
+import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
+import { PaymentGatewayError, WebhookSignatureError } from '../types.js';
 import type {
   PaymentGateway,
   CreateCheckoutInput,
@@ -47,6 +47,18 @@ export interface BankTransferConfig {
   beneficiaryName: string;
   /** Public URL where the donor sees the payment instructions page. */
   instructionsUrl: string;
+  /**
+   * Shared HMAC secret protecting `POST /webhooks/bank-transfer`. The
+   * accountant's reconciliation cron MUST compute
+   * `hex(HMAC-SHA256(secret, rawBody))` and send it as
+   * `Authorization: HMAC-SHA256 <hex>`. When unset, the webhook route
+   * still verifies that no Authorization header is present (so a
+   * forgotten secret in prod fails closed rather than open). The
+   * `/admin → reconciliation/entries` manual upload path bypasses this
+   * — it calls `PaymentsService.handleEvent` directly with role-based
+   * authentication, so staff CSV uploads don't need the shared key.
+   */
+  webhookSecret?: string;
 }
 
 /**
@@ -120,6 +132,47 @@ export class BankTransferGateway implements PaymentGateway {
   }
 
   /**
+   * Verify the HMAC-SHA256 authorization on an inbound bank-transfer
+   * webhook. Returns silently on success; throws WebhookSignatureError
+   * otherwise. Separated from parseWebhook so callers can reason about
+   * the auth step explicitly.
+   *
+   * Fails closed: if no `webhookSecret` is configured but the caller
+   * sent an Authorization header anyway, we refuse — that's a clear
+   * sign of a misconfigured prod where the secret was meant to be set.
+   */
+  private verifyAuthorization(rawBody: string, headers: Record<string, string>): void {
+    const headersLower = lowercaseHeaders(headers);
+    const provided = headersLower['authorization'] ?? '';
+    if (!this.cfg.webhookSecret) {
+      if (provided) {
+        throw new WebhookSignatureError(
+          this.id,
+          'bank-transfer webhook secret not configured but Authorization header present',
+        );
+      }
+      return;
+    }
+    if (!provided.startsWith('HMAC-SHA256 ')) {
+      throw new WebhookSignatureError(
+        this.id,
+        'bank-transfer webhook missing HMAC-SHA256 authorization header',
+      );
+    }
+    const sig = provided.slice('HMAC-SHA256 '.length);
+    const expected = createHmac('sha256', this.cfg.webhookSecret).update(rawBody).digest('hex');
+    if (
+      sig.length !== expected.length ||
+      !timingSafeEqual(Buffer.from(expected), Buffer.from(sig))
+    ) {
+      throw new WebhookSignatureError(
+        this.id,
+        'bank-transfer webhook signature mismatch',
+      );
+    }
+  }
+
+  /**
    * Returns the URL of our own instructions page; we redirect the donor there
    * with the orderId, and the page shows: amount, IBAN, BIC, RF reference,
    * and a QR-code-based deeplink for mobile banking apps.
@@ -177,6 +230,7 @@ export class BankTransferGateway implements PaymentGateway {
    *   { reference, amountCents, paidAt, debtorName }
    */
   async parseWebhook(input: ParseWebhookInput): Promise<NormalisedEvent> {
+    this.verifyAuthorization(input.rawBody, input.headers);
     const payload = JSON.parse(input.rawBody) as {
       reference: string;
       amountCents: number;
@@ -219,4 +273,10 @@ export class BankTransferGateway implements PaymentGateway {
  */
 function extractOrderIdFromRf(ref: string): string {
   return ref.replace(/\s+/g, '').slice(4); // strip "RF" + 2 check digits
+}
+
+function lowercaseHeaders(h: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(h)) out[k.toLowerCase()] = v;
+  return out;
 }

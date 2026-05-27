@@ -51,6 +51,27 @@ export class UsersController {
             // Returns null for non-gift adoptions; donor sees their own
             // recipient list only via the gates enforced at line 18.
             giftRecipient: { select: { id: true, name: true, email: true } },
+            // Per-adoption benefit fulfilment rows. Donor sees what
+            // they've received vs. what's still being worked on.
+            benefits: {
+              orderBy: [
+                { category: 'asc' },
+                { status: 'asc' },
+              ],
+              select: {
+                id: true,
+                benefitKey: true,
+                category: true,
+                donorLabelSnapshot: true,
+                labelSnapshot: true,
+                status: true,
+                shippedAt: true,
+                eventDate: true,
+                nextDueAt: true,
+                fulfilledAt: true,
+                trackingNumber: true,
+              },
+            },
           },
         },
         receipts: { orderBy: { issuedAt: 'desc' }, take: 50 },

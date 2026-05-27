@@ -29,6 +29,19 @@ class SettingsController {
       vat: s.vat,
       qrLabel: s.qrLabel,
       enrichment: s.enrichment,
+      /**
+       * Donor-safe test-mode hints. We never leak secrets; we only flag
+       * which providers are pointing at sandbox endpoints so the
+       * checkout UI can show test-card help text. A storefront on real
+       * production credentials returns `testMode.paytrail === false`
+       * etc. and the UI hides the banner.
+       */
+      testMode: {
+        paytrail:
+          process.env.PAYTRAIL_MERCHANT_ID === '375917' ||
+          process.env.PAYTRAIL_MOCK === 'true',
+        mobilepay: (process.env.MOBILEPAY_API_URL ?? '').includes('apitest.vipps.no'),
+      },
     };
   }
 }

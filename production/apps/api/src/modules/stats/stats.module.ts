@@ -48,6 +48,56 @@ class PublicStatsController {
       asOf: new Date().toISOString(),
     };
   }
+
+  /**
+   * Donor wall — paginated list of adopters who opted in (showOnDonorWall=true)
+   * and whose adoption is active. Vulnerable+ tiers get prominent
+   * placement. Returns only display-safe fields: name (publicName takes
+   * precedence over donor.name to honour wishes), plant name, tier,
+   * dedication. No emails, no addresses, no payment info.
+   */
+  @Get('donor-wall')
+  async donorWall() {
+    const adoptions = await this.prisma.adoption.findMany({
+      where: {
+        status: 'active',
+        showOnDonorWall: true,
+        // Anonymous gifts don't appear on the wall.
+        giftAnonymous: false,
+      },
+      orderBy: [
+        { tierId: 'asc' },
+        { startedAt: 'desc' },
+      ],
+      take: 500,
+      include: {
+        donor: { select: { name: true } },
+        plant: { select: { slug: true, nameEn: true, nameFi: true, nameSv: true } },
+        tier: { select: { id: true, name: true, nameFi: true, nameSv: true, annualPriceCents: true } },
+      },
+    });
+    return {
+      adoptions: adoptions.map((a) => ({
+        id: a.id,
+        displayName: a.publicName ?? a.donor.name ?? 'A friend of the Garden',
+        nickname: a.nickname,
+        dedication: a.dedication,
+        intent: a.intent,
+        memorialOf: a.memorialOf,
+        startedAt: a.startedAt?.toISOString() ?? null,
+        plant: a.plant,
+        tier: {
+          id: a.tier.id,
+          name: a.tier.name,
+          nameFi: a.tier.nameFi,
+          nameSv: a.tier.nameSv,
+          priceCents: a.tier.annualPriceCents,
+        },
+      })),
+      count: adoptions.length,
+      asOf: new Date().toISOString(),
+    };
+  }
 }
 
 @Module({ controllers: [PublicStatsController] })

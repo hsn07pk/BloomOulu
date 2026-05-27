@@ -45,7 +45,13 @@ export class PaymentGatewayFactory {
 
   private bankTransfer(): BankTransferGateway {
     const cfg = this.settings.get().bankTransfer;
-    return new BankTransferGateway(cfg);
+    // BANK_TRANSFER_WEBHOOK_SECRET is intentionally env-only (not in
+    // SystemSetting) so it can't be exfiltrated through the admin
+    // panel. The accountant's reconciliation cron stores the same
+    // secret and signs each POST. /admin manual uploads do NOT need it
+    // — they take the role-guarded ReconciliationController path.
+    const webhookSecret = process.env.BANK_TRANSFER_WEBHOOK_SECRET;
+    return new BankTransferGateway({ ...cfg, webhookSecret });
   }
 
   private paytrail(): PaytrailGateway {
@@ -66,6 +72,7 @@ export class PaymentGatewayFactory {
       webhookSecret: process.env.PAYTRAIL_WEBHOOK_SECRET,
       mockMode,
       webBaseUrl: getWebUrl(),
+      refundCallbackUrl: process.env.PAYTRAIL_CALLBACK_URL,
     });
   }
 

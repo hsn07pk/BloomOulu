@@ -21,6 +21,9 @@ import {
   QUEUE_RAG_EVAL,
   QUEUE_AUDIT_GAP,
   QUEUE_ENRICHMENT_SWEEP,
+  QUEUE_DISBURSEMENT_MONTHLY,
+  QUEUE_RECURRING_BENEFITS,
+  QUEUE_CSR_QUARTERLY,
   defaultJobOpts,
 } from './queues.js';
 
@@ -90,6 +93,46 @@ export async function registerCronJobs() {
   const auditGap = new Queue(QUEUE_AUDIT_GAP, { connection });
   await auditGap.upsertJobScheduler('daily-0330', { pattern: '30 3 * * *' }, {
     name: 'daily',
+    data: {},
+    opts: defaultJobOpts,
+  });
+
+  // Disbursement draft generator — defaults to monthly 1st 05:00 UTC, but
+  // the pattern is overridable via DISBURSEMENT_CRON_PATTERN (any valid
+  // cron expression). Examples:
+  //   '0 5 1 * *'    — monthly, 1st of the month (default)
+  //   '0 5 * * 1'    — weekly, every Monday
+  //   '0 5 * * *'    — daily
+  //   '0 5 1,15 * *' — twice monthly, 1st + 15th
+  // Setting DISBURSEMENT_CRON_DISABLED=true skips registration entirely
+  // (useful when finance prefers to drive drafts only via the admin
+  // "Generate" buttons). The schedulerId is kept stable so re-registering
+  // with a new pattern replaces the old one cleanly.
+  const disb = new Queue(QUEUE_DISBURSEMENT_MONTHLY, { connection });
+  if (process.env.DISBURSEMENT_CRON_DISABLED !== 'true') {
+    const pattern = (process.env.DISBURSEMENT_CRON_PATTERN ?? '0 5 1 * *').trim();
+    await disb.upsertJobScheduler('disbursement-cron', { pattern }, {
+      name: 'scheduled',
+      data: {},
+      opts: defaultJobOpts,
+    });
+  }
+
+  // Daily 06:00 UTC — sweep AdoptionBenefit rows where category=recurring
+  // and nextDueAt <= now. Sends the per-benefitKey email + bumps cadence.
+  const recurring = new Queue(QUEUE_RECURRING_BENEFITS, { connection });
+  await recurring.upsertJobScheduler('daily-0600', { pattern: '0 6 * * *' }, {
+    name: 'sweep',
+    data: {},
+    opts: defaultJobOpts,
+  });
+
+  // 1st of each month, 07:00 UTC — fire the CSR quarterly impact report
+  // sweep. Processor itself decides which Corporate adoptions are due
+  // (every 3 months from startedAt).
+  const csr = new Queue(QUEUE_CSR_QUARTERLY, { connection });
+  await csr.upsertJobScheduler('monthly-1st-0700', { pattern: '0 7 1 * *' }, {
+    name: 'sweep',
     data: {},
     opts: defaultJobOpts,
   });

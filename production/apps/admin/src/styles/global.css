@@ -523,3 +523,116 @@ section[data-css='login'] form {
     display: none;
   }
 }
+
+/* ── Action-dropdown clip fix ───────────────────────────────────────────
+   When a resource exposes more than three resource-level actions
+   (e.g. Disbursement's four Generate buttons), AdminJS collapses the
+   overflow into a dropdown that gets clipped by the parent card's
+   overflow:hidden. Allow the dropdown to spill out so every action
+   stays clickable. Same pattern on record-level action menus where
+   our Resend / Mark-* buttons live. */
+[class*='ActionsHeader'],
+[class*='ActionsHeader__'],
+section[data-css='resource-actions'],
+section[data-css*='actions'] {
+  overflow: visible !important;
+}
+[class*='DropDown'],
+[class*='DropDown__'] {
+  z-index: 1000;
+  overflow: visible !important;
+}
+[class*='DropDown'] > div,
+[class*='DropDown__'] > div {
+  background: var(--bo-paper);
+  border: 1px solid var(--bo-line);
+  border-radius: var(--bo-radius-sm, 6px);
+  box-shadow: 0 8px 32px rgba(31, 60, 45, 0.18);
+  min-width: 220px;
+  max-height: none !important;
+  white-space: nowrap;
+}
+[class*='DropDown'] a,
+[class*='DropDown'] button {
+  display: block;
+  padding: 10px 14px;
+  color: var(--bo-ink);
+  text-decoration: none;
+  border-bottom: 1px solid var(--bo-line-soft);
+  white-space: nowrap;
+}
+[class*='DropDown'] a:hover,
+[class*='DropDown'] button:hover {
+  background: var(--bo-sage-pale);
+}
+
+/* ── Row-action dropdown rescue ─────────────────────────────────────────
+   AdminJS renders the "···" record-action menu (Show / Edit / custom
+   actions) as a portaled dropdown that gets cut by the parent card's
+   overflow OR pushed off the bottom of the viewport when the row is near
+   the page edge. Force the menu to render above everything, with its
+   own opaque background + shadow so it's readable on top of subsequent
+   rows. The portal-based DropDown gets a generic class name we can
+   target via attribute-selector fallback. */
+[class*='DropDownMenu'],
+[class*='DropDownItem'],
+[role='menu'],
+ul[class*='Menu'] {
+  background: var(--bo-paper, #FFFFFF) !important;
+  border: 1px solid var(--bo-line, #E5E2D8) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 14px 40px rgba(31, 60, 45, 0.22) !important;
+  z-index: 9999 !important;
+  min-width: 240px;
+  max-height: 80vh;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  position: absolute;
+  /* Anchor relative to the click point — AdminJS's portal positions
+     this dynamically; we just need to make sure the box itself is
+     never clipped. */
+}
+/* Body-level portals (AdminJS attaches dropdowns to document.body) need
+   their wrapper to allow overflow too. */
+body > [class*='DropDownMenu'],
+body > [class*='Portal'] {
+  position: fixed !important;
+  z-index: 9999 !important;
+}
+/* Pad the menu items so the touch targets are reasonable + space them
+   out so the user doesn't accidentally click the wrong action. */
+[class*='DropDownItem'] a,
+[class*='DropDownItem'] button,
+[role='menuitem'] {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px !important;
+  font-size: 14px !important;
+  color: var(--bo-ink, #1F3C2D) !important;
+  text-decoration: none !important;
+  border-bottom: 1px solid var(--bo-line-soft, #EFECDF) !important;
+  white-space: nowrap !important;
+  background: transparent !important;
+}
+[class*='DropDownItem']:last-child a,
+[class*='DropDownItem']:last-child button {
+  border-bottom: 0 !important;
+}
+[class*='DropDownItem'] a:hover,
+[class*='DropDownItem'] button:hover,
+[role='menuitem']:hover {
+  background: var(--bo-sage-pale, #F2F0E8) !important;
+}
+/* The "..." trigger button should never be obscured by the row hover. */
+button[data-css*='Action'][aria-haspopup='true'] {
+  position: relative;
+  z-index: 5;
+}
+/* Ensure the list table itself doesn't clip absolute-positioned children. */
+section[data-css='list'],
+section[data-css*='list'],
+section[data-css='table'],
+div[data-css='table'] {
+  overflow: visible !important;
+}

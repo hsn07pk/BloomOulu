@@ -441,4 +441,63 @@ export class MeController {
       items: items.slice(0, FINAL_LIMIT).map((i) => ({ ...i, ts: i.ts.toISOString() })),
     };
   }
+
+  /**
+   * RSVP to an event-category benefit. The donor flips their attendance
+   * intent (accepted / declined / attended) on a specific AdoptionBenefit
+   * row. Persists rsvpStatus + rsvpAt. Ownership check ensures one donor
+   * can't manipulate another's benefits.
+   */
+  @Patch('benefits/:benefitId/rsvp')
+  @Roles('donor', 'curator', 'finance', 'admin')
+  async rsvp(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param('benefitId') benefitId: string,
+    @Body(
+      new ZodValidationPipe(
+        z.object({
+          status: z.enum(['accepted', 'declined', 'attended']),
+        }),
+      ),
+    )
+    body: { status: 'accepted' | 'declined' | 'attended' },
+  ) {
+    const benefit = await this.prisma.adoptionBenefit.findUnique({
+      where: { id: benefitId },
+      include: {
+        adoption: { select: { donorId: true, giftRecipientId: true } },
+      },
+    });
+    if (!benefit) throw new NotFoundException();
+    if (benefit.category !== 'event') {
+      throw new BadRequestException('RSVP only applies to event-category benefits');
+    }
+    const isOwner =
+      benefit.adoption.donorId === actor.sub ||
+      benefit.adoption.giftRecipientId === actor.sub;
+    if (!isOwner && actor.role !== 'admin' && actor.role !== 'curator') {
+      throw new NotFoundException();
+    }
+    const updated = await this.prisma.adoptionBenefit.update({
+      where: { id: benefitId },
+      data: {
+        rsvpStatus: body.status,
+        rsvpAt: new Date(),
+        // Attended marks the benefit fulfilled too — the donor showed
+        // up to the event, that's the deliverable.
+        ...(body.status === 'attended'
+          ? { status: 'fulfilled' as const, fulfilledAt: new Date() }
+          : {}),
+      },
+      select: { id: true, rsvpStatus: true, rsvpAt: true, status: true },
+    });
+    await this.prisma.auditLog.create({
+      data: {
+        actorUserId: actor.sub,
+        action: `benefit.rsvp.${body.status}`,
+        resource: `AdoptionBenefit/${benefitId}`,
+      },
+    });
+    return updated;
+  }
 }

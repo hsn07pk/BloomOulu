@@ -15,7 +15,7 @@
  *   * https://developer.vippsmobilepay.com/docs/APIs/epayment-api/
  */
 
-import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { request } from 'undici';
 import { PaymentGatewayError, WebhookSignatureError } from '../types.js';
 import type {
@@ -269,9 +269,25 @@ export class MobilePayGateway implements PaymentGateway {
   }
 
   /**
-   * Webhook signature verification — MobilePay sends an `Authorization` header
-   * with an HMAC-SHA256 of `{date} + {sha256(body)}` keyed with the webhook
-   * secret. We follow https://developer.vippsmobilepay.com/docs/APIs/webhooks-api/
+   * Webhook signature verification — Vipps MobilePay webhooks API.
+   *
+   * Per https://developer.vippsmobilepay.com/docs/APIs/webhooks-api/request-authentication/
+   * (verified against the 2026 spec), the Authorization header is:
+   *
+   *   `HMAC-SHA256 SignedHeaders=x-ms-date;host;x-ms-content-sha256&Signature=<base64>`
+   *
+   * where the signature is HMAC-SHA256(secret, stringToSign) base64-encoded,
+   * and the string to sign is exactly:
+   *
+   *   `${METHOD}\n${PATH_AND_QUERY}\n${x-ms-date};${host};${x-ms-content-sha256}`
+   *
+   * with literal `\n` (LF, NOT CRLF). The body is hashed separately —
+   * `x-ms-content-sha256` MUST equal base64(sha256(rawBody)).
+   *
+   * `parseWebhook` accepts the original method + path through the
+   * `metadata` map (`http.method`, `http.path`) so the gateway stays
+   * pure (no Express/Fastify coupling). Callers in the api route
+   * controller populate them from the FastifyRequest.
    */
   async parseWebhook(input: ParseWebhookInput): Promise<NormalisedEvent> {
     const headersLower = lowercaseHeaders(input.headers);
@@ -282,16 +298,57 @@ export class MobilePayGateway implements PaymentGateway {
         'MobilePay webhook missing HMAC-SHA256 header',
       );
     }
-    const sig = provided.slice('HMAC-SHA256 '.length);
+    // The header is `HMAC-SHA256 SignedHeaders=...&Signature=<base64>`.
+    // Extract Signature; accept the legacy short form `HMAC-SHA256 <base64>`
+    // for backwards compatibility with the older webhook product (the
+    // pre-2024 epayment webhooks signed `date\ncontenthash`). New
+    // webhooks always carry the full SignedHeaders form.
+    const value = provided.slice('HMAC-SHA256 '.length);
+    let providedSig = value;
+    let legacy = true;
+    if (value.includes('SignedHeaders=')) {
+      // New-format header. Signature= MUST be present.
+      const m = /Signature=([A-Za-z0-9+/=]+)/.exec(value);
+      if (!m || !m[1]) {
+        throw new WebhookSignatureError(
+          this.id as any,
+          'MobilePay webhook signature header malformed (SignedHeaders= without Signature=)',
+        );
+      }
+      providedSig = m[1];
+      legacy = false;
+    }
+
     const date = headersLower['x-ms-date'] ?? '';
-    const sha256 = headersLower['x-ms-content-sha256'] ?? '';
-    const stringToSign = `${date}\n${sha256}`;
+    const contentSha = headersLower['x-ms-content-sha256'] ?? '';
+    const host = headersLower['host'] ?? '';
+    // First-class verification: hash the actual raw body and compare to
+    // x-ms-content-sha256. A mismatch here means the body was modified
+    // in flight; reject even before signature comparison.
+    if (!legacy) {
+      const computedBodyHash = createHash('sha256').update(input.rawBody).digest('base64');
+      if (
+        computedBodyHash.length !== contentSha.length ||
+        !timingSafeEqual(Buffer.from(computedBodyHash), Buffer.from(contentSha))
+      ) {
+        throw new WebhookSignatureError(
+          this.id as any,
+          'MobilePay webhook content-sha256 mismatch',
+        );
+      }
+    }
+
+    const method = (input.metadata?.['http.method'] ?? 'POST').toUpperCase();
+    const path = input.metadata?.['http.path'] ?? '';
+    const stringToSign = legacy
+      ? `${date}\n${contentSha}` // legacy
+      : `${method}\n${path}\n${date};${host};${contentSha}`;
     const computed = createHmac('sha256', this.cfg.webhookSecret)
       .update(stringToSign)
       .digest('base64');
     if (
-      computed.length !== sig.length ||
-      !timingSafeEqual(Buffer.from(computed), Buffer.from(sig))
+      computed.length !== providedSig.length ||
+      !timingSafeEqual(Buffer.from(computed), Buffer.from(providedSig))
     ) {
       throw new WebhookSignatureError(
         this.id as any,

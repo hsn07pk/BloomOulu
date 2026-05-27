@@ -2,7 +2,7 @@ import type { Job } from 'bullmq';
 import { prisma } from '@bloomoulu/db';
 import { sendEmail } from '../../../infra/email.js';
 import { renderMjml } from '@bloomoulu/emails/render';
-import { presign } from '../../../infra/storage.js';
+import { presign, readFile } from '../../../infra/storage.js';
 
 export interface EmailJob {
   template: string;             // EmailTemplate.slug
@@ -22,32 +22,54 @@ export async function processEmail(job: Job<EmailJob>): Promise<void> {
   const preheader = pickLocale(tpl, 'preheader', locale) ?? '';
   const mjml = pickLocale(tpl, 'mjml', locale);
 
-  // Resolve any s3://bucket/key references — both in `variables.receiptUrl`
-  // (used inside the email body) and in `attachments[*].url` (passed to
-  // nodemailer as `path:`). nodemailer can fetch via http(s); we presign for
-  // 24h so the donor can also click the link from the email.
+  // Resolve any storage references — both `s3://bucket/key` (legacy) and
+  // `local://key` (the local-disk backend). `presign()` knows how to map
+  // either form to a public `/v1/files/...` URL the donor can click from
+  // the email. Used inside the email body via {{receiptUrl}} etc.
   const resolvedVars: Record<string, string> = { ...variables };
   for (const k of Object.keys(resolvedVars)) {
     const v = resolvedVars[k];
-    if (typeof v === 'string' && v.startsWith('s3://')) {
+    if (typeof v === 'string' && (v.startsWith('s3://') || v.startsWith('local://'))) {
       resolvedVars[k] = await presign(v, 60 * 60 * 24);
     }
   }
 
   const html = renderMjml(mjml, { ...resolvedVars, preheader });
 
-  const resolvedAttachments = await Promise.all(
-    (attachments ?? []).map(async (a) => ({
-      filename: a.filename,
-      path: a.url.startsWith('s3://') ? await presign(a.url, 60 * 60 * 24) : a.url,
-    })),
+  // Attachments: load `local://` blobs from disk and ship as a Buffer
+  // (nodemailer's `content:` option) — nodemailer treats `path:` as a
+  // literal filesystem path / URL, so `local://...` would fail ENOENT.
+  // `s3://` legacy refs get presigned to a public HTTP URL nodemailer
+  // can fetch. Plain http(s) URLs pass through unchanged.
+  const resolvedAttachments: Array<{
+    filename: string;
+    path?: string;
+    content?: Buffer;
+    contentType?: string;
+  }> = await Promise.all(
+    (attachments ?? []).map(async (a): Promise<{
+      filename: string;
+      path?: string;
+      content?: Buffer;
+      contentType?: string;
+    }> => {
+      if (a.url.startsWith('local://')) {
+        const file = await readFile(a.url);
+        if (!file) throw new Error(`Attachment missing in local storage: ${a.url}`);
+        return { filename: a.filename, content: file.body, contentType: file.contentType };
+      }
+      if (a.url.startsWith('s3://')) {
+        return { filename: a.filename, path: await presign(a.url, 60 * 60 * 24) };
+      }
+      return { filename: a.filename, path: a.url };
+    }),
   );
 
   await sendEmail({
     to,
     subject: interpolate(subject, resolvedVars),
     html,
-    attachments: resolvedAttachments.map((a) => ({ filename: a.filename, url: a.path })),
+    attachments: resolvedAttachments,
   });
 }
 

@@ -896,17 +896,14 @@ function WelcomeBubble({
  */
 function PlantImageGallery({ citations, locale }: { citations: Citation[]; locale: Locale }) {
   const seen = new Set<string>();
-  // Only render images whose URL is on our own public bucket. ~226
-  // legacy PlantImage rows from the bulk seed still point directly at
-  // upload.wikimedia.org/.../*.jpg — and many of those URLs 404 because
-  // the file path was wrong at seed time. Rendering them produces a
-  // broken-image icon for the donor. A separate rehost backfill script
-  // will move salvageable ones into our bucket and purge the rest, but
-  // until then the chat must defend against showing broken cards.
+  // Only render images we host ourselves. Locally-hosted images come
+  // through /v1/files/<key> (served by the api from STORAGE_DIR).
+  // Legacy seeded PlantImage rows pointing directly at Wikimedia are
+  // filtered out — many of those 404'd at seed time and rendering them
+  // would show a broken-image icon to the donor.
   const isHostedUrl = (url: string) =>
-    /\/bloomoulu-public\//.test(url) ||
-    url.startsWith('http://localhost:9000/') ||
-    url.startsWith('http://minio:9000/');
+    url.includes('/v1/files/') ||
+    /\/bloomoulu-public\//.test(url);
   const items = citations
     .filter((c): c is Citation & { image: NonNullable<Citation['image']>; plantSlug: string } => {
       if (!c.plantSlug || !c.image?.url) return false;

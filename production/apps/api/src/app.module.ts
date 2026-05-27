@@ -17,12 +17,14 @@ import { AdoptionLifecycleModule } from './modules/adoptions/adoption-lifecycle.
 import { PaymentsModule } from './modules/payments/payments.module.js';
 import { WebhooksModule } from './modules/webhooks/webhooks.module.js';
 import { ReceiptsModule } from './modules/receipts/receipts.module.js';
+import { TaxCertsModule } from './modules/tax-certs/tax-certs.module.js';
 import { AskModule } from './modules/ask/ask.module.js';
 import { KioskModule } from './modules/kiosk/kiosk.module.js';
 import { GdprModule } from './modules/gdpr/gdpr.module.js';
 import { AuditModule } from './modules/audit/audit.module.js';
 import { SettingsModule } from './modules/settings/settings.module.js';
 import { ReconciliationModule } from './modules/reconciliation/reconciliation.module.js';
+import { DisbursementsModule } from './modules/disbursements/disbursements.module.js';
 import { ContentModule } from './modules/content/content.module.js';
 import { TiersModule } from './modules/tiers/tiers.module.js';
 import { NarrationModule } from './modules/narration/narration.module.js';
@@ -97,10 +99,12 @@ const isProd = process.env.NODE_ENV === 'production';
     PaymentsModule,
     WebhooksModule,
     ReceiptsModule,
+    TaxCertsModule,
     AskModule,
     KioskModule,
     GdprModule,
     ReconciliationModule,
+    DisbursementsModule,
     ContentModule,
     TiersModule,
     NarrationModule,

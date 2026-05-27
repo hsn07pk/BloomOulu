@@ -20,6 +20,76 @@
  * e.g. activating bundle siblings).
  */
 import type { Prisma } from '@prisma/client';
+import { benefitsForTier } from '@bloomoulu/constants';
+
+/**
+ * Seed an AdoptionBenefit row for every catalog entry tied to this
+ * adoption's tier. Idempotent — uses `skipDuplicates` so re-running on
+ * an already-seeded adoption is a no-op. Called from `activateAdoption`
+ * and from the one-off backfill script.
+ *
+ * autoFulfill benefits land directly in 'fulfilled' state (the artefact
+ * is always-available, e.g. digital certificate). Everything else
+ * lands in 'pending' and surfaces in the admin Benefits to-do list.
+ */
+async function seedAdoptionBenefits(
+  tx: Prisma.TransactionClient,
+  adoptionId: string,
+  tierId: string,
+) {
+  const catalog = benefitsForTier(tierId);
+  if (catalog.length === 0) return;
+  // Pull the donor's current postal address to snapshot onto each
+  // physical-category row. If it's null we mark physical benefits
+  // `not_applicable` — staff sees them in the admin filter as "blocked
+  // on address" and can ping the donor.
+  const adoption = await tx.adoption.findUnique({
+    where: { id: adoptionId },
+    select: { donor: { select: { postalAddress: true } } },
+  });
+  const addr = (adoption?.donor?.postalAddress ?? null) as Prisma.JsonValue | null;
+  const hasAddress =
+    addr !== null &&
+    typeof addr === 'object' &&
+    'line1' in (addr as Record<string, unknown>);
+  const now = new Date();
+  await tx.adoptionBenefit.createMany({
+    data: catalog.map((b) => {
+      const isPhysicalBlocked = b.requiresAddress && !hasAddress;
+      // Recurring benefits seed with nextDueAt = now + cadenceMonths so
+      // the worker fires the first send at that boundary instead of
+      // immediately on activation.
+      let nextDueAt: Date | null = null;
+      if (b.category === 'recurring' && b.cadenceMonths) {
+        const d = new Date(now);
+        d.setUTCMonth(d.getUTCMonth() + b.cadenceMonths);
+        nextDueAt = d;
+      }
+      return {
+        adoptionId,
+        benefitKey: b.key,
+        category: b.category,
+        labelSnapshot: b.label,
+        donorLabelSnapshot: b.donorLabel ?? null,
+        status: b.autoFulfill
+          ? ('fulfilled' as const)
+          : isPhysicalBlocked
+            ? ('not_applicable' as const)
+            : ('pending' as const),
+        fulfilledAt: b.autoFulfill ? now : null,
+        shippingAddress:
+          b.category === 'physical' && hasAddress
+            ? (addr as Prisma.InputJsonValue)
+            : undefined,
+        nextDueAt,
+        notes: isPhysicalBlocked
+          ? 'No postal address on donor — set to not_applicable. Ask donor to add address, then flip to pending.'
+          : null,
+      };
+    }),
+    skipDuplicates: true,
+  });
+}
 
 async function writeAudit(
   tx: Prisma.TransactionClient,
@@ -63,6 +133,10 @@ export async function activateAdoption(
       },
     });
   }
+  // Seed per-benefit fulfilment rows for this tier. Runs once per
+  // (Adoption, benefit); subsequent activations (paused → active etc.)
+  // hit `skipDuplicates` and are no-ops.
+  await seedAdoptionBenefits(tx, id, updated.tierId);
   await writeAudit(tx, {
     actorUserId,
     action: 'adoption.activated',
