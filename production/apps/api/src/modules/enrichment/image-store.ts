@@ -4,15 +4,18 @@
  * `infra/storage` so the storage layer stays consolidated — same code
  * path used for receipts, audio narrations, GDPR exports, etc.
  *
- * The serving URL is `<api>/v1/files/plant-images/<plantImageId>.<ext>`
- * (resolved by `presign()`); PlantImage rows store the resolved URL so
- * the public site can render the image directly.
+ * The serving URL is a ROOT-RELATIVE `/v1/files/plant-images/<id>.<ext>`
+ * — never an absolute host. PlantImage.url is rendered directly in a
+ * browser <img src>, so a relative path resolves against whatever origin
+ * the donor is on (localhost / ngrok / production) and the web layer's
+ * same-origin rewrite proxies it to the api. Storing an absolute host
+ * would break on any other origin (mixed-content + wrong host).
  *
  * Wikimedia caveat: original-file URLs are rejected by Wikimedia's
  * thumbnailer, so they're rewritten to the 1280px standard thumb.
  */
 import { setTimeout as sleep } from 'node:timers/promises';
-import { uploadToS3, presign } from '../../infra/storage.js';
+import { uploadToS3 } from '../../infra/storage.js';
 import { ENRICH_UA, retryAfterMs } from './http.js';
 
 const KEY_PREFIX = 'plant-images';
@@ -150,11 +153,15 @@ export async function hostPlantImage(
 
   const key = `${KEY_PREFIX}/${plantImageId}.${extensionFor(contentType, sourceUrl)}`;
   try {
-    const ref = await uploadToS3({ key, body, contentType });
-    // Resolve the ref to a public `/v1/files/...` URL the browser can
-    // fetch. TTL is ignored by the local storage backend (presign() in
-    // infra/storage.ts).
-    return await presign(ref, 0);
+    await uploadToS3({ key, body, contentType });
+    // Store a ROOT-RELATIVE URL, never an absolute one. PlantImage.url is
+    // rendered directly in a browser <img src>; a baked absolute host
+    // (http://localhost:4000 or a specific tunnel) breaks the moment the
+    // page is viewed from any other origin (mixed-content on HTTPS, wrong
+    // host). A relative `/v1/files/...` resolves against whatever origin
+    // the donor is on — localhost, ngrok, or the production domain — and
+    // the web layer's same-origin rewrite proxies it to the api.
+    return `/v1/files/${key}`;
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn(

@@ -2091,6 +2091,17 @@ async function bootstrap() {
         };
 
         const apiBase = (process.env.API_URL ?? 'http://localhost:4000').replace(/\/$/, '');
+        // Derive a browser-fetchable URL from a stored storage ref —
+        // never reconstruct a filename (the on-disk name differs per
+        // artefact: tax certs are named by donor-id slice, not row id).
+        // Handles local://key, s3://bucket/key, /v1/… and absolute http.
+        const fileHref = (ref: string | null | undefined): string | null => {
+          if (!ref) return null;
+          if (ref.startsWith('local://')) return `${apiBase}/v1/files/${ref.slice('local://'.length)}`;
+          if (ref.startsWith('s3://')) return `${apiBase}/v1/files/${ref.replace(/^s3:\/\/[^/]+\//, '')}`;
+          if (ref.startsWith('/')) return `${apiBase}${ref}`;
+          return ref; // already absolute http(s)
+        };
 
         const html = `<!doctype html>
 <html lang="en">
@@ -2255,7 +2266,7 @@ async function bootstrap() {
           <td>${escapeHtml(r.donor.name ?? r.donor.email)}</td>
           <td>${eur(r.amountCents)}</td>
           <td>${r.pdfUrl
-            ? `<a href="${apiBase}/v1/files/receipts/${escapeHtml(r.number)}.pdf" class="btn" download target="_blank" rel="noopener">PDF</a>`
+            ? `<a href="${fileHref(r.pdfUrl)}" class="btn" download target="_blank" rel="noopener">PDF</a>`
             : '<span class="pill">pending</span>'}</td>
         </tr>`,
           )
@@ -2286,7 +2297,7 @@ async function bootstrap() {
           <td><span class="pill">${escapeHtml(c.scheme)}</span></td>
           <td>${eur(c.totalCents)}</td>
           <td>${c.pdfUrl
-            ? `<a href="${apiBase}/v1/files/tax-certs/${c.taxYear}/CERT-${c.taxYear}-${c.id.replace(/-/g, '').slice(0, 8).toUpperCase()}.pdf" class="btn" download target="_blank" rel="noopener">PDF</a>`
+            ? `<a href="${fileHref(c.pdfUrl)}" class="btn" download target="_blank" rel="noopener">PDF</a>`
             : '<span class="pill">pending</span>'}</td>
         </tr>`,
           )

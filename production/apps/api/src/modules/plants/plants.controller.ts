@@ -25,7 +25,6 @@ import { z } from 'zod';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { NarrationService } from '../narration/narration.service.js';
 import { ZodValidationPipe } from '../../common/zod.pipe.js';
-import { presign } from '../../infra/storage.js';
 
 /** Body of POST /v1/plants/:slug/scan. Kept tiny — every field is optional;
  *  the controller derives a stable visitorHash from IP + UA so we never
@@ -430,19 +429,20 @@ export class PlantsController {
     // reload) will see the new rows.
     this.narration.ensureGenerated(plant.id);
 
-    // Replace s3:// references with short-lived presigned HTTP URLs so
-    // the browser can stream the audio directly from MinIO.
-    const narrations = await Promise.all(
-      plant.narrations.map(async (n) => {
-        if (!n.audioUrl.startsWith('s3://')) return n;
-        try {
-          const url = await presign(n.audioUrl, 3600);
-          return { ...n, audioUrl: url };
-        } catch {
-          return n;
-        }
-      }),
-    );
+    // Resolve storage refs into a ROOT-RELATIVE /v1/files URL the browser
+    // can stream. Handles both the legacy `s3://bucket/key` shape and the
+    // current `local://key` shape. A relative path (not an absolute host)
+    // means the <audio src> resolves against whatever origin the donor is
+    // on — localhost / ngrok / production — and the web layer's same-origin
+    // rewrite proxies it to the api. (A raw `local://…` is unplayable, and
+    // a baked absolute host breaks on any other origin.)
+    const narrations = plant.narrations.map((n) => {
+      let key: string | null = null;
+      if (n.audioUrl.startsWith('local://')) key = n.audioUrl.slice('local://'.length);
+      else if (n.audioUrl.startsWith('s3://')) key = n.audioUrl.replace(/^s3:\/\/[^/]+\//, '');
+      if (!key) return n; // already an http(s) URL or unknown shape — leave as-is
+      return { ...n, audioUrl: `/v1/files/${key}` };
+    });
     return {
       ...plant,
       narrations,
