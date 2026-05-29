@@ -867,7 +867,6 @@ const PreviewBlock: React.FC<{ s: Suggestion }> = ({ s }) => {
     return (
       <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
         {obj.url && (
-          // eslint-disable-next-line @next/next/no-img-element
           <img
             src={obj.url}
             alt=""

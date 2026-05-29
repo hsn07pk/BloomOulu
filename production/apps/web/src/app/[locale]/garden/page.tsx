@@ -639,7 +639,7 @@ export default async function GardenPage({
                     </p>
                     {a.nickname && (
                       <p className="small" style={{ marginTop: 10, fontStyle: 'italic' }}>
-                        "{a.nickname}"
+                        &ldquo;{a.nickname}&rdquo;
                       </p>
                     )}
                     {a.plaque && (
@@ -662,7 +662,7 @@ export default async function GardenPage({
                           : locale === 'fi'
                             ? 'Laatta valmistuksessa'
                             : 'Plaque being engraved'}
-                        : "{a.plaque.engravedText}"
+                        : &ldquo;{a.plaque.engravedText}&rdquo;
                       </p>
                     )}
                     <div style={{ marginTop: 16, display: 'flex', gap: 8, flexWrap: 'wrap' }}>

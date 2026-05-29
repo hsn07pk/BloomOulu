@@ -2929,7 +2929,7 @@ function TestModeHelp({
       </div>
       {showPaytrail && (
         <div>
-          Use Paytrail's public test card{' '}
+          Use Paytrail&apos;s public test card{' '}
           <code style={{ fontFamily: 'var(--f-mono)', background: 'rgba(0,0,0,0.05)', padding: '0 4px', borderRadius: 4 }}>
             4153&nbsp;0139&nbsp;9970&nbsp;0321
           </code>

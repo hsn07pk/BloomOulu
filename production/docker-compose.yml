@@ -56,6 +56,10 @@ services:
         NEXT_PUBLIC_WEB_URL: ${NEXT_PUBLIC_WEB_URL:-http://localhost:3000}
         NEXT_PUBLIC_ADMIN_URL: ${NEXT_PUBLIC_ADMIN_URL:-http://localhost:4100}
         NEXT_PUBLIC_KIOSK_URL: ${NEXT_PUBLIC_KIOSK_URL:-http://localhost:3100}
+        # Baked into routes-manifest.json by next build — must be the
+        # in-Docker api hostname so the single-tunnel /v1/* + /webhooks/*
+        # rewrites resolve. (Runtime env can't change it on standalone.)
+        API_REWRITE_TARGET: http://api:4000
         # Donor-facing contact details. Single source of truth: change in
         # one env var and every web page (donate/complete error, GDPR
         # banners, ask-the-garden curator name, etc.) reflects it.
@@ -77,6 +81,11 @@ services:
       NEXT_PUBLIC_GARDEN_NAME_FI: ${NEXT_PUBLIC_GARDEN_NAME_FI:-Oulun yliopiston kasvitieteellinen puutarha}
       NEXT_PUBLIC_GARDEN_NAME_SV: ${NEXT_PUBLIC_GARDEN_NAME_SV:-Uleåborgs universitets botaniska trädgård}
       INTERNAL_API_URL: http://api:4000
+      # Same-origin rewrite target: web proxies /v1/* and /webhooks/* to
+      # the api container so a single public hostname (the ngrok tunnel)
+      # serves donor pages AND the payment webhooks/callbacks. See
+      # apps/web/next.config.mjs rewrites().
+      API_REWRITE_TARGET: http://api:4000
       AUTH_URL: ${NEXT_PUBLIC_WEB_URL:-http://localhost:3000}
       AUTH_SECRET: ${AUTH_SECRET}
       AUTH_OULU_OIDC_ISSUER: ${AUTH_OULU_OIDC_ISSUER:-}
@@ -352,6 +361,32 @@ services:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
     ports:
       - "${KIOSK_PORT:-3100}:3100"
+    networks: [internal]
+
+  # ── Stable public tunnel (ngrok) ───────────────────────────────────────
+  # Gives the stack ONE fixed HTTPS URL (your reserved ngrok domain) so
+  # payment-provider webhooks + redirects always hit the same place across
+  # `docker compose up -d` restarts — the production-grade replacement for
+  # the throwaway `trycloudflare.com` quick tunnel.
+  #
+  # Routes the single domain straight at the web container; web's Next.js
+  # rewrites forward /v1/* and /webhooks/* to the api (see
+  # apps/web/next.config.mjs + API_REWRITE_TARGET below), so one hostname
+  # serves the whole donor + webhook flow.
+  #
+  # Lives in the `tunnel` compose profile so plain local dev doesn't need
+  # ngrok. To make `docker compose up -d` include it automatically, set
+  #   COMPOSE_PROFILES=tunnel
+  # in your .env (alongside NGROK_AUTHTOKEN + NGROK_DOMAIN). One-time
+  # setup is in docs/runbook/stable-tunnel.md.
+  ngrok:
+    image: ngrok/ngrok:latest
+    profiles: [tunnel]
+    <<: *restart
+    command: http web:3000 --domain=${NGROK_DOMAIN}
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:-}
+    depends_on: [web]
     networks: [internal]
 
   # ── Data plane ─────────────────────────────────────────────────────────

@@ -64,7 +64,6 @@ export async function processReceipt(job: Job<ReceiptJob>): Promise<void> {
     number,
     locale: payment.donor.locale,
     donorName: payment.donor.name ?? payment.donor.email,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     donorAddress: payment.donor.postalAddress as any,
     amountCents: payment.amountCents,
     currency: payment.currency,

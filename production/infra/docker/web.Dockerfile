@@ -16,10 +16,17 @@ ARG NEXT_PUBLIC_API_URL=http://localhost:4000
 ARG NEXT_PUBLIC_WEB_URL=http://localhost:3000
 ARG NEXT_PUBLIC_ADMIN_URL=http://localhost:4100
 ARG NEXT_PUBLIC_KIOSK_URL=http://localhost:3100
+# API_REWRITE_TARGET drives next.config.mjs rewrites() for /v1/* + /webhooks/*.
+# Next.js bakes rewrite destinations into routes-manifest.json at BUILD time
+# (output: standalone), so a runtime env has no effect — it must be a build
+# arg. In Docker this is http://api:4000 (the api service); default stays
+# localhost:4000 for plain `pnpm dev`.
+ARG API_REWRITE_TARGET=http://localhost:4000
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
     NEXT_PUBLIC_WEB_URL=$NEXT_PUBLIC_WEB_URL \
     NEXT_PUBLIC_ADMIN_URL=$NEXT_PUBLIC_ADMIN_URL \
-    NEXT_PUBLIC_KIOSK_URL=$NEXT_PUBLIC_KIOSK_URL
+    NEXT_PUBLIC_KIOSK_URL=$NEXT_PUBLIC_KIOSK_URL \
+    API_REWRITE_TARGET=$API_REWRITE_TARGET
 COPY . .
 RUN pnpm --filter @bloomoulu/db run generate
 RUN pnpm --filter @bloomoulu/web run build

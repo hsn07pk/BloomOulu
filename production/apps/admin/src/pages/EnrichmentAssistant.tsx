@@ -381,7 +381,6 @@ const EnrichmentAssistant: React.FC = () => {
                       )}
                       {f === 'image' && preview.preview.image && (
                         <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
                             src={preview.preview.image.value.url}
                             alt=""

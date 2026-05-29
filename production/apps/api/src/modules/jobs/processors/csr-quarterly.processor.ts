@@ -14,8 +14,8 @@ import { Logger } from '@nestjs/common';
 import { prisma } from '@bloomoulu/db';
 import { uploadToS3 } from '../../../infra/storage.js';
 import { enqueueEmail } from '../enqueue.js';
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let renderCsrPdf: any = null;
+type RenderCsrPdf = (typeof import('@bloomoulu/emails/pdf/csr-quarterly'))['renderCsrQuarterlyPdf'];
+let renderCsrPdf: RenderCsrPdf | null = null;
 
 const logger = new Logger('CsrQuarterly');
 
