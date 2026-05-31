@@ -36,7 +36,7 @@ write_files:
     permissions: "0644"
     content: |
       REPO_URL=https://github.com/hsn07pk/BloomOulu.git
-      REPO_BRANCH=feat/stable-ngrok-tunnel
+      REPO_BRANCH=csc-deploy
       CLONE_DIR=/opt/bloomoulu
 
   # `bloomoulu-deploy [PUBLIC_HOST]` — auto-detects the floating IP via sslip.io
