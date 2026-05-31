@@ -386,7 +386,7 @@ const Certificate: React.FC<{ input: AdoptionCertificatePdfInput }> = ({ input }
         React.createElement(
           Text,
           null,
-          input.verificationUrl ?? 'bloom-oulu.vercel.app',
+          input.verificationUrl ?? '',
         ),
       ),
     ),

@@ -29,7 +29,15 @@ import { searchWeb, type WebResult } from './web-search.js';
 import { chunkText } from '@bloomoulu/rag';
 
 const OLLAMA_BASE = process.env.OLLAMA_URL ?? process.env.OLLAMA_BASE_URL ?? 'http://ollama:11434';
-const LLM_MODEL = process.env.OLLAMA_LLM_MODEL ?? process.env.LLM_MODEL ?? 'llama3.2:1b';
+// Hosted OpenAI-compatible LLM (e.g. Groq). When LLM_BASE_URL is set, all text
+// GENERATION is routed there; embeddings always stay on the local Ollama.
+const LLM_BASE_URL = (process.env.LLM_BASE_URL ?? '').replace(/\/$/, '');
+const LLM_API_KEY = process.env.LLM_API_KEY ?? '';
+const USE_HOSTED_LLM = LLM_BASE_URL.length > 0;
+const LLM_MODEL = USE_HOSTED_LLM
+  ? (process.env.LLM_MODEL ?? 'llama-3.3-70b-versatile')
+  : (process.env.OLLAMA_LLM_MODEL ?? process.env.LLM_MODEL ?? 'llama3.2:1b');
+const LLM_MAX_TOKENS = Number(process.env.LLM_MAX_TOKENS ?? 512);
 const EMBED_MODEL = process.env.OLLAMA_EMBED_MODEL ?? process.env.EMBED_MODEL ?? 'nomic-embed-text:v1.5';
 const RERANKER_BASE = process.env.RERANKER_BASE_URL ?? 'http://reranker:8080';
 
@@ -838,18 +846,11 @@ export class AskService {
       `Latest: Where are you located?\n` +
       `Rewrite: Where are you located?\n`;
     try {
-      const res = await request(`${OLLAMA_BASE}/api/generate`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          model: LLM_MODEL,
-          prompt: `${sys}\n\nConversation:\n${transcript}\nLatest: ${question}\nRewrite:`,
-          stream: false,
-          options: { temperature: 0.1, num_ctx: 2048, num_predict: 80 },
-        }),
-      });
-      const json = (await res.body.json()) as { response?: string };
-      const rewritten = (json.response ?? '')
+      const raw = await this.llmComplete(
+        `${sys}\n\nConversation:\n${transcript}\nLatest: ${question}\nRewrite:`,
+        { temperature: 0.1, maxTokens: 80 },
+      );
+      const rewritten = raw
         .trim()
         .replace(/^["'`]|["'`]$/g, '')
         .replace(/^Rewrite:\s*/i, '')
@@ -913,23 +914,55 @@ export class AskService {
       `Use this plant-name glossary so you preserve species correctly:\n${glossary.join('\n')}\n` +
       `Reply with ONLY the English translation. No quotes, no explanation, no preface.`;
     try {
-      const res = await request(`${OLLAMA_BASE}/api/generate`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          model: LLM_MODEL,
-          prompt: `${sys}\n\nQuestion: ${text}\n\nEnglish:`,
-          stream: false,
-          options: { temperature: 0.1, num_ctx: 2048 },
-        }),
+      const raw = await this.llmComplete(`${sys}\n\nQuestion: ${text}\n\nEnglish:`, {
+        temperature: 0.1,
+        maxTokens: 200,
       });
-      const json = (await res.body.json()) as { response?: string };
-      const translated = (json.response ?? '').trim().replace(/^["']|["']$/g, '');
+      const translated = raw.trim().replace(/^["']|["']$/g, '');
       return translated.length > 3 ? translated : text;
     } catch (err) {
       this.logger.warn(`Translation failed, embedding raw text: ${(err as Error).message}`);
       return text;
     }
+  }
+
+  /** Non-streaming text completion. Routes to the hosted OpenAI-compatible
+   *  endpoint (e.g. Groq /chat/completions) when LLM_BASE_URL is set, else to
+   *  the local Ollama /api/generate. */
+  private async llmComplete(
+    prompt: string,
+    opts: { temperature?: number; maxTokens?: number; numCtx?: number } = {},
+  ): Promise<string> {
+    const { temperature = 0.1, maxTokens = LLM_MAX_TOKENS, numCtx = 2048 } = opts;
+    if (USE_HOSTED_LLM) {
+      const res = await request(`${LLM_BASE_URL}/chat/completions`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${LLM_API_KEY}` },
+        body: JSON.stringify({
+          model: LLM_MODEL,
+          messages: [{ role: 'user', content: prompt }],
+          temperature,
+          max_tokens: maxTokens,
+          stream: false,
+        }),
+      });
+      const json = (await res.body.json()) as {
+        choices?: Array<{ message?: { content?: string } }>;
+      };
+      return json.choices?.[0]?.message?.content ?? '';
+    }
+    const res = await request(`${OLLAMA_BASE}/api/generate`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: LLM_MODEL,
+        prompt,
+        stream: false,
+        options: { temperature, num_ctx: numCtx, num_predict: maxTokens },
+      }),
+    });
+    const json = (await res.body.json()) as { response?: string };
+    return json.response ?? '';
   }
 
   private async embed(text: string): Promise<number[]> {
@@ -1073,6 +1106,55 @@ export class AskService {
     temperature: number,
     onDelta?: (text: string) => void,
   ): Promise<string> {
+    if (USE_HOSTED_LLM) {
+      const res = await request(`${LLM_BASE_URL}/chat/completions`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${LLM_API_KEY}` },
+        body: JSON.stringify({
+          model: LLM_MODEL,
+          messages: [
+            { role: 'system', content: system },
+            { role: 'user', content: user },
+          ],
+          temperature,
+          max_tokens: LLM_MAX_TOKENS,
+          stream: true,
+        }),
+      });
+      if (res.statusCode >= 300) {
+        const t = await res.body.text();
+        throw new Error(`LLM ${res.statusCode}: ${t.slice(0, 200)}`);
+      }
+      let full = '';
+      let buffer = '';
+      for await (const chunk of res.body as unknown as AsyncIterable<Buffer>) {
+        buffer += chunk.toString('utf8');
+        let nl: number;
+        while ((nl = buffer.indexOf('\n')) !== -1) {
+          const line = buffer.slice(0, nl).trim();
+          buffer = buffer.slice(nl + 1);
+          if (!line.startsWith('data:')) continue;
+          const data = line.slice(5).trim();
+          if (data === '[DONE]') {
+            buffer = '';
+            break;
+          }
+          try {
+            const piece = JSON.parse(data) as {
+              choices?: Array<{ delta?: { content?: string } }>;
+            };
+            const delta = piece.choices?.[0]?.delta?.content;
+            if (typeof delta === 'string' && delta.length > 0) {
+              full += delta;
+              onDelta?.(delta);
+            }
+          } catch {
+            // partial SSE line — wait for next chunk
+          }
+        }
+      }
+      return full.trim();
+    }
     const res = await request(`${OLLAMA_BASE}/api/generate`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },

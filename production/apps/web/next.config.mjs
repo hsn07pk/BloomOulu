@@ -25,6 +25,27 @@ try {
 
 const withNextIntl = createNextIntlPlugin('./src/i18n.ts');
 
+// Derive a next/image remotePattern for the public deployment host (e.g.
+// the ngrok / Cloudflare Tunnel subdomain) from NEXT_PUBLIC_WEB_URL, so
+// absolute image URLs served on that host pass the allowlist. Guarded so a
+// missing/malformed env var doesn't crash the config load.
+function publicHostRemotePattern() {
+  const url = process.env.NEXT_PUBLIC_WEB_URL;
+  if (!url) return [];
+  try {
+    const { protocol, hostname, port } = new URL(url);
+    return [
+      {
+        protocol: protocol.replace(/:$/, ''),
+        hostname,
+        ...(port ? { port } : {}),
+      },
+    ];
+  } catch {
+    return [];
+  }
+}
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
@@ -67,6 +88,9 @@ const nextConfig = {
       // Local API serves rehosted plant images at /v1/files/* (the new
       // local-disk storage backend — see apps/api/src/infra/storage.ts).
       { protocol: 'http', hostname: 'localhost', port: '4000' },
+      // Public deployment host (tunnel subdomain) derived from
+      // NEXT_PUBLIC_WEB_URL — empty in dev where the env var is unset.
+      ...publicHostRemotePattern(),
     ],
   },
   async headers() {

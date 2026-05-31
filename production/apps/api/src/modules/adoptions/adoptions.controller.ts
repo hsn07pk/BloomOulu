@@ -16,6 +16,7 @@ import { Roles } from '../../common/roles.decorator.js';
 import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.decorator.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { renderAdoptionCertificatePdf } from '@bloomoulu/emails/pdf/adoption-certificate';
+import { getWebUrl } from '@bloomoulu/constants';
 import {
   AdoptionsService,
   CreateAdoptionDto,
@@ -111,7 +112,7 @@ export class AdoptionsController {
       dedication: a.dedication,
       nickname: a.nickname,
       issuedAt: a.startedAt ?? a.createdAt,
-      verificationUrl: `bloom-oulu.vercel.app/${locale}/plants/${a.plant.slug}`,
+      verificationUrl: `${getWebUrl().replace(/\/$/, '')}/${locale}/plants/${a.plant.slug}`,
     });
     reply
       .code(200)

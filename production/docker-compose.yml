@@ -120,6 +120,7 @@ services:
       AUTH_SECRET: ${AUTH_SECRET}
       AUTH_URL: ${NEXT_PUBLIC_WEB_URL:-http://localhost:3000}
       NEXT_PUBLIC_WEB_URL: ${NEXT_PUBLIC_WEB_URL:-http://localhost:3000}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
       ALLOWED_ORIGINS: "${NEXT_PUBLIC_WEB_URL:-http://localhost:3000},${NEXT_PUBLIC_KIOSK_URL:-http://localhost:3100},${NEXT_PUBLIC_ADMIN_URL:-http://localhost:4100}"
       WEB_ORIGIN: ${NEXT_PUBLIC_WEB_URL:-http://localhost:3000}
       # Ollama runs natively on host for Metal GPU; bridge from container.
@@ -129,9 +130,12 @@ services:
       OLLAMA_URL: http://host.docker.internal:11434
       OLLAMA_BASE_URL: http://host.docker.internal:11434
       OLLAMA_LLM_MODEL: ${OLLAMA_LLM_MODEL:-gemma3:4b}
-      OLLAMA_EMBED_MODEL: bge-m3
-      EMBED_MODEL: bge-m3
-      LLM_MODEL: gemma3:4b
+      OLLAMA_EMBED_MODEL: ${OLLAMA_EMBED_MODEL:-bge-m3}
+      EMBED_MODEL: ${EMBED_MODEL:-bge-m3}
+      LLM_MODEL: ${LLM_MODEL:-gemma3:4b}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-512}
       RERANKER_URL: http://reranker:8080
       # Real SMTP — pass these through from .env. The api throws on
       # send if SMTP_HOST is unset, so configure these before going
@@ -269,9 +273,12 @@ services:
       OLLAMA_URL: http://host.docker.internal:11434
       OLLAMA_BASE_URL: http://host.docker.internal:11434
       OLLAMA_LLM_MODEL: ${OLLAMA_LLM_MODEL:-gemma3:4b}
-      OLLAMA_EMBED_MODEL: bge-m3
-      EMBED_MODEL: bge-m3
-      LLM_MODEL: gemma3:4b
+      OLLAMA_EMBED_MODEL: ${OLLAMA_EMBED_MODEL:-bge-m3}
+      EMBED_MODEL: ${EMBED_MODEL:-bge-m3}
+      LLM_MODEL: ${LLM_MODEL:-gemma3:4b}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-512}
       # Payment env — dunning + renewal workers construct gateway
       # adapters here. Must mirror the `api` service's payment env so
       # background charges hit the same merchant. The defaults match
