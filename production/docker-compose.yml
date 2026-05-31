@@ -128,7 +128,7 @@ services:
       # scripts run on the host, broken for processes inside a container.
       OLLAMA_URL: http://host.docker.internal:11434
       OLLAMA_BASE_URL: http://host.docker.internal:11434
-      OLLAMA_LLM_MODEL: gemma3:4b
+      OLLAMA_LLM_MODEL: ${OLLAMA_LLM_MODEL:-gemma3:4b}
       OLLAMA_EMBED_MODEL: bge-m3
       EMBED_MODEL: bge-m3
       LLM_MODEL: gemma3:4b
@@ -268,7 +268,7 @@ services:
       EMAIL_FROM: ${EMAIL_FROM:-BloomOulu <noreply@bloomoulu.localhost>}
       OLLAMA_URL: http://host.docker.internal:11434
       OLLAMA_BASE_URL: http://host.docker.internal:11434
-      OLLAMA_LLM_MODEL: gemma3:4b
+      OLLAMA_LLM_MODEL: ${OLLAMA_LLM_MODEL:-gemma3:4b}
       OLLAMA_EMBED_MODEL: bge-m3
       EMBED_MODEL: bge-m3
       LLM_MODEL: gemma3:4b

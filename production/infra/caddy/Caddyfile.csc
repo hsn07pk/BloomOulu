@@ -12,9 +12,11 @@
 # domain) for PUBLIC_HOST so the subdomains resolve — a bare IP can't have
 # admin.<ip>.
 
-{
-	email {$CADDY_ACME_EMAIL:ops@bloomoulu.invalid}
-}
+# No global options block needed — TLS is controlled per-site via {$CADDY_TLS}
+# below. Default "tls internal" = self-signed; for a trusted cert on a
+# resolvable host set CADDY_TLS to "" (Let's Encrypt) or "tls you@org.fi".
+# (A bare global `email` with an empty CADDY_ACME_EMAIL makes Caddy refuse
+#  to start, so we don't emit one.)
 
 # ── Public donor website (also serves /v1/* + /webhooks/* via web rewrites) ──
 {$PUBLIC_HOST} {
