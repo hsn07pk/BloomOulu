@@ -81,6 +81,11 @@ const nextConfig = {
     typedRoutes: true,
   },
   images: {
+    // 5500+ external Wikimedia plant images: Next's on-demand optimizer
+    // returns 429 under the burst a plant grid generates on a CPU-bound
+    // host, so serve the source URLs directly (the browser fetches
+    // Wikimedia with a real UA — no optimizer bottleneck, no 429).
+    unoptimized: true,
     remotePatterns: [
       { protocol: 'https', hostname: 'upload.wikimedia.org' },
       { protocol: 'https', hostname: 'commons.wikimedia.org' },
