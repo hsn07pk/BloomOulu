@@ -10,6 +10,7 @@
  */
 import { useEffect, useState } from 'react';
 import { useCart, type CartItem } from '../../../lib/cart.client';
+import { isAdoptable, nonAdoptableReason } from '../../../lib/adoption';
 
 interface Tier {
   id: CartItem['tierId'];
@@ -115,6 +116,14 @@ export default function CartView({
     const tier = tiers.find((t) => t.id === item.tierId);
     return sum + (tier?.annualPriceCents ?? 0);
   }, 0);
+  // Checkout is blocked while any extinct plant is in the cart. Each
+  // EX row gets a per-item warning above (see the article styling);
+  // the summary bar shows a single global block + disables the CTA.
+  const extinctItems = cart.items.filter((item) => {
+    const plant = plants[item.plantSlug];
+    return plant && !isAdoptable(plant.redListStatus);
+  });
+  const hasExtinct = extinctItems.length > 0;
 
   return (
     <section style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -131,6 +140,10 @@ export default function CartView({
           item.plantSlug;
         const tierName =
           (locale === 'fi' ? tier?.nameFi : locale === 'sv' ? tier?.nameSv : tier?.name) ?? item.tierId;
+        // Eligibility — extinct (EX) species can't be adopted. The
+        // item still renders so the donor sees why their cart is
+        // stuck; checkout below is disabled while any EX rows remain.
+        const adoptable = plant ? isAdoptable(plant.redListStatus) : true;
         return (
           <article
             key={item.plantSlug}
@@ -140,6 +153,12 @@ export default function CartView({
               gridTemplateColumns: 'auto 1fr auto auto',
               gap: 16,
               alignItems: 'center',
+              ...(adoptable
+                ? {}
+                : {
+                    borderColor: 'var(--rust-on-light)',
+                    background: 'rgba(184,81,58,0.04)',
+                  }),
             }}
           >
             <div
@@ -167,6 +186,23 @@ export default function CartView({
               {plant?.latinName && plant.latinName !== plantName && (
                 <div className="small muted" style={{ fontStyle: 'italic' }}>
                   {plant.latinName}
+                </div>
+              )}
+              {!adoptable && (
+                <div
+                  className="small"
+                  style={{
+                    marginTop: 6,
+                    color: 'var(--rust-on-light)',
+                    lineHeight: 1.4,
+                  }}
+                >
+                  ⚠{' '}
+                  {locale === 'fi'
+                    ? 'Ei adoptoitavissa (hävinnyt laji). Poista jatkaaksesi kassalle.'
+                    : locale === 'sv'
+                      ? 'Kan ej adopteras (utdöd art). Ta bort för att fortsätta.'
+                      : 'Cannot be adopted (extinct species). Remove to continue.'}
                 </div>
               )}
             </div>
@@ -249,13 +285,35 @@ export default function CartView({
           >
             {locale === 'fi' ? 'Tyhjennä kori' : locale === 'sv' ? 'Töm korg' : 'Empty cart'}
           </button>
-          <a href={`/${locale}/cart/checkout`} className="btn btn-primary btn-lg">
-            {locale === 'fi'
-              ? `Kassalle (€${(totalCents / 100).toFixed(0)}) →`
-              : locale === 'sv'
-                ? `Till kassan (€${(totalCents / 100).toFixed(0)}) →`
-                : `Check out €${(totalCents / 100).toFixed(0)} →`}
-          </a>
+          {hasExtinct ? (
+            <button
+              type="button"
+              disabled
+              className="btn btn-primary btn-lg"
+              aria-label={
+                locale === 'fi'
+                  ? 'Kassalle ei voi jatkaa, koska korissa on hävinneitä lajeja'
+                  : locale === 'sv'
+                    ? 'Kan inte gå till kassan, korgen innehåller utdöda arter'
+                    : 'Cannot check out — cart contains extinct species'
+              }
+              style={{ opacity: 0.5, cursor: 'not-allowed' }}
+            >
+              {locale === 'fi'
+                ? 'Poista hävinneet lajit jatkaaksesi'
+                : locale === 'sv'
+                  ? 'Ta bort utdöda arter för att fortsätta'
+                  : 'Remove extinct species to continue'}
+            </button>
+          ) : (
+            <a href={`/${locale}/cart/checkout`} className="btn btn-primary btn-lg">
+              {locale === 'fi'
+                ? `Kassalle (€${(totalCents / 100).toFixed(0)}) →`
+                : locale === 'sv'
+                  ? `Till kassan (€${(totalCents / 100).toFixed(0)}) →`
+                  : `Check out €${(totalCents / 100).toFixed(0)} →`}
+            </a>
+          )}
         </div>
       </div>
     </section>

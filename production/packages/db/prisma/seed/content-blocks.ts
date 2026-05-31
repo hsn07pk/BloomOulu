@@ -171,7 +171,7 @@ const TERMS_EN = `${draftBanner.en}
 
 ## 1. Service
 
-BloomOulu is operated by the University of Oulu Botanical Garden ("the Garden"). The adoption service is **symbolic**: no property in the plant transfers to the donor. The donation supports plant conservation, the seed bank, and the Garden's operations as detailed in *Where your money goes*.
+BloomOulu is operated by the University of Oulu Botanical Garden ("the Garden"). The adoption service is **symbolic**: no property in the plant transfers to the donor. The donation supports plant conservation, the seed bank, and the Garden's operations.
 
 ## 2. Donor obligations
 
@@ -179,7 +179,7 @@ You confirm that information you provide (name, postal address, billing details)
 
 ## 3. Garden obligations
 
-The Garden uses donor funds in line with the published allocation (currently 82% / 12% / 6%) and publishes an annual audit report each March.
+The Garden uses donor funds for plant conservation, the seed bank, and operations, and publishes an annual audit report each March.
 
 ## 4. Refund + cooling-off
 
@@ -206,7 +206,7 @@ const TERMS_FI = `${draftBanner.fi}
 
 ## 1. Palvelu
 
-BloomOulu on Oulun yliopiston kasvitieteellisen puutarhan ("Puutarha") ylläpitämä palvelu. Adoptio on **symbolinen**: omistusoikeus kasviin ei siirry lahjoittajalle. Lahjoitus tukee kasvien suojelua, siemenpankkia ja puutarhan toimintaa kuten kohdassa *Mihin rahasi käytetään* on kuvattu.
+BloomOulu on Oulun yliopiston kasvitieteellisen puutarhan ("Puutarha") ylläpitämä palvelu. Adoptio on **symbolinen**: omistusoikeus kasviin ei siirry lahjoittajalle. Lahjoitus tukee kasvien suojelua, siemenpankkia ja puutarhan toimintaa.
 
 ## 2. Lahjoittajan velvollisuudet
 
@@ -214,7 +214,7 @@ Vahvistat, että antamasi tiedot (nimi, postiosoite, maksutiedot) ovat totuudenm
 
 ## 3. Puutarhan velvollisuudet
 
-Puutarha käyttää lahjoitusvarat julkaistun jakauman mukaisesti (nyt 82 % / 12 % / 6 %) ja julkaisee tilintarkastuskertomuksen vuosittain maaliskuussa.
+Puutarha käyttää lahjoitusvarat kasvien suojeluun, siemenpankkiin ja puutarhan toimintaan, ja julkaisee tilintarkastuskertomuksen vuosittain maaliskuussa.
 
 ## 4. Palautus + peruuttamisoikeus
 
@@ -249,7 +249,7 @@ Sanna uppgifter och behörighet att donera.
 
 ## 3. Trädgårdens skyldigheter
 
-Användning enligt publicerad fördelning, årlig revisionsrapport.
+Användning för bevarande, fröbank och drift, samt årlig revisionsrapport.
 
 ## 4. Återbetalning + ångerrätt
 
@@ -356,18 +356,6 @@ const BLOCKS: Block[] = [
     ctaHref: '/adopt',
     isPublished: true,
     sortOrder: 0,
-  },
-  {
-    slug: 'policy.funds-flow',
-    kind: 'policy',
-    bodyEn:
-      '## Where your money goes\n\n- **82%** directly to plant conservation, seed-bank operation, propagation.\n- **12%** to platform operations (hosting, payments, audit).\n- **6%** to printed perks (postcards, prints, books, seeds) sourced from Finnish artists and the Garden\'s own seed bank.\n\nAnnual audit reports are published every March.',
-    bodyFi:
-      '## Mihin lahjoituksesi menee\n\n- **82 %** suoraan kasvien suojeluun, siemenpankin toimintaan, lisäykseen.\n- **12 %** alustan ylläpitoon.\n- **6 %** painettuihin etuihin suomalaisilta taiteilijoilta.\n\nVuosittaiset tilintarkastusraportit julkaistaan maaliskuussa.',
-    bodySv:
-      '## Vart dina pengar går\n\n- **82 %** direkt till växtbevarande.\n- **12 %** plattformsdrift.\n- **6 %** tryckta förmåner från finska konstnärer.\n\nÅrliga revisionsrapporter publiceras varje mars.',
-    isPublished: true,
-    sortOrder: 10,
   },
   {
     slug: 'legal.privacy',

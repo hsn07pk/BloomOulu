@@ -8,7 +8,8 @@ import { useTranslations } from 'next-intl';
  * about this plant" right before the donation CTA — social-proof framing.
  *
  * Stats wired:
- *   - scanCount     QR scans on the physical garden label
+ *   - viewCount     Plain page views (web + kiosk URL hits)
+ *   - scanCount     QR scans on the physical garden label (subset of views)
  *   - saveCount     Users who bookmarked the plant
  *   - lastAdoptedAt Most recent active adoption (relative time)
  *   - askCount      RAG answers whose retrieved chunks linked to this plant
@@ -25,6 +26,7 @@ import { useTranslations } from 'next-intl';
  */
 
 export interface PlantStatsProps {
+  viewCount: number;
   scanCount: number;
   saveCount: number;
   askCount: number;
@@ -69,6 +71,7 @@ function useRelativeTime(iso: string | null, locale: string): string | null {
 }
 
 export function PlantStats({
+  viewCount,
   scanCount,
   saveCount,
   askCount,
@@ -79,16 +82,21 @@ export function PlantStats({
   const fmt = new Intl.NumberFormat(numberLocale(locale));
   const adoptedRelative = useRelativeTime(lastAdoptedAt, locale);
 
-  const tiles: Array<{ icon: string; value: string; label: string; muted?: boolean }> = [
-    { icon: '👁', value: fmt.format(scanCount), label: t('statsVisits') },
+  // 5 tiles in a 2-col grid: the "Last adopted" relative-time string is
+  // usually longer than a number, so it spans both columns on the bottom
+  // row to absorb the asymmetry from an odd tile count.
+  const tiles: Array<{ icon: string; value: string; label: string; muted?: boolean; wide?: boolean }> = [
+    { icon: '👁', value: fmt.format(viewCount), label: t('statsVisits') },
     { icon: '♥', value: fmt.format(saveCount), label: t('statsSaved') },
+    { icon: '📱', value: fmt.format(scanCount), label: t('statsScans') },
+    { icon: '🤖', value: fmt.format(askCount), label: t('statsQuestions') },
     {
       icon: '🌱',
       value: adoptedRelative ?? t('statsLastAdoptedNever'),
       label: t('statsLastAdopted'),
       muted: !adoptedRelative,
+      wide: true,
     },
-    { icon: '🤖', value: fmt.format(askCount), label: t('statsQuestions') },
   ];
 
   return (
@@ -130,6 +138,7 @@ export function PlantStats({
               display: 'flex',
               flexDirection: 'column',
               justifyContent: 'space-between',
+              ...(tile.wide ? { gridColumn: '1 / -1' } : {}),
             }}
           >
             <div

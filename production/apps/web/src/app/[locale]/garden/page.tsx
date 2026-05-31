@@ -481,57 +481,6 @@ export default async function GardenPage({
             </div>
           </div>
 
-          {/* Impact breakdown */}
-          <div className="card card-pad">
-            <div className="eyebrow">
-              {locale === 'fi' ? 'Suojeluvaikutuksesi' : 'Your conservation impact'}
-            </div>
-            <div className="serif" style={{ fontSize: 36, marginTop: 12 }}>
-              €{(garden.impact.directExSitu / 100).toFixed(0)}
-            </div>
-            <div className="small muted">
-              {locale === 'fi'
-                ? 'suoraan ex-situ-työhön · 62%'
-                : 'to direct ex-situ work · 62 %'}
-            </div>
-            <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {(
-                [
-                  [
-                    locale === 'fi' ? 'Siemenpankki' : 'Seed bank deposits',
-                    garden.impact.seedBank,
-                    'var(--sage)',
-                  ],
-                  [
-                    locale === 'fi' ? 'Puutarhan toiminta' : 'Garden operations',
-                    garden.impact.gardenOperations,
-                    'var(--teal)',
-                  ],
-                  [
-                    locale === 'fi' ? 'Alustakulut' : 'Platform costs',
-                    garden.impact.platformCosts,
-                    'var(--ink-mute)',
-                  ],
-                ] as const
-              ).map(([label, cents, color]) => (
-                <div
-                  key={label}
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    fontSize: 12,
-                  }}
-                >
-                  <span className="muted">{label}</span>
-                  <span className="mono" style={{ color, fontWeight: 600 }}>
-                    €{(cents / 100).toFixed(0)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
           {/* Next milestone */}
           <div className="card card-pad" style={{ background: 'var(--sage-pale)' }}>
             <div className="eyebrow eyebrow--rust" style={{ color: 'var(--rust-on-light)' }}>

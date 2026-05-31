@@ -133,6 +133,16 @@ export class AdoptionsService {
 
     const plant = await this.prisma.plant.findUnique({ where: { slug: dto.plantSlug } });
     if (!plant) throw new NotFoundException(`Plant ${dto.plantSlug} not found`);
+    // Defence in depth — apps/web/src/lib/adoption.ts enforces the same
+    // rule in the UI (hides the Adopt CTA, blocks cart checkout) but a
+    // determined client could still POST directly. Extinct (IUCN code
+    // EX) species are not adoptable: there's nothing left in the wild
+    // to conserve.
+    if (plant.redListStatus === 'EX') {
+      throw new BadRequestException(
+        `Plant ${plant.slug} is classified Extinct (EX) and cannot be adopted`,
+      );
+    }
 
     const tier = await this.prisma.tier.findUnique({ where: { id: dto.tierId } });
     if (!tier) throw new NotFoundException(`Tier ${dto.tierId} not found`);
@@ -337,11 +347,20 @@ export class AdoptionsService {
     const slugs = Array.from(new Set(dto.items.map((i) => i.plantSlug)));
     const plants = await this.prisma.plant.findMany({
       where: { slug: { in: slugs } },
-      select: { id: true, slug: true, nameEn: true },
+      select: { id: true, slug: true, nameEn: true, redListStatus: true },
     });
     const bySlug = new Map(plants.map((p) => [p.slug, p]));
     for (const slug of slugs) {
       if (!bySlug.has(slug)) throw new NotFoundException(`Plant ${slug} not found`);
+    }
+    // Defence in depth — same eligibility rule as the single-create
+    // path above. We reject the *whole* bundle if any plant is Extinct
+    // so we never half-charge a donor for a partially-valid basket.
+    const extinct = plants.filter((p) => p.redListStatus === 'EX').map((p) => p.slug);
+    if (extinct.length > 0) {
+      throw new BadRequestException(
+        `Cannot adopt extinct (EX) species: ${extinct.join(', ')}`,
+      );
     }
 
     const tierIds = Array.from(new Set(dto.items.map((i) => i.tierId)));

@@ -91,6 +91,7 @@
     "statsTitle": "Community engagement",
     "statsVisits": "Visits",
     "statsSaved": "Saved",
+    "statsScans": "QR scans",
     "statsLastAdopted": "Last adopted",
     "statsLastAdoptedNever": "No adoptions yet",
     "statsQuestions": "Questions asked",
@@ -213,7 +214,6 @@
     "summaryOneOff": "One-off",
     "confirmPay": "Confirm · pay €{amount}{suffix}",
     "taxDisclosure": "Of €{total}, €{donation} is treated as a donation (no VAT); €{benefits} covers benefits (24% VAT applied). This gift may be tax-deductible for Finnish companies under TVL §57.",
-    "fundsFlowLink": "Read the funds-flow policy",
     "adoptingPlant": "You are adopting",
     "placeholderDonorName": "e.g. Mira Karjalainen",
     "placeholderDonorEmail": "you@example.fi",
@@ -345,8 +345,7 @@
     "privacy": "Privacy",
     "terms": "Terms",
     "accessibility": "Accessibility statement",
-    "contact": "Contact",
-    "fundsFlow": "Where your money goes"
+    "contact": "Contact"
   },
   "A11y": {
     "title": "Accessibility",

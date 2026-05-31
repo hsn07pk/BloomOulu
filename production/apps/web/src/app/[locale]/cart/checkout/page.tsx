@@ -64,7 +64,6 @@ const DEFAULT_ADOPT_SETTINGS: AdoptSettings = {
   plaqueEligibleTiers: [...DEFAULT_PLAQUE_ELIGIBLE_TIERS],
   dedicationMaxChars: 240,
   coAdopterMax: 10,
-  fundsFlowUrl: '/about#funds-flow',
   intervalsEnabled: [...DEFAULT_INTERVALS_ENABLED],
 };
 

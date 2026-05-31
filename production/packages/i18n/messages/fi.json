@@ -91,6 +91,7 @@
     "statsTitle": "Yhteisön kiinnostus",
     "statsVisits": "Käyntiä",
     "statsSaved": "Tallennettu",
+    "statsScans": "QR-skannaukset",
     "statsLastAdopted": "Adoptoitu viimeksi",
     "statsLastAdoptedNever": "Ei vielä adoptioita",
     "statsQuestions": "Kysymyksiä esitetty",
@@ -213,7 +214,6 @@
     "summaryOneOff": "Kertaluonteinen",
     "confirmPay": "Vahvista · maksa {amount} €{suffix}",
     "taxDisclosure": "{total} €:sta {donation} € käsitellään lahjoituksena (ei ALV); {benefits} € kattaa edut (24 % ALV). Tämä lahja voi olla verovähennyskelpoinen TVL §57 mukaan.",
-    "fundsFlowLink": "Lue rahojen kulkureitti",
     "adoptingPlant": "Adoptoit kasvin",
     "placeholderDonorName": "esim. Mira Karjalainen",
     "placeholderDonorEmail": "sinä@esimerkki.fi",
@@ -345,8 +345,7 @@
     "privacy": "Tietosuoja",
     "terms": "Käyttöehdot",
     "accessibility": "Saavutettavuusseloste",
-    "contact": "Yhteystiedot",
-    "fundsFlow": "Mihin rahasi käytetään"
+    "contact": "Yhteystiedot"
   },
   "A11y": {
     "title": "Saavutettavuus",

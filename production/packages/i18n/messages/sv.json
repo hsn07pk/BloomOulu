@@ -91,6 +91,7 @@
     "statsTitle": "Gemenskapens engagemang",
     "statsVisits": "Besök",
     "statsSaved": "Sparad",
+    "statsScans": "QR-skanningar",
     "statsLastAdopted": "Senast adopterad",
     "statsLastAdoptedNever": "Inga adoptioner än",
     "statsQuestions": "Frågor ställda",
@@ -213,7 +214,6 @@
     "summaryOneOff": "Engångs",
     "confirmPay": "Bekräfta · betala {amount} €{suffix}",
     "taxDisclosure": "Av {total} € behandlas {donation} € som donation (ingen moms); {benefits} € täcker förmåner (24 % moms tillämpas). Denna gåva kan vara avdragsgill enligt TVL §57.",
-    "fundsFlowLink": "Läs penningflödespolicyn",
     "adoptingPlant": "Du adopterar",
     "placeholderDonorName": "t.ex. Mira Karjalainen",
     "placeholderDonorEmail": "du@exempel.fi",
@@ -345,8 +345,7 @@
     "privacy": "Integritet",
     "terms": "Villkor",
     "accessibility": "Tillgänglighetsutlåtande",
-    "contact": "Kontakt",
-    "fundsFlow": "Vart pengarna går"
+    "contact": "Kontakt"
   },
   "A11y": {
     "title": "Tillgänglighet",

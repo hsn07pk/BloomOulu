@@ -87,8 +87,6 @@ export interface BloomOuluSettings {
     dedicationMaxChars: number;
     /** Max co-adopters per adoption. */
     coAdopterMax: number;
-    /** Link target shown next to the tax-disclosure box. */
-    fundsFlowUrl: string;
     /** Which billing intervals the donor sees. Production default is
      *  ['monthly', 'one_time']; an admin can enable 'annual' later
      *  without a deploy by editing SystemSetting `adoption.intervalsEnabled`. */
@@ -269,7 +267,6 @@ export function buildSettingsDefaults(): BloomOuluSettings {
       })(),
       dedicationMaxChars: envInt('ADOPTION_DEDICATION_MAX_CHARS', 240),
       coAdopterMax: envInt('ADOPTION_CO_ADOPTER_MAX', 10),
-      fundsFlowUrl: envStr('ADOPTION_FUNDS_FLOW_URL', '/about#funds-flow'),
       // Default offering: monthly + one_time. Annual is hidden until an
       // admin explicitly re-enables it in /admin → SystemSetting.
       intervalsEnabled: (() => {

@@ -200,8 +200,14 @@ model Plant {
   // Denormalised counter for plant-scan events. Authoritative source is
   // the PlantScan table; this counter is bumped per insert via the
   // PlantsService.recordScan path so the homepage and admin index can
-  // sort by popularity without scanning the event table.
+  // sort by popularity without scanning the event table. QR-only — for
+  // total page views (web + kiosk) see viewCount below.
   scanCount       Int           @default(0)
+
+  // Denormalised counter for plain plant-detail page views (web + kiosk).
+  // Bumped fire-and-forget from the client on every plant page mount via
+  // POST /v1/plants/:slug/view. No per-event table — keep it lightweight.
+  viewCount       Int           @default(0)
 
   // Denormalised counters for plant-detail engagement. Authoritative
   // sources stay in SavedPlant (saves) and AskAnswer (RAG retrievals

@@ -496,4 +496,28 @@ export class PlantsController {
     ]);
     return;
   }
+
+  /**
+   * Record a plain plant-detail page view (web or kiosk). Fired fire-and-
+   * forget from the client on every mount. Cheap by design: just bumps
+   * the denormalised Plant.viewCount counter — no per-view event table
+   * (storage would dwarf the analytical value).
+   *
+   * For QR-specific telemetry (kioskId, visitorHash dedupe, conservation
+   * funnel) use POST /:slug/scan instead.
+   */
+  @Post(':slug/view')
+  @HttpCode(204)
+  async recordView(@Param('slug') slug: string) {
+    const plant = await this.prisma.plant.findUnique({
+      where: { slug },
+      select: { id: true },
+    });
+    if (!plant) throw new NotFoundException();
+    await this.prisma.plant.update({
+      where: { id: plant.id },
+      data: { viewCount: { increment: 1 } },
+    });
+    return;
+  }
 }

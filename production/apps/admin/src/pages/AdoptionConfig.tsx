@@ -109,8 +109,8 @@ export const schema: ConfigSchema = {
       ],
     },
     {
-      title: 'Funds-flow disclosure',
-      description: 'Donor-facing copy on the cart page about where the money goes.',
+      title: 'Tax disclosure',
+      description: 'Donor-facing tax classification of donations vs. perks on the cart page.',
       fields: [
         {
           key: 'adoption.donationShareBp',
@@ -118,13 +118,6 @@ export const schema: ConfigSchema = {
           help: 'Of every €100, this percentage is treated as a pure donation in the tax-disclosure box. 7200 = 72%. The other 28% is perk value subject to VAT.',
           type: { kind: 'number', min: 0, max: 10000, suffix: 'bp (0–10000)' },
           default: 7200,
-        },
-        {
-          key: 'adoption.fundsFlowUrl',
-          label: 'Funds-flow detail page',
-          help: 'Link shown beside the disclosure box. Usually points to /about#funds-flow.',
-          type: { kind: 'string', maxLength: 240 },
-          default: '/about#funds-flow',
         },
       ],
     },

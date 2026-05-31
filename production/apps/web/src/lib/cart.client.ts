@@ -28,6 +28,12 @@ export interface CartState {
 }
 
 const STORAGE_KEY = 'bloomoulu.cart.v1';
+// Custom DOM event used to broadcast cart writes to every `useCart`
+// instance in the SAME tab. The browser's `storage` event only fires
+// in *other* tabs — without this, the Topbar's CartBadge (a separate
+// useCart consumer) would miss an "add to cart" click on the plant
+// page and not show up until the next full reload.
+const CHANGE_EVENT = 'bloomoulu:cart-changed';
 
 function emptyCart(): CartState {
   return { items: [], updatedAt: 0 };
@@ -50,6 +56,18 @@ function writeCart(c: CartState) {
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(c));
+    // Notify same-tab listeners. Cross-tab sync still happens via the
+    // browser's native `storage` event (see the useCart effect below).
+    //
+    // Deferred to the next microtask so other `useCart` consumers don't
+    // setState while React is still in the middle of the commit phase
+    // for the component that triggered the write (e.g. AdoptWizard's
+    // useEffect calling cartHook.add() — without this defer, React
+    // raises "Cannot update a component (CartBadge) while rendering a
+    // different component (AdoptWizard)").
+    queueMicrotask(() => {
+      window.dispatchEvent(new CustomEvent(CHANGE_EVENT));
+    });
   } catch {
     /* quota exceeded / private mode: ignore */
   }
@@ -66,11 +84,21 @@ export function useCart() {
   useEffect(() => {
     setCart(readCart());
     setHydrated(true);
+    // Cross-tab: native storage event. Same-tab: our custom event from
+    // writeCart(). Without the same-tab listener, multiple useCart()
+    // consumers in one page (e.g. plant page + Topbar badge) only
+    // re-render in the component that did the mutation — the others
+    // stay stale until the next page reload.
+    const refreshFromStorage = () => setCart(readCart());
     const onStorage = (e: StorageEvent) => {
-      if (e.key === STORAGE_KEY) setCart(readCart());
+      if (e.key === STORAGE_KEY) refreshFromStorage();
     };
     window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
+    window.addEventListener(CHANGE_EVENT, refreshFromStorage);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener(CHANGE_EVENT, refreshFromStorage);
+    };
   }, []);
 
   const add = useCallback((plantSlug: string, tierId: CartItem['tierId'] = 'seedling') => {

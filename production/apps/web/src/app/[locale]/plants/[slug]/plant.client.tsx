@@ -24,6 +24,7 @@ import {
   type TierId,
 } from '@bloomoulu/constants';
 import { useCart } from '../../../../lib/cart.client';
+import { isAdoptable, nonAdoptableReason } from '../../../../lib/adoption';
 import { PlantStats } from '../../../../components/PlantStats';
 
 /** Secondary "Add to cart" CTA so visitors can queue multiple plants
@@ -150,8 +151,9 @@ interface Plant {
   fundedCents?: number;
   targetCents?: number;
   // Engagement counters (denormalised on Plant) + on-demand aggregate
-  // for the "Last adopted N days ago" tile. All four feed the PlantStats
+  // for the "Last adopted N days ago" tile. All feed the PlantStats
   // card in the sticky right column.
+  viewCount?: number;
   scanCount?: number;
   saveCount?: number;
   askCount?: number;
@@ -292,12 +294,12 @@ export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled,
   const searchParams = useSearchParams();
   // QR entry detection: kiosk-style QR codes encode a URL with ?qr=1 (and
   // optionally &kiosk=<terminal-id>) so we can tell a browse visit from a
-  // physical-label scan and only show the "Scanned via QR" chip + record a
+  // physical-label scan, show the "Scanned via QR" chip, and record a
   // PlantScan event when the donor actually walked up to the plant.
   const arrivedViaQr = searchParams?.get('qr') === '1';
   const qrKioskId = searchParams?.get('kiosk') ?? null;
-  // Fire-and-forget scan ping. Useffect runs once per slug change; the
-  // backend's idempotency is loose by design (we want a count per visit).
+  // QR-scan ping — only fires for `?qr=1` arrivals. Writes a PlantScan
+  // row (with kioskId + visitorHash) and increments Plant.scanCount.
   const scanPingedRef = useRef(false);
   useEffect(() => {
     if (!arrivedViaQr || scanPingedRef.current) return;
@@ -312,6 +314,21 @@ export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled,
       /* analytics ping — never block the page on a failure */
     });
   }, [arrivedViaQr, plant.slug, locale, qrKioskId]);
+  // Page-view ping — fires on every plant page mount (web + kiosk).
+  // Bumps Plant.viewCount only; no per-event row stored. The scan ping
+  // above is the QR-specific subset with richer telemetry.
+  const viewPingedRef = useRef(false);
+  useEffect(() => {
+    if (viewPingedRef.current) return;
+    viewPingedRef.current = true;
+    const api = getBrowserApiUrl().replace(/\/$/, '');
+    void fetch(`${api}/v1/plants/${encodeURIComponent(plant.slug)}/view`, {
+      method: 'POST',
+      keepalive: true,
+    }).catch(() => {
+      /* analytics ping — never block the page on a failure */
+    });
+  }, [plant.slug]);
   const [mode, setMode] = useState<Mode>('adult');
   const [tab, setTab] = useState<Tab>('story');
   const hasCitations = (plant.citations?.length ?? 0) > 0;
@@ -1024,7 +1041,6 @@ export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled,
                   color: tab === id ? 'var(--ink)' : 'var(--ink-mute)',
                   fontWeight: tab === id ? 600 : 400,
                   fontSize: 14,
-                  borderBottom: tab === id ? '2px solid var(--forest)' : '2px solid transparent',
                   marginBottom: -1,
                   background: 'transparent',
                   border: 'none',
@@ -1168,6 +1184,7 @@ export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled,
               Sits above the adoption CTA card as social proof before the
               donation moment. See PlantStats.tsx + stats-roadmap.md. */}
           <PlantStats
+            viewCount={plant.viewCount ?? 0}
             scanCount={plant.scanCount ?? 0}
             saveCount={plant.saveCount ?? 0}
             askCount={plant.askCount ?? 0}
@@ -1386,76 +1403,112 @@ export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled,
                   + plant preselected. Intent (self / gift / memorial /
                   class) is chosen in the wizard's step 3 — the buttons
                   below are just shortcuts that pre-fill it. The cart is
-                  kept as a separate "queue several plants" workflow. */}
-              <Link
-                href={`/${locale}/adopt?plant=${plant.slug}&tier=${selectedTierId}&interval=${billingInterval}`}
-                className="btn btn-primary btn-block btn-lg"
-                style={{ marginTop: 16 }}
-              >
-                🌱{' '}
-                {locale === 'fi'
-                  ? 'Adoptoi tämä kasvi →'
-                  : locale === 'sv'
-                    ? 'Adoptera denna växt →'
-                    : 'Adopt this plant →'}
-              </Link>
-              <div className="tiny muted" style={{ marginTop: 14, textAlign: 'center' }}>
-                {locale === 'fi'
-                  ? 'Tai adoptoi:'
-                  : locale === 'sv'
-                    ? 'Eller adoptera som:'
-                    : 'Or adopt as:'}
-              </div>
-              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                <Link
-                  href={`/${locale}/adopt?plant=${plant.slug}&tier=${selectedTierId}&interval=${billingInterval}&intent=gift`}
-                  className="btn btn-ghost small"
-                  style={{ flex: 1, border: '1px solid var(--line)', textAlign: 'center' }}
-                >
-                  🎁{' '}
-                  {locale === 'fi' ? 'Lahja' : locale === 'sv' ? 'Gåva' : 'Gift'}
-                </Link>
-                <Link
-                  href={`/${locale}/adopt?plant=${plant.slug}&tier=${selectedTierId}&interval=${billingInterval}&intent=memorial`}
-                  className="btn btn-ghost small"
-                  style={{ flex: 1, border: '1px solid var(--line)', textAlign: 'center' }}
-                >
-                  💗{' '}
-                  {locale === 'fi' ? 'Muistolahja' : locale === 'sv' ? 'Minnesgåva' : 'Memorial'}
-                </Link>
-                <Link
-                  href={`/${locale}/adopt?plant=${plant.slug}&tier=${selectedTierId}&interval=${billingInterval}&intent=class`}
-                  className="btn btn-ghost small"
-                  style={{ flex: 1, border: '1px solid var(--line)', textAlign: 'center' }}
-                >
-                  🎓{' '}
-                  {locale === 'fi' ? 'Luokka' : locale === 'sv' ? 'Klass' : 'Class'}
-                </Link>
-              </div>
-              <AddToCartButton slug={plant.slug} tierId={selectedTierId} locale={locale} />
-            </div>
+                  kept as a separate "queue several plants" workflow.
 
-            <div
-              style={{
-                borderTop: '1px solid var(--line)',
-                padding: 20,
-                background: 'rgba(31,58,44,0.03)',
-              }}
-            >
-              <div className="tiny">
-                {locale === 'fi'
-                  ? 'Mihin rahasi käytetään'
-                  : locale === 'sv'
-                    ? 'Vart dina pengar går'
-                    : 'Where your money goes'}
-              </div>
-              <p className="small" style={{ marginTop: 8, color: 'var(--ink-2)' }}>
-                {locale === 'fi'
-                  ? 'Jokaisesta 100 €:sta: 62 € ex-situ-työ, 18 € Luomus-siemenpankki, 12 € puutarhan toiminta, 8 € alusta.'
-                  : locale === 'sv'
-                    ? 'Av varje 100 €: 62 € ex-situ-arbete, 18 € till Luomus-fröbank, 12 € trädgårdsdrift, 8 € plattform.'
-                    : 'Of every €100: €62 direct ex-situ work, €18 to Luomus seed bank, €12 garden operations, €8 platform.'}
-              </p>
+                  Extinct (EX) species replace the adopt CTAs entirely
+                  with a small explainer card. See lib/adoption.ts for
+                  the eligibility rule + the user-facing copy. The API
+                  enforces the same rule independently for defence in
+                  depth. */}
+              {isAdoptable(plant.redListStatus) ? (
+                <>
+                  <Link
+                    href={`/${locale}/adopt?plant=${plant.slug}&tier=${selectedTierId}&interval=${billingInterval}`}
+                    className="btn btn-primary btn-block btn-lg"
+                    style={{ marginTop: 16 }}
+                  >
+                    🌱{' '}
+                    {locale === 'fi'
+                      ? 'Adoptoi tämä kasvi →'
+                      : locale === 'sv'
+                        ? 'Adoptera denna växt →'
+                        : 'Adopt this plant →'}
+                  </Link>
+                  <div className="tiny muted" style={{ marginTop: 14, textAlign: 'center' }}>
+                    {locale === 'fi'
+                      ? 'Tai adoptoi:'
+                      : locale === 'sv'
+                        ? 'Eller adoptera som:'
+                        : 'Or adopt as:'}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                    <Link
+                      href={`/${locale}/adopt?plant=${plant.slug}&tier=${selectedTierId}&interval=${billingInterval}&intent=gift`}
+                      className="btn btn-ghost small"
+                      style={{ flex: 1, border: '1px solid var(--line)', textAlign: 'center' }}
+                    >
+                      🎁{' '}
+                      {locale === 'fi' ? 'Lahja' : locale === 'sv' ? 'Gåva' : 'Gift'}
+                    </Link>
+                    <Link
+                      href={`/${locale}/adopt?plant=${plant.slug}&tier=${selectedTierId}&interval=${billingInterval}&intent=memorial`}
+                      className="btn btn-ghost small"
+                      style={{ flex: 1, border: '1px solid var(--line)', textAlign: 'center' }}
+                    >
+                      💗{' '}
+                      {locale === 'fi' ? 'Muistolahja' : locale === 'sv' ? 'Minnesgåva' : 'Memorial'}
+                    </Link>
+                    <Link
+                      href={`/${locale}/adopt?plant=${plant.slug}&tier=${selectedTierId}&interval=${billingInterval}&intent=class`}
+                      className="btn btn-ghost small"
+                      style={{ flex: 1, border: '1px solid var(--line)', textAlign: 'center' }}
+                    >
+                      🎓{' '}
+                      {locale === 'fi' ? 'Luokka' : locale === 'sv' ? 'Klass' : 'Class'}
+                    </Link>
+                  </div>
+                  <AddToCartButton slug={plant.slug} tierId={selectedTierId} locale={locale} />
+                </>
+              ) : (
+                <div
+                  role="note"
+                  style={{
+                    marginTop: 16,
+                    padding: '14px 16px',
+                    background: 'rgba(31,58,44,0.05)',
+                    border: '1px solid var(--line)',
+                    borderRadius: 12,
+                  }}
+                >
+                  <div
+                    className="tiny"
+                    style={{
+                      color: 'var(--rust-on-light)',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.08em',
+                      marginBottom: 6,
+                    }}
+                  >
+                    {locale === 'fi'
+                      ? 'Ei adoptoitavissa'
+                      : locale === 'sv'
+                        ? 'Kan ej adopteras'
+                        : 'Not available for adoption'}
+                  </div>
+                  <p
+                    className="small"
+                    style={{ margin: 0, color: 'var(--ink-soft)', lineHeight: 1.5 }}
+                  >
+                    {nonAdoptableReason(plant.redListStatus, locale)}
+                  </p>
+                  <Link
+                    href={`/${locale}/plants?redList=CR`}
+                    className="btn btn-ghost small"
+                    style={{
+                      marginTop: 12,
+                      padding: '6px 12px',
+                      fontSize: 13,
+                      border: '1px solid var(--line)',
+                    }}
+                  >
+                    {locale === 'fi'
+                      ? 'Selaa uhanalaisia kasveja →'
+                      : locale === 'sv'
+                        ? 'Bläddra hotade arter →'
+                        : 'Browse threatened species →'}
+                  </Link>
+                </div>
+              )}
             </div>
           </div>
 

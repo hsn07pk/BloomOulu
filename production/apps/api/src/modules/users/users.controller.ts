@@ -105,23 +105,12 @@ export class UsersController {
             ? 100_000
             : 20_000;
 
-    // Impact breakdown — derived from the published funds-flow ratio in
-    // ContentBlock 'policy.funds-flow' (62 / 18 / 12 / 8). Tiny rounding
-    // drift is fine; finance-of-record is the Receipt table.
-    const impact = {
-      directExSitu: Math.round(lifetimeCents * 0.62),
-      seedBank: Math.round(lifetimeCents * 0.18),
-      gardenOperations: Math.round(lifetimeCents * 0.12),
-      platformCosts: Math.round(lifetimeCents * 0.08),
-    };
-
     return {
       ...user,
       lifetimeCents,
       paymentCount: succeededTotal._count.id ?? 0,
       loyalty,
       nextThresholdCents,
-      impact,
     };
   }
 }

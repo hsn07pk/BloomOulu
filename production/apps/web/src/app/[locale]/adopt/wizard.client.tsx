@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import {
@@ -16,6 +16,7 @@ import {
 } from '@bloomoulu/constants';
 import { adoptAction, adoptBundleAction } from './actions';
 import { useCart, type CartItem } from '../../../lib/cart.client';
+import { isAdoptable } from '../../../lib/adoption';
 
 // ─── Types ────────────────────────────────────────────────────────────────
 export type AdoptIntent = PublicIntent;
@@ -28,7 +29,6 @@ export interface AdoptSettings {
   plaqueEligibleTiers: Array<'seedling' | 'rooted' | 'vulnerable' | 'endangered' | 'corporate'>;
   dedicationMaxChars: number;
   coAdopterMax: number;
-  fundsFlowUrl: string;
   /** Whitelist of billing intervals donors see. Production default is
    *  ['monthly','one_time']; admin enables 'annual' in /admin →
    *  SystemSetting → adoption.intervalsEnabled. */
@@ -344,6 +344,21 @@ export function AdoptWizard({
   );
   const corporateTier = useMemo(() => tiers.find((tt) => tt.id === 'corporate') ?? null, [tiers]);
   const [tierId, setTierId] = useState<AdoptTier['id']>(presetTier);
+  // Step 1's tier picker is authoritative for the whole order: clicking
+  // a tier here updates both the local pick AND every cart item, so the
+  // "selectedTier" the rest of the wizard derives from `pickedItems[0]`
+  // stays in sync. Without this propagation, if the cart already had
+  // an item (e.g. the donor came in with a plant pre-picked), the
+  // "Continue with <tier>" button silently kept showing the cart's old
+  // tier and checkout would have charged the old amount. Per-item
+  // overrides remain available in step 2.
+  const handleTierIdChange = useCallback(
+    (newId: AdoptTier['id']) => {
+      setTierId(newId);
+      cartHook.cart.items.forEach((it) => cartHook.setTier(it.plantSlug, newId));
+    },
+    [cartHook],
+  );
   // Single source of truth: one of three billing intervals, matching
   // /cart/checkout exactly. `recurring` is derived for the api payload.
   // Admin-controlled allow-list. The first enabled interval is the
@@ -495,6 +510,38 @@ export function AdoptWizard({
     }
     return plants[0] ?? null;
   }, [plants, pickedItems, cartPlants]);
+
+  // Compact summary of every cart item (slug + display names + tier
+  // label + adoptability flag) — passed to Step 1 so the donor can see
+  // what's queued right next to the Continue button, and so we can
+  // disable Continue when any extinct species are in the cart.
+  const cartSummaryItems = useMemo(
+    () =>
+      pickedItems.map((it) => {
+        const plant = lookupPlant(it.plantSlug);
+        const tier = tiers.find((tt) => tt.id === it.tierId);
+        return {
+          plantSlug: it.plantSlug,
+          latin: plant?.taxon?.latinName ?? null,
+          common: plant
+            ? locale === 'fi'
+              ? plant.nameFi || plant.nameEn
+              : locale === 'sv'
+                ? plant.nameSv || plant.nameEn
+                : plant.nameEn
+            : it.plantSlug.replace(/-/g, ' '),
+          tierLabel: tier ? tierName(tier, locale) : it.tierId,
+          adoptable: plant ? isAdoptable(plant.redListStatus) : true,
+        };
+      }),
+    // lookupPlant captures `plants` + `cartPlants` so we depend on both.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pickedItems, plants, cartPlants, tiers, locale],
+  );
+  // Step 1 (and any later step that has a Continue button) is blocked
+  // while any extinct species sit in the cart. The API would reject
+  // anyway, but failing fast in the UI is the friendlier path.
+  const hasExtinctInCart = cartSummaryItems.some((it) => !it.adoptable);
 
   const priceForTier = (id: AdoptTier['id']): number => {
     const tier = tiers.find((tt) => tt.id === id);
@@ -772,7 +819,7 @@ export function AdoptWizard({
             tiers={orderedTiers}
             corporate={corporateTier}
             tierId={tierId}
-            setTierId={setTierId}
+            setTierId={handleTierIdChange}
             recurring={recurring}
             setRecurring={setRecurring}
             billingInterval={billingInterval}
@@ -781,6 +828,8 @@ export function AdoptWizard({
             selectedTier={selectedTier}
             totalCents={totalCents}
             baseCents={baseCents}
+            cartSummaryItems={cartSummaryItems}
+            hasExtinctInCart={hasExtinctInCart}
             onNext={goNext}
           />
         )}
@@ -908,6 +957,19 @@ interface Step1Props {
   selectedTier: AdoptTier;
   totalCents: number;
   baseCents: number;
+  /** Compact view of every cart item, rendered as a "Your cart" chip
+   *  next to the Continue button so the donor sees what they're about
+   *  to checkout with. Empty array → chip hides. The `adoptable` flag
+   *  drives the per-item warning + disables Continue when any item is
+   *  unadoptable (e.g. EX species). */
+  cartSummaryItems: Array<{
+    plantSlug: string;
+    latin: string | null;
+    common: string;
+    tierLabel: string;
+    adoptable: boolean;
+  }>;
+  hasExtinctInCart: boolean;
   onNext: () => void;
 }
 
@@ -923,6 +985,8 @@ function Step1ChooseTier({
   enabledIntervals,
   selectedTier,
   totalCents,
+  cartSummaryItems,
+  hasExtinctInCart,
   onNext,
 }: Step1Props) {
   const t = useTranslations('Adopt');
@@ -1148,14 +1212,139 @@ function Step1ChooseTier({
         <span>{t('localPerks')}</span>
       </div>
 
+      {/* Compact "Your cart" summary — only shows when the donor has
+          items queued (e.g. they came in from a plant page, or built
+          a multi-plant cart on /plants). Sits inline with the Continue
+          button so they see what they're about to proceed with. */}
+      {cartSummaryItems.length > 0 && (
+        <div
+          style={{
+            marginTop: 24,
+            padding: '14px 18px',
+            background: 'var(--cream-deep, rgba(31,58,44,0.04))',
+            borderRadius: 12,
+            border: '1px solid var(--line, rgba(31,58,44,0.08))',
+          }}
+          aria-label={
+            locale === 'fi' ? 'Korin sisältö' : locale === 'sv' ? 'Korgens innehåll' : 'Cart contents'
+          }
+        >
+          <div
+            className="tiny"
+            style={{
+              color: 'var(--ink-mute, #5A6E63)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.08em',
+              marginBottom: 8,
+            }}
+          >
+            {locale === 'fi' ? 'Korissasi' : locale === 'sv' ? 'I din korg' : 'In your cart'} ·{' '}
+            {cartSummaryItems.length}{' '}
+            {cartSummaryItems.length === 1
+              ? locale === 'fi'
+                ? 'kasvi'
+                : locale === 'sv'
+                  ? 'växt'
+                  : 'plant'
+              : locale === 'fi'
+                ? 'kasvia'
+                : locale === 'sv'
+                  ? 'växter'
+                  : 'plants'}
+          </div>
+          <ul
+            style={{
+              listStyle: 'none',
+              margin: 0,
+              padding: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 4,
+            }}
+          >
+            {cartSummaryItems.slice(0, 3).map((item) => (
+              <li
+                key={item.plantSlug}
+                style={{
+                  display: 'flex',
+                  alignItems: 'baseline',
+                  gap: 8,
+                  fontSize: 14,
+                  color: item.adoptable
+                    ? 'var(--ink, #1F3C2D)'
+                    : 'var(--rust-on-light)',
+                }}
+              >
+                <span aria-hidden="true">{item.adoptable ? '🌿' : '⚠'}</span>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  {item.latin ? (
+                    <em style={{ fontStyle: 'italic' }}>{item.latin}</em>
+                  ) : (
+                    item.common
+                  )}
+                  <span
+                    className="tiny"
+                    style={{ color: 'var(--ink-mute, #5A6E63)', marginLeft: 8 }}
+                  >
+                    {item.adoptable
+                      ? item.tierLabel
+                      : locale === 'fi'
+                        ? 'hävinnyt — ei adoptoitavissa'
+                        : locale === 'sv'
+                          ? 'utdöd — kan ej adopteras'
+                          : 'extinct — not adoptable'}
+                  </span>
+                </span>
+              </li>
+            ))}
+            {cartSummaryItems.length > 3 && (
+              <li
+                className="tiny"
+                style={{
+                  color: 'var(--ink-mute, #5A6E63)',
+                  marginTop: 4,
+                  paddingLeft: 22,
+                }}
+              >
+                {locale === 'fi'
+                  ? `ja vielä ${cartSummaryItems.length - 3}`
+                  : locale === 'sv'
+                    ? `och ${cartSummaryItems.length - 3} till`
+                    : `and ${cartSummaryItems.length - 3} more`}
+              </li>
+            )}
+          </ul>
+        </div>
+      )}
+
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 32 }}>
-        <button type="button" className="btn btn-primary btn-lg" onClick={onNext}>
-          {t('continueWithTier', {
-            tier: tierName(selectedTier, locale),
-            amount: euros(totalCents, locale),
-            suffix: '',
-          })}{' '}
-          →
+        <button
+          type="button"
+          className="btn btn-primary btn-lg"
+          onClick={onNext}
+          disabled={hasExtinctInCart}
+          aria-label={
+            hasExtinctInCart
+              ? locale === 'fi'
+                ? 'Poista hävinneet lajit korista jatkaaksesi'
+                : locale === 'sv'
+                  ? 'Ta bort utdöda arter ur korgen för att fortsätta'
+                  : 'Remove extinct species from cart to continue'
+              : undefined
+          }
+          style={hasExtinctInCart ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
+        >
+          {hasExtinctInCart
+            ? locale === 'fi'
+              ? 'Poista hävinneet lajit jatkaaksesi'
+              : locale === 'sv'
+                ? 'Ta bort utdöda arter för att fortsätta'
+                : 'Remove extinct species to continue'
+            : `${t('continueWithTier', {
+                tier: tierName(selectedTier, locale),
+                amount: euros(totalCents, locale),
+                suffix: '',
+              })} →`}
         </button>
       </div>
     </section>
@@ -2372,14 +2561,7 @@ function Step4Pay({
               total: euros(totalCents, locale),
               donation: euros(donationShare, locale),
               benefits: euros(benefitsShare, locale),
-            })}{' '}
-            <a
-              href={`/${locale}${adopt.fundsFlowUrl.startsWith('/') ? adopt.fundsFlowUrl : `/${adopt.fundsFlowUrl}`}`}
-              style={{ color: 'var(--forest)' }}
-            >
-              {t('fundsFlowLink')}
-            </a>
-            .
+            })}
           </div>
 
           {errorMessage && (

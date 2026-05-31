@@ -5,7 +5,6 @@
  * Includes:
  *   - Garden masthead + period
  *   - Hero: total funded this quarter in copper
- *   - Conservation impact breakdown (62/18/12/8 % of funds-flow policy)
  *   - Tier + adopted plant name
  *   - Plain-English copy for the CSR / sustainability report
  */
@@ -64,11 +63,6 @@ const L = {
     title: 'Conservation impact',
     fundedTitle: 'Total funded this quarter',
     fundedCaption: 'across {n} payment(s) from your corporate adoption',
-    breakdown: 'Where your contribution went',
-    directExSitu: 'Direct ex-situ conservation',
-    seedBank: 'Seed-bank deposits',
-    operations: 'Garden operations',
-    platform: 'Platform infrastructure',
     plantLine: 'Your adopted plant',
     note:
       'This document satisfies the CSR-reporting requirements set out in the EU CSRD ' +
@@ -81,11 +75,6 @@ const L = {
     title: 'Suojeluvaikutus',
     fundedTitle: 'Rahoitettu yhteensä tällä neljänneksellä',
     fundedCaption: '{n} maksun kautta yrityksenne adoptiosta',
-    breakdown: 'Mihin tukenne kohdistui',
-    directExSitu: 'Suora ex-situ -suojelu',
-    seedBank: 'Siemenpankki',
-    operations: 'Puutarhan toiminta',
-    platform: 'Alustan ylläpito',
     plantLine: 'Adoptoimanne kasvi',
     note:
       'Tämä asiakirja täyttää EU:n CSRD-direktiivin mukaiset CSR-raportointivaatimukset. ' +
@@ -97,11 +86,6 @@ const L = {
     title: 'Bevarandeeffekt',
     fundedTitle: 'Finansierat totalt detta kvartal',
     fundedCaption: 'via {n} betalningar från ert företagsadoption',
-    breakdown: 'Vart ert bidrag gick',
-    directExSitu: 'Direkt ex-situ-bevarande',
-    seedBank: 'Fröbank',
-    operations: 'Trädgårdens drift',
-    platform: 'Plattformsinfrastruktur',
     plantLine: 'Er adopterade växt',
     note:
       'Detta dokument uppfyller CSR-rapporteringskraven i EU:s CSRD-direktiv. ' +
@@ -120,12 +104,6 @@ function money(cents: number, locale: string): string {
 
 const Report: React.FC<{ input: CsrQuarterlyPdfInput }> = ({ input }) => {
   const l = L[input.locale] ?? L.en;
-  const labels: Array<[string, number]> = [
-    [l.directExSitu, 62],
-    [l.seedBank, 18],
-    [l.operations, 12],
-    [l.platform, 8],
-  ];
   const fmt = (d: Date): string =>
     d.toLocaleDateString(input.locale === 'en' ? 'en-GB' : `${input.locale}-FI`, {
       day: 'numeric',
@@ -162,29 +140,6 @@ const Report: React.FC<{ input: CsrQuarterlyPdfInput }> = ({ input }) => {
         Text,
         { style: styles.totalCaption },
         l.fundedCaption.replace('{n}', String(input.paymentCount)),
-      ),
-      React.createElement(
-        View,
-        { style: styles.card },
-        React.createElement(Text, { style: styles.cardTitle }, l.breakdown),
-        ...labels.map(([label, pct], i) => {
-          const portion = Math.round((input.fundedCents * pct) / 100);
-          return React.createElement(
-            View,
-            { key: `r${i}`, style: { marginBottom: 10 } },
-            React.createElement(
-              View,
-              { style: styles.row },
-              React.createElement(Text, { style: { fontSize: 10 } }, `${label} · ${pct} %`),
-              React.createElement(Text, { style: { fontSize: 10, fontFamily: 'Helvetica-Bold' } }, money(portion, input.locale)),
-            ),
-            React.createElement(
-              View,
-              { style: styles.bar },
-              React.createElement(View, { style: { ...styles.barFill, width: `${pct}%` } }),
-            ),
-          );
-        }),
       ),
       React.createElement(
         View,
