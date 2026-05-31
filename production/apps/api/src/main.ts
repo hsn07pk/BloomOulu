@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-floating-promises */
 import './env.js'; // <- must be FIRST; loads .env into process.env before module init
-import { getWebUrl } from '@bloomoulu/constants';
+import { getWebUrl, getKioskUrl, getAdminUrl } from '@bloomoulu/constants';
 import './telemetry.js'; // <- second; sets up OTEL before any other import
 
 import { NestFactory } from '@nestjs/core';
@@ -52,8 +52,11 @@ async function bootstrap() {
     }),
   );
 
+  // Allow all first-party app origins. In dev these resolve to
+  // localhost:3000 / :3100 / :4100; in prod each app's
+  // NEXT_PUBLIC_*_URL is set to the public domain.
   app.enableCors({
-    origin: [getWebUrl()],
+    origin: [getWebUrl(), getKioskUrl(), getAdminUrl()],
     credentials: true,
   });
 

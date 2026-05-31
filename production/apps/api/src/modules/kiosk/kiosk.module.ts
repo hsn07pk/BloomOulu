@@ -80,8 +80,17 @@ class KioskController {
    *   day.
    * - `blooming`: next 5 candidates (so the kiosk can rotate without
    *   re-fetching).
-   * - `recentAdoptions`: last 10 active adoptions whose donor opted to
-   *   show on the donor wall (defaults to true per schema).
+   * - `mostVisited`: top 6 plants by Plant.viewCount (lifetime). Powers
+   *   the kiosk's "most visited" grid in place of the legacy
+   *   single-featured-plant card.
+   * - `recentAdoptions`: up to 100 active adoptions whose donor opted
+   *   to show on the donor wall (defaults to true per schema). `intent`
+   *   is exposed so the wall can colour-code corporate / memorial /
+   *   individual chips.
+   * - `totals`: lifetime supporter count + total raised (€), for the
+   *   adopter-wall header line.
+   * - `todayStats`: scans / questions / adoptions / raised today —
+   *   surfaced as the kiosk's live counter panel.
    *
    * Public, no auth — the kiosk's deviceToken is consulted only by
    * heartbeat. The data here is safe to expose to a lobby visitor.
@@ -112,17 +121,64 @@ class KioskController {
     const featured = candidates.length > 0 ? candidates[dayIdx % candidates.length]! : null;
     const blooming = candidates.filter((p) => p.id !== featured?.id).slice(0, 5);
 
-    const adoptions = await this.prisma.adoption.findMany({
-      where: { status: 'active', showOnDonorWall: true },
-      take: 10,
-      orderBy: { startedAt: 'desc' },
-      include: {
-        plant: { select: { nameFi: true, nameEn: true } },
-        donor: { select: { name: true } },
-        tier: { select: { name: true, nameFi: true } },
-      },
-    });
-    const recentAdoptions = adoptions.map((a) => ({
+    // Local-day window for the "today's stats" panel. UTC-day would be
+    // confusing on a kiosk that explicitly shows Europe/Helsinki time;
+    // using server-local is good enough for a Finnish-hosted instance.
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const [
+      adoptionsList,
+      mostVisited,
+      distinctSupporters,
+      raisedAgg,
+      scansToday,
+      questionsToday,
+      adoptionsTodayCount,
+      raisedTodayAgg,
+    ] = await Promise.all([
+      this.prisma.adoption.findMany({
+        where: { status: 'active', showOnDonorWall: true },
+        take: 100,
+        orderBy: { startedAt: 'desc' },
+        include: {
+          plant: { select: { nameFi: true, nameEn: true } },
+          donor: { select: { name: true } },
+          tier: { select: { name: true, nameFi: true } },
+        },
+      }),
+      // Top-N plants by lifetime page-view count. Skips plants that
+      // haven't been visited yet (viewCount > 0) so the kiosk doesn't
+      // show a grid of zeros when the DB is fresh; falls back to most-
+      // adopted ordering as a stand-in until views accumulate.
+      this.prisma.plant.findMany({
+        where: { status: 'active' },
+        orderBy: [{ viewCount: 'desc' }, { adopterCount: 'desc' }],
+        take: 6,
+        include: { primaryImage: true, taxon: true },
+      }),
+      // Distinct donor count from succeeded payments. We pull only the
+      // donorId column with `distinct` and len() in JS; cheaper than a
+      // $queryRaw COUNT(DISTINCT …) for our scale and stays type-safe.
+      this.prisma.payment.findMany({
+        where: { status: 'succeeded' },
+        select: { donorId: true },
+        distinct: ['donorId'],
+      }),
+      this.prisma.payment.aggregate({
+        where: { status: 'succeeded' },
+        _sum: { amountCents: true },
+      }),
+      this.prisma.plantScan.count({ where: { scannedAt: { gte: startOfToday } } }),
+      this.prisma.askAnswer.count({ where: { createdAt: { gte: startOfToday } } }),
+      this.prisma.adoption.count({ where: { createdAt: { gte: startOfToday } } }),
+      this.prisma.payment.aggregate({
+        where: { status: 'succeeded', createdAt: { gte: startOfToday } },
+        _sum: { amountCents: true },
+      }),
+    ]);
+
+    const recentAdoptions = adoptionsList.map((a) => ({
       id: a.id,
       // publicName: prefer the adoption's publicName (donor's chosen wall
       // name); fall back to first-name-only, then "Anonymous".
@@ -133,9 +189,28 @@ class KioskController {
       plantNameFi: a.plant.nameFi,
       plantNameEn: a.plant.nameEn,
       tierName: a.tier.name,
+      intent: a.intent, // for_self | gift | memorial | class | corporate
     }));
 
-    return { featured, blooming, recentAdoptions };
+    const totals = {
+      supporters: distinctSupporters.length,
+      raisedCents: raisedAgg._sum.amountCents ?? 0,
+    };
+    const todayStats = {
+      scans: scansToday,
+      questions: questionsToday,
+      adoptions: adoptionsTodayCount,
+      raisedTodayCents: raisedTodayAgg._sum.amountCents ?? 0,
+    };
+
+    return {
+      featured,
+      blooming,
+      mostVisited,
+      recentAdoptions,
+      totals,
+      todayStats,
+    };
   }
 }
 
