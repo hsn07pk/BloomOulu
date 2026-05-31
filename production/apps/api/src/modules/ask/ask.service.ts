@@ -389,7 +389,13 @@ export class AskService {
     // 0.70). For EN queries this collapses to the original.
     const rerankQuery =
       translatedQuery && translatedQuery.length > 3 ? translatedQuery : queryForEmbedding;
-    const reranked = combined.length > 0 ? await this.rerank(rerankQuery, combined) : [];
+    // Rerank only the top-N hybrid-retrieval candidates: the bge-reranker is a
+    // CPU cross-encoder (~0.33s/doc), so reranking all 12 cost ~4s. The RRF
+    // fusion already surfaces the best candidates, so capping the rerank set
+    // keeps the final top-5 essentially unchanged while cutting latency. Env-tunable.
+    const rerankN = Number(process.env.ASK_RERANK_TOPN ?? 6);
+    const reranked =
+      combined.length > 0 ? await this.rerank(rerankQuery, combined.slice(0, rerankN)) : [];
 
     // 6. Score floor + web-search augmentation.
     //    Two thresholds:
@@ -401,7 +407,11 @@ export class AskService {
     //    Above 0.25, corpus alone is strong enough; skip the web call.
     const thresholdBp = this.settings.get().ask.confidenceThresholdBp;
     const hardFloor = thresholdBp / 10_000;
-    const augmentBand = 0.25;
+    // Only do the (blocking, ~15-20s) Wikipedia web-fallback when the corpus
+    // match is genuinely weak — not merely mediocre. A high band (0.25) fired
+    // it for most queries and dominated latency; 0.05 keeps it for true misses
+    // while letting decent corpus matches answer fast. Override via env.
+    const augmentBand = Number(process.env.ASK_AUGMENT_BAND ?? 0.05);
     const top = reranked[0];
     let webResults: WebResult[] = [];
     if (!top || top.score < augmentBand) {
