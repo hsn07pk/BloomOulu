@@ -1,0 +1,88 @@
+#cloud-config
+# ════════════════════════════════════════════════════════════════════════════
+# BloomOulu — CSC cPouta first-boot provisioning (cloud-init user-data).
+#
+# Paste this into the "Customization Script / user_data" box when you launch the
+# instance in https://pouta.csc.fi (Compute → Instances → Launch → Configuration).
+#
+# At first boot it (as root, unattended):
+#   • installs Docker Engine + the compose plugin
+#   • clones the BloomOulu repo to /opt/bloomoulu
+#   • installs a `bloomoulu-deploy` helper on PATH
+#
+# It deliberately does NOT deploy yet: the public hostname depends on the
+# floating IP, which you associate AFTER the VM boots. Once the floating IP is
+# attached, SSH in and run ONE command — the helper auto-detects the IP:
+#
+#   sudo bloomoulu-deploy
+#
+# (or pin a host explicitly:  sudo bloomoulu-deploy bloom.example.fi)
+#
+# ── EDIT THESE TWO if you forked or the deploy artifacts live on a branch ───
+#   The deploy files (docker-compose.csc.yml, Caddyfile.csc, .env.csc.example,
+#   scripts/deploy-cpouta.sh) must exist on REPO_BRANCH of REPO_URL.
+# ════════════════════════════════════════════════════════════════════════════
+
+package_update: true
+package_upgrade: false
+packages:
+  - git
+  - curl
+  - ca-certificates
+
+write_files:
+  # Config for the helper — change repo/branch here if needed.
+  - path: /etc/bloomoulu.env
+    permissions: "0644"
+    content: |
+      REPO_URL=https://github.com/hsn07pk/BloomOulu.git
+      REPO_BRANCH=feat/stable-ngrok-tunnel
+      CLONE_DIR=/opt/bloomoulu
+
+  # `bloomoulu-deploy [PUBLIC_HOST]` — auto-detects the floating IP via sslip.io
+  # when no host is given, then hands off to the real deploy script.
+  - path: /usr/local/bin/bloomoulu-deploy
+    permissions: "0755"
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      . /etc/bloomoulu.env
+      host="${1:-}"
+      if [ -z "$host" ]; then
+        ip="$(curl -fsS https://api.ipify.org || curl -fsS https://ifconfig.me || true)"
+        [ -n "$ip" ] || { echo "Could not auto-detect the public IP. Pass it: bloomoulu-deploy <ip-or-host>" >&2; exit 1; }
+        host="${ip//./-}.sslip.io"
+        echo "Auto-detected public IP $ip → PUBLIC_HOST=$host"
+      fi
+      cd "$CLONE_DIR" && git pull --ff-only origin "$REPO_BRANCH" || true
+      exec "$CLONE_DIR/production/scripts/deploy-cpouta.sh" "$host"
+
+  # Shown at SSH login until the deploy has run.
+  - path: /etc/motd
+    permissions: "0644"
+    content: |
+
+      ┌──────────────────────────────────────────────────────────────┐
+      │  BloomOulu cPouta VM — provisioning done.                      │
+      │                                                                │
+      │  1. Make sure a floating IP is associated to this instance     │
+      │     and the security group opens TCP 22, 80, 443.              │
+      │  2. Deploy (auto-detects the floating IP):                     │
+      │                                                                │
+      │         sudo bloomoulu-deploy                                  │
+      │                                                                │
+      │  The admin password prints ONCE at the end — save it.          │
+      └──────────────────────────────────────────────────────────────┘
+
+runcmd:
+  # ── Docker Engine + compose plugin ────────────────────────────────────────
+  - [ sh, -c, "command -v docker >/dev/null 2>&1 || curl -fsSL https://get.docker.com | sh" ]
+  - [ systemctl, enable, --now, docker ]
+  # Let the default login user (ubuntu on the CSC Ubuntu image) use docker.
+  - [ sh, -c, "id ubuntu >/dev/null 2>&1 && usermod -aG docker ubuntu || true" ]
+  # ── Clone the repo ────────────────────────────────────────────────────────
+  - [ sh, -c, ". /etc/bloomoulu.env; [ -d \"$CLONE_DIR/.git\" ] || git clone --branch \"$REPO_BRANCH\" --depth 1 \"$REPO_URL\" \"$CLONE_DIR\"" ]
+  - [ sh, -c, ". /etc/bloomoulu.env; chmod +x \"$CLONE_DIR/production/scripts/deploy-cpouta.sh\" 2>/dev/null || true" ]
+  - [ sh, -c, "echo 'BloomOulu provisioning finished. Run: sudo bloomoulu-deploy' | tee /var/log/bloomoulu-cloud-init.done" ]
+
+final_message: "BloomOulu base image ready after $UPTIME s. SSH in and run: sudo bloomoulu-deploy"

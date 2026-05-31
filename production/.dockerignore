@@ -19,11 +19,12 @@
 .idea
 .DS_Store
 
-# Local-only files
-.env.local
-.env.development
-.env.development.local
-.env.production.local
+# Local-only files — never bake env/secrets into images. Runtime env comes
+# from docker-compose, which injects every value the api/web need at run time.
+.env
+.env.*
+!.env.example
+!.env.csc.example
 
 # Caddy state, MinIO data, etc. (only if accidentally copied)
 infra/caddy/data

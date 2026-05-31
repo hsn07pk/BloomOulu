@@ -1,0 +1,107 @@
+# ──────────────────────────────────────────────────────────────────────────
+# BloomOulu — CSC cPouta deployment overlay.
+#
+# Layers on top of docker-compose.yml for a single cPouta VM:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.csc.yml up -d --build
+#
+# (the deploy-cpouta.sh script wires the -f flags + .env for you).
+#
+# What this overlay changes vs the local-dev base:
+#   • Adds an `ollama` container — dev runs Ollama on the macOS host for Metal
+#     GPU, which doesn't exist on a headless Linux VM. api/worker/admin are
+#     repointed from host.docker.internal → the ollama service.
+#   • Swaps Caddy onto the public 80/443 with the host-driven Caddyfile.csc
+#     (automatic HTTPS), instead of the HTTP-only localhost Caddyfile.
+#   • admin runs as NODE_ENV=production (Secure cookie) — valid because every
+#     public origin is HTTPS through Caddy.
+#   • The LGTM observability stack is moved behind the `observability` compose
+#     profile so a lean demo VM doesn't pay for it. Re-enable with
+#     COMPOSE_PROFILES=observability.
+#
+# Payments are untouched: PAYTRAIL_MOCK stays true (test cards only).
+# Host port exposure is locked to 127.0.0.1 via the *_PORT vars in .env
+# (see .env.csc.example) so only Caddy is reachable on the floating IP.
+# ──────────────────────────────────────────────────────────────────────────
+
+services:
+  # ── Local LLM (replaces the macOS host Ollama) ──────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    environment:
+      OLLAMA_KEEP_ALIVE: "24h"
+    volumes:
+      - ollama_data:/root/.ollama
+    # Bound to loopback only; nothing outside the compose network needs it.
+    ports:
+      - "127.0.0.1:11434:11434"
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks: [internal]
+    # ── GPU (optional) ───────────────────────────────────────────────────
+    # cPouta P100 flavors: install nvidia-container-toolkit on the VM, then
+    # uncomment to give Ollama the GPU. CPU works for gemma3:4b otherwise.
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  # ── App services: repoint Ollama at the in-cluster container ────────────
+  api:
+    environment:
+      OLLAMA_URL: http://ollama:11434
+      OLLAMA_BASE_URL: http://ollama:11434
+
+  api-worker:
+    environment:
+      OLLAMA_URL: http://ollama:11434
+      OLLAMA_BASE_URL: http://ollama:11434
+
+  admin:
+    # Behind Caddy every origin is HTTPS, so the Secure session cookie is safe.
+    environment:
+      NODE_ENV: production
+      OLLAMA_URL: http://ollama:11434
+      OLLAMA_BASE_URL: http://ollama:11434
+
+  # ── Public reverse proxy with automatic HTTPS ───────────────────────────
+  caddy:
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST:?set PUBLIC_HOST in .env (e.g. 10-1-2-3.sslip.io or your domain)}
+      CADDY_ACME_EMAIL: ${CADDY_ACME_EMAIL:-}
+      # tls internal = self-signed (always works, no rate limits). Set to an
+      # empty string to switch to automatic Let's Encrypt for a real,
+      # publicly-resolvable PUBLIC_HOST (also set CADDY_ACME_EMAIL).
+      CADDY_TLS: ${CADDY_TLS:-tls internal}
+    # Base maps ${CADDY_HTTP_PORT:-8080}:80; set CADDY_HTTP_PORT=80 in .env so
+    # that becomes 80:80, then add 443 here (compose appends port mappings).
+    ports:
+      - "443:443"
+    volumes:
+      # Same target path as the base mount → this replaces Caddyfile.localhost.
+      - ./infra/caddy/Caddyfile.csc:/etc/caddy/Caddyfile:ro
+
+  # ── Observability: opt-in only (keeps a demo VM lean) ───────────────────
+  prometheus:
+    profiles: ["observability"]
+  alertmanager:
+    profiles: ["observability"]
+  grafana:
+    profiles: ["observability"]
+  loki:
+    profiles: ["observability"]
+  promtail:
+    profiles: ["observability"]
+  tempo:
+    profiles: ["observability"]
+
+volumes:
+  ollama_data: {}
