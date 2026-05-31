@@ -207,6 +207,10 @@ export default async function DonorsPage({
                       fontSize: 14,
                       color: 'var(--moss)',
                       textDecoration: 'none',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      minHeight: 32,
+                      padding: '4px 0',
                     }}
                   >
                     {localisedPlantName(a.plant)}

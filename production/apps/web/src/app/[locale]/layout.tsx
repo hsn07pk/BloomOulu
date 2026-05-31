@@ -91,6 +91,7 @@ export default async function RootLayout({
           <Topbar locale={locale} />
           <main id="main">{children}</main>
           <footer
+            className="site-footer"
             style={{
               borderTop: '1px solid var(--line)',
               marginTop: 64,
@@ -112,10 +113,10 @@ export default async function RootLayout({
               }}
             >
               <span>© {new Date().getFullYear()} Oulun yliopiston kasvitieteellinen puutarha</span>
-              <nav aria-label="legal" style={{ display: 'flex', gap: 16 }}>
-                <a href={`/${locale}/privacy`}>{tFooter('privacy')}</a>
-                <a href={`/${locale}/terms`}>{tFooter('terms')}</a>
-                <a href={`/${locale}/accessibility-statement`}>{tFooter('accessibility')}</a>
+              <nav aria-label="legal" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <a href={`/${locale}/privacy`} className="site-footer__link">{tFooter('privacy')}</a>
+                <a href={`/${locale}/terms`} className="site-footer__link">{tFooter('terms')}</a>
+                <a href={`/${locale}/accessibility-statement`} className="site-footer__link">{tFooter('accessibility')}</a>
               </nav>
             </div>
           </footer>

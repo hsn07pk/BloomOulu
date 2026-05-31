@@ -279,8 +279,8 @@ export function PlantIndex({
             {t('indexDesc')}
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          <div style={{ position: 'relative' }}>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', width: '100%', maxWidth: 320 }}>
+          <div style={{ position: 'relative', width: '100%' }}>
             <label htmlFor="plant-search" className="sr-only">
               {t('searchAria')}
             </label>
@@ -296,11 +296,12 @@ export function PlantIndex({
                 borderRadius: 999,
                 border: '1px solid var(--line)',
                 background: 'var(--paper)',
-                width: 320,
-                maxWidth: '100%',
+                width: '100%',
+                maxWidth: 320,
                 fontSize: 14,
                 color: 'var(--ink)',
                 outline: 'none',
+                boxSizing: 'border-box',
               }}
             />
             <span

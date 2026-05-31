@@ -161,7 +161,7 @@ a { color: var(--forest); text-underline-offset: 3px; }
 /* Topbar (shared chrome) */
 .topbar { position: sticky; top: 0; z-index: 50; background: rgba(250, 247, 238, 0.88); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-bottom: 1px solid var(--line); }
 .topbar-inner { max-width: 1320px; margin: 0 auto; padding: 14px 32px; display: flex; align-items: center; gap: 24px; }
-.brand { display: flex; align-items: center; gap: 12px; font-family: var(--f-display); font-size: 1.467rem; font-weight: 500; letter-spacing: -0.015em; color: var(--forest-deep); cursor: pointer; font-variation-settings: 'opsz' 36, 'SOFT' 20; text-decoration: none; }
+.brand { display: flex; align-items: center; gap: 12px; min-height: 36px; padding: 2px 0; font-family: var(--f-display); font-size: 1.467rem; font-weight: 500; letter-spacing: -0.015em; color: var(--forest-deep); cursor: pointer; font-variation-settings: 'opsz' 36, 'SOFT' 20; text-decoration: none; }
 .brand-mark { width: 34px; height: 34px; flex-shrink: 0; object-fit: contain; display: inline-block; }
 .nav { display: flex; gap: 4px; margin-left: 20px; }
 .nav a { padding: 8px 14px; border-radius: 999px; font-size: 0.867rem; color: var(--ink-soft); font-weight: 500; transition: all 120ms; display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
@@ -169,8 +169,57 @@ a { color: var(--forest); text-underline-offset: 3px; }
 .nav a.active { background: var(--forest-deep); color: var(--cream); }
 .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
 .lang-pill { display: flex; gap: 2px; padding: 3px; border-radius: 999px; background: rgba(45, 84, 64, 0.08); font-size: 0.733rem; font-weight: 500; font-family: var(--f-mono); }
-.lang-pill a { padding: 4px 9px; border-radius: 999px; color: var(--ink-soft); text-decoration: none; }
+.lang-pill a {
+  padding: 6px 10px;
+  border-radius: 999px;
+  color: var(--ink-soft);
+  text-decoration: none;
+  min-width: 28px;
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
 .lang-pill a.active { background: var(--cream); color: var(--forest-deep); box-shadow: var(--shadow-soft); }
+
+/* Footer legal links — pad them so each one is a comfortable 32px tap target. */
+.site-footer__link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  color: inherit;
+}
+.site-footer__link:hover { background: rgba(31,58,44,0.04); color: var(--ink); }
+
+/* Generic icon-only button — used for QR / save / share / etc. The class
+   was referenced from JSX with no matching rule; without these the spans
+   inside collapsed to the glyph's intrinsic 12–18px size, well below the
+   24×24 WCAG 2.2 AA target. 40px square + visible border = comfortable
+   thumb tap on phones, still proportional on desktop. */
+.icon-btn {
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink-soft);
+  cursor: pointer;
+  padding: 0;
+  font-size: 18px;
+  line-height: 1;
+  transition: background 120ms, border-color 120ms, color 120ms;
+}
+.icon-btn:hover, .icon-btn:focus-visible {
+  background: var(--sage-pale);
+  color: var(--forest-deep);
+  border-color: var(--forest-mid);
+}
+.icon-btn[disabled] { opacity: 0.5; cursor: not-allowed; }
 
 .veining { background-image: repeating-linear-gradient(115deg, transparent, transparent 80px, rgba(168,192,96,.04) 80px, rgba(168,192,96,.04) 81px); }
 
@@ -225,9 +274,57 @@ body.bloom-high-contrast .btn-primary { background: #0A1A12 !important; }
 body.bloom-high-contrast .pill,
 body.bloom-high-contrast .card { border: 1.5px solid #000 !important; }
 
+/* ── Mobile inline-text-link tap target ───────────────────────────────────
+   WCAG 2.5.5 exempts inline links surrounded by paragraph text, but the
+   actual phone tap accuracy on a 19 px tall link is poor — fat thumbs
+   miss it more than half the time. Padding-block extends the link's
+   hit box without breaking line layout (since the line height already
+   accommodates the descender/ascender area). 4 px each side bumps every
+   inline link's bounding rect to ≥27 px tall at 16 px body text. */
 @media (max-width: 768px) {
-  /* ADR-0006: mobile reduces the root by ~7% so every rem scales down together. */
-  html { font-size: 87.5%; }
+  p a, li a, dd a {
+    padding-block: 4px;
+  }
+}
+
+/* ── Mobile form-control sizing ────────────────────────────────────────────
+   iOS Safari auto-zooms when a user focuses an <input>/<textarea>/<select>
+   whose computed font-size is below 16px. The zoom is visually jarring,
+   forces a manual zoom-out, and pushes sticky headers off-screen. The
+   blanket rule below pins every text-entry control to 16px at all mobile
+   widths — overrides any inline `fontSize: 14` we set elsewhere.
+
+   Checkboxes and radios don't trigger zoom but their default browser
+   render is ~13 px — well under the WCAG 2.5.5 24 × 24 minimum. Size
+   them up to 20 px so the effective tap area (with the surrounding
+   focus ring) clears 24 × 24 comfortably. */
+@media (max-width: 768px) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  textarea,
+  select { font-size: 16px !important; }
+
+  input[type='checkbox'],
+  input[type='radio'] {
+    width: 20px !important;
+    height: 20px !important;
+    min-width: 20px;
+    min-height: 20px;
+    accent-color: var(--forest-deep);
+    cursor: pointer;
+  }
+}
+
+@media (max-width: 768px) {
+  /* ADR-0006 originally shaved 12.5% off the root font on mobile for visual
+     density. The side effect was a 14 px body — under the modern mobile
+     readability minimum (16 px, per Material/HIG/WCAG technique C12). At
+     14 px every inline link inside a paragraph also rendered at ~21 px
+     tall, below WCAG 2.5.5 (24 × 24). Restoring root to 100% fixes both:
+     body text scales to 16 px, paragraph line-height pushes inline link
+     bounds past 24 px, and rem-based utility classes (.btn, .small, .tiny)
+     grow with it — slightly larger but still proportionate. Headings are
+     inline-styled px so they're unaffected. */
+  html { font-size: 100%; }
   body { padding-bottom: 64px; }
   .container { padding: 20px 16px !important; max-width: 100% !important; }
   h1 { font-size: clamp(1.875rem, 8vw, 2.75rem) !important; line-height: 1.05 !important; }
@@ -243,6 +340,87 @@ body.bloom-high-contrast .card { border: 1.5px solid #000 !important; }
   .btn-lg { padding: 14px 20px !important; font-size: 0.933rem !important; }
   .veining { background-image: none !important; }
   .ask-shell { grid-template-columns: 1fr !important; }
+
+  /* Adopt wizard sticky stepper — on desktop it shows
+     "← back | ① Choose tier — ② Pick plant — ③ Person — ④ Pay | spacer"
+     in one row. At mobile widths the labels + connector lines blow past
+     the viewport. Hide the step labels (numbers + active label only),
+     drop the right-side spacer, and tighten paddings so the row fits. */
+  .adopt-stepper__inner { padding: 12px 14px !important; gap: 10px !important; }
+  .adopt-stepper__list { gap: 2px !important; justify-content: flex-end !important; }
+  .adopt-stepper__label { display: none !important; }
+  .adopt-stepper__item[aria-current="step"] .adopt-stepper__label {
+    display: inline !important;
+    font-size: 0.85rem !important;
+    margin-left: 2px;
+  }
+  .adopt-stepper__line { width: 14px !important; margin-left: 2px !important; margin-right: 2px !important; }
+  .adopt-stepper__spacer { display: none !important; }
+
+  /* Bank-transfer pay page — stack the label / value into a single column
+     so long IBANs and RF references don't fight a 130px label track. */
+  .pay-page { padding: 32px 16px !important; }
+  .pay-page__details { padding: 20px 18px 12px !important; }
+  .pay-page__row { grid-template-columns: 1fr !important; gap: 4px !important; padding: 12px 0 !important; }
+  .pay-page__row dd { font-size: 14px !important; }
+  .pay-page__amount strong { font-size: 36px !important; }
+  .pay-page__qr { padding: 20px !important; }
+  .pay-page__qr .qr { width: 180px !important; height: 180px !important; }
+}
+
+/* ── Very-narrow mobile (≤360px: iPhone SE 1st gen, old Galaxy, etc.) ─────
+   The topbar packs brand + cart + lang-pill + sign-in. At 320px these
+   collide. Tighten paddings, shrink the locale pill, and let the sign-in
+   button collapse to an icon-sized affordance so the whole row clears
+   the viewport on the smallest phones in active use. */
+@media (max-width: 360px) {
+  .topbar-inner { padding: 10px 8px !important; gap: 4px !important; }
+  .topbar-right { gap: 4px !important; }
+  .brand { font-size: 1rem !important; gap: 6px !important; }
+  .brand-mark { width: 22px !important; height: 22px !important; }
+  .lang-pill { font-size: 0.625rem !important; padding: 2px !important; gap: 1px !important; }
+  .lang-pill a {
+    padding: 4px 6px !important;
+    min-width: 24px !important;
+    min-height: 24px !important;
+  }
+  /* Compact the inline-styled Sign-in / account chip so it doesn't push
+     past the viewport. Targeting via the [href*=sign-in] is more robust
+     than the inline `style=` because the value of marginLeft varies.
+     white-space: nowrap prevents "Sign in" from breaking to two lines
+     when the row is tight. */
+  .topbar-right > a[href*="sign-in"] {
+    padding: 6px 8px !important;
+    margin-left: 0 !important;
+    font-size: 11px !important;
+    white-space: nowrap !important;
+  }
+  .topbar-right > span > a[aria-label*="garden"],
+  .topbar-right > span > a[aria-label*="My Garden"],
+  .topbar-right > span > a[aria-label*="Puutarha"] {
+    padding: 6px 8px !important;
+    font-size: 11px !important;
+    white-space: nowrap !important;
+  }
+  /* Cart-badge — when the visitor has an item their "🌿 1" badge appears
+     in the topbar. At 320px the brand + cart-badge + lang-pill + Sign-in
+     race for ~290px of usable width. Drop the badge's outer padding +
+     gap so it claws back ~12px and the row holds together. */
+  .topbar-right > a[href*="/cart"] {
+    padding: 4px 8px !important;
+    font-size: 12px !important;
+    gap: 3px !important;
+  }
+
+  /* On the smallest screens (≤360 — iPhone SE 1st gen) the active-step
+     label inside the adopt stepper still takes ~80px and pushes the row
+     past the viewport. Hide it altogether — the colored bullet already
+     communicates current step, and the page <h1> below states the step
+     name verbosely. */
+  .adopt-stepper__item[aria-current="step"] .adopt-stepper__label {
+    display: none !important;
+  }
+  .adopt-stepper__line { width: 10px !important; }
 }
 
 @media print {
@@ -276,6 +454,7 @@ body.bloom-high-contrast .card { border: 1.5px solid #000 !important; }
   border: 1px solid var(--line);
   border-radius: 16px;
   padding: 28px 28px 16px;
+  min-width: 0; /* allow IBAN/RF values inside grid rows to wrap rather than expand */
 }
 .pay-page__amount {
   display: flex;
@@ -314,6 +493,7 @@ body.bloom-high-contrast .card { border: 1.5px solid #000 !important; }
   font-size: 15px;
   color: var(--ink);
   word-break: break-all;
+  min-width: 0; /* without this, mono IBAN/RF strings refuse to shrink in a 1fr grid track */
 }
 .pay-page__qr {
   background: var(--paper);

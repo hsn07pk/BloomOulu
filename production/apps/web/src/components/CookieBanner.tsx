@@ -57,6 +57,7 @@ export function CookieBanner({
     <div
       role="region"
       aria-label="Cookie notice"
+      className="cookie-banner"
       style={{
         position: 'fixed',
         right: 16,
@@ -73,7 +74,7 @@ export function CookieBanner({
       }}
     >
       <p style={{ margin: '0 0 8px' }}>{message}</p>
-      <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
         <button
           ref={btnRef}
           type="button"
@@ -82,17 +83,26 @@ export function CookieBanner({
             background: '#2D5440',
             color: '#FFFFFF',
             border: 0,
-            padding: '6px 14px',
-            borderRadius: 4,
+            padding: '10px 16px',
+            borderRadius: 6,
             cursor: 'pointer',
             fontSize: 14,
+            minHeight: 40,
           }}
         >
           {acknowledge}
         </button>
         <a
           href={moreInfoHref}
-          style={{ color: '#2D5440', textDecoration: 'underline', fontSize: 13 }}
+          style={{
+            color: '#2D5440',
+            textDecoration: 'underline',
+            fontSize: 13,
+            padding: '8px 4px',
+            minHeight: 40,
+            display: 'inline-flex',
+            alignItems: 'center',
+          }}
         >
           {moreInfo}
         </a>

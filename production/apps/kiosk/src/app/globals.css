@@ -1,0 +1,22 @@
+/* The kiosk is designed for a fixed 1920×1080 lobby touchscreen. When
+   accidentally opened on a phone (a visitor scanning the QR, a curator
+   previewing on mobile), the 3-column grid collapses into unreadable
+   slivers. The rule below stacks every grid into a single column on
+   sub-tablet viewports so the page is at least legible. */
+html, body { margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+
+@media (max-width: 900px) {
+  /* Stack the kiosk's inline 3-column grid into one column on mobile. */
+  section[style*="minmax(0, 1.4fr)"],
+  section[style*="grid-template-columns: minmax(0, 1.4fr)"] {
+    grid-template-columns: 1fr !important;
+  }
+  /* Tighten the article cards' padding so cards don't waste viewport. */
+  article[style*="border-radius: 16px"] {
+    padding: 20px !important;
+    min-height: 0 !important;
+  }
+  /* Body padding inside the kiosk page — relax it for mobile. */
+  main[style*="padding"] { padding: 24px 16px !important; }
+}

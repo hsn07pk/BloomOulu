@@ -646,6 +646,7 @@ export function AdoptWizard({
   return (
     <>
       <div
+        className="adopt-stepper"
         style={{
           background: 'var(--paper)',
           borderBottom: '1px solid var(--line)',
@@ -655,7 +656,7 @@ export function AdoptWizard({
         }}
       >
         <div
-          className="container"
+          className="container adopt-stepper__inner"
           style={{ padding: '16px 32px', display: 'flex', alignItems: 'center', gap: 24 }}
         >
           {step > 1 ? (
@@ -682,6 +683,7 @@ export function AdoptWizard({
             </Link>
           )}
           <ol
+            className="adopt-stepper__list"
             style={{
               display: 'flex',
               gap: 4,
@@ -701,11 +703,13 @@ export function AdoptWizard({
               return (
                 <li
                   key={key}
+                  className="adopt-stepper__item"
                   style={{ display: 'flex', alignItems: 'center', gap: 8 }}
                   aria-current={active ? 'step' : undefined}
                 >
                   <span
                     aria-hidden="true"
+                    className="adopt-stepper__bullet"
                     style={{
                       width: 24,
                       height: 24,
@@ -721,12 +725,13 @@ export function AdoptWizard({
                       justifyContent: 'center',
                       fontSize: "0.733rem",
                       fontWeight: 600,
+                      flexShrink: 0,
                     }}
                   >
                     {done ? '✓' : n}
                   </span>
                   <span
-                    className="small"
+                    className="small adopt-stepper__label"
                     style={{
                       color: active ? 'var(--ink)' : 'var(--ink-mute)',
                       fontWeight: active ? 500 : 400,
@@ -737,12 +742,14 @@ export function AdoptWizard({
                   {n < stepLabels.length && (
                     <span
                       aria-hidden="true"
+                      className="adopt-stepper__line"
                       style={{
                         width: 32,
                         height: 1,
                         background: 'var(--line)',
                         marginLeft: 4,
                         marginRight: 4,
+                        flexShrink: 0,
                       }}
                     />
                   )}
@@ -750,7 +757,7 @@ export function AdoptWizard({
               );
             })}
           </ol>
-          <span style={{ width: 100 }} />
+          <span className="adopt-stepper__spacer" style={{ width: 100 }} />
         </div>
       </div>
 
