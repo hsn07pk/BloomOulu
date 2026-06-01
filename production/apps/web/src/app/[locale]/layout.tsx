@@ -6,6 +6,7 @@ import { getMessages, getTranslations } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import { LOCALES, type Locale } from '../../i18n';
 import { A11yPanel } from '../../components/A11yPanel';
+import { FeedbackButton } from '../../components/FeedbackButton';
 import { CookieBanner } from '../../components/CookieBanner';
 import { Topbar } from '../../components/Topbar';
 import LiveSync from '../../components/LiveSync.client';
@@ -121,6 +122,7 @@ export default async function RootLayout({
             </div>
           </footer>
           <A11yPanel />
+          <FeedbackButton />
           <CookieBanner
             message={cookie.message}
             acknowledge={cookie.acknowledge}

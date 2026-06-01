@@ -347,6 +347,10 @@
     "accessibility": "Saavutettavuusseloste",
     "contact": "Yhteystiedot"
   },
+  "Feedback": {
+    "title": "Palaute",
+    "aria": "Avaa palautelomake (avautuu uuteen välilehteen)"
+  },
   "A11y": {
     "title": "Saavutettavuus",
     "open": "Avaa saavutettavuusasetukset",

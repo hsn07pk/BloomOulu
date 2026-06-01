@@ -347,6 +347,10 @@
     "accessibility": "Accessibility statement",
     "contact": "Contact"
   },
+  "Feedback": {
+    "title": "Feedback",
+    "aria": "Open the feedback form (opens in a new tab)"
+  },
   "A11y": {
     "title": "Accessibility",
     "open": "Open accessibility options",
