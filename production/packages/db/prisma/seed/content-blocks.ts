@@ -53,14 +53,24 @@ We process personal data under GDPR Article 6(1)(b) (contract performance — yo
 | Kiosk analytics (anonymous: heartbeat, QR scan counts) | Operational health | Art. 6(1)(f) | 90 days |
 | Cookies | Auth session only (no tracking) | Art. 6(1)(b) contract | Session-scoped |
 
-## 3. Recipients of your data
+## 3. Recipients of your data (processors + sub-processors)
 
-- **Paytrail Oyj** (Jyväskylä, FI) — payment processor for cards + FI online banking + Apple/Google Pay. Data processing agreement under Art. 28.
-- **Vipps MobilePay AS** (Oslo, NO; EEA) — MobilePay recurring agreements only. Activated only after the donor selects MobilePay.
-- **Postal SMTP host** (self-hosted on University-controlled infrastructure) — transactional email delivery.
-- **MinIO object storage** (self-hosted on University-controlled infrastructure) — receipt + tax-certificate PDFs.
+We share personal data only with the processors below, each under a data-processing agreement (GDPR Art. 28) or, where the recipient is an independent open-data source, only the minimum needed for the feature.
 
-No transfers outside the European Economic Area.
+| Recipient | Location | What they receive | Why |
+|---|---|---|---|
+| **Paytrail Oyj** | Jyväskylä, FI (EEA) | Name, email, amount, transaction metadata | Cards + FI online banking + Apple/Google Pay + Klarna |
+| **Vipps MobilePay AS** | Oslo, NO (EEA) | Agreement + charge metadata | MobilePay recurring agreements (only if the donor selects MobilePay) |
+| **Groq, Inc.** | **United States (outside the EEA)** | The text of the question you type into AskTheGarden | Generates the AI answer (LLM inference) |
+| **Wikipedia / Wikimedia Foundation** | United States (outside the EEA) | Your AskTheGarden question text (only when the garden's own corpus can't answer and a live web-search fallback runs) | Fetch an authoritative public article to ground the answer |
+| **SMTP / email provider** | EEA (University-controlled infrastructure) | Email address + message contents | Transactional email (magic links, receipts, gift codes) |
+| **MinIO object storage** | EEA (University-controlled infrastructure) | Receipt + tax-certificate PDFs | Document storage |
+| **ngrok, Inc.** | United States (outside the EEA) | Encrypted HTTPS traffic in transit only (no payload stored) | Public ingress tunnel for the self-hosted stack, where used |
+| **GBIF, Wikidata/Wikimedia** | EEA / United States | Plant *catalogue* queries only — never donor personal data | Background enrichment of the plant catalogue |
+
+### Transfers outside the EEA
+
+AskTheGarden sends the question you type to **Groq, Inc. in the United States** for AI inference, and — only when a web-search fallback is triggered for a question the garden's own corpus cannot answer — to **Wikipedia/Wikimedia (US)**. Where the platform is reached through the **ngrok** ingress tunnel, traffic transits US-operated infrastructure (encrypted in transit; no payload retained by ngrok). These transfers rely on the European Commission's **Standard Contractual Clauses (SCCs)** and, for AskTheGarden specifically, on your interaction with the assistant plus our **legitimate interest** (Art. 6(1)(f)) in answering it. **Do not enter personal data (names, contact details, payment information) into the AskTheGarden chat** — it is for botanical questions only. No payment, receipt, or account data is ever transferred outside the EEA.
 
 ## 4. Your rights
 
@@ -103,14 +113,24 @@ Käsittelemme henkilötietoja GDPR 6(1)(b) artiklan (sopimuksen täyttäminen �
 | Kioskin analytiikka (anonyymi: heartbeat, QR-skannit) | Toiminnan terveys | Art. 6(1)(f) | 90 vrk |
 | Evästeet | Vain kirjautumisistunto (ei seurantaa) | Art. 6(1)(b) | Istuntokohtainen |
 
-## 3. Tietojen vastaanottajat
+## 3. Tietojen vastaanottajat (käsittelijät + alikäsittelijät)
 
-- **Paytrail Oyj** (Jyväskylä, FI) — maksunvälitys: kortit + FI-verkkopankki + Apple/Google Pay. Tietojenkäsittelysopimus GDPR Art. 28 mukaisesti.
-- **Vipps MobilePay AS** (Oslo, NO; ETA) — MobilePay-tilaussopimukset vain. Aktivoituu vain jos lahjoittaja valitsee MobilePayn.
-- **Postal-SMTP-palvelin** (itse hostattu yliopiston laitteistossa) — tapahtumasähköpostit.
-- **MinIO-objektivarasto** (itse hostattu yliopiston laitteistossa) — kuitit + verotodistukset.
+Jaamme henkilötietoja vain alla luetelluille käsittelijöille, kullekin tietojenkäsittelysopimuksen (GDPR Art. 28) nojalla — tai, kun vastaanottaja on riippumaton avoimen datan lähde, vain ominaisuuden edellyttämän vähimmäismäärän.
 
-Tietoja ei siirretä Euroopan talousalueen ulkopuolelle.
+| Vastaanottaja | Sijainti | Mitä vastaanottaa | Miksi |
+|---|---|---|---|
+| **Paytrail Oyj** | Jyväskylä, FI (ETA) | Nimi, sähköposti, summa, tapahtumatiedot | Kortit + FI-verkkopankki + Apple/Google Pay + Klarna |
+| **Vipps MobilePay AS** | Oslo, NO (ETA) | Sopimus- ja veloitustiedot | MobilePay-tilaussopimukset (vain jos lahjoittaja valitsee MobilePayn) |
+| **Groq, Inc.** | **Yhdysvallat (ETA:n ulkopuolella)** | AskTheGarden-kysymyksesi teksti | AI-vastauksen muodostus (LLM) |
+| **Wikipedia / Wikimedia** | Yhdysvallat (ETA:n ulkopuolella) | AskTheGarden-kysymyksesi teksti (vain kun puutarhan oma korpus ei vastaa ja live-haku käynnistyy) | Luotettavan julkisen artikkelin haku vastauksen tueksi |
+| **SMTP-/sähköpostipalvelu** | ETA (yliopiston laitteisto) | Sähköpostiosoite + viestin sisältö | Tapahtumasähköpostit (kirjautumislinkit, kuitit, lahjakoodit) |
+| **MinIO-objektivarasto** | ETA (yliopiston laitteisto) | Kuitti- ja verotodistus-PDF:t | Dokumenttien tallennus |
+| **ngrok, Inc.** | Yhdysvallat (ETA:n ulkopuolella) | Vain salattu HTTPS-liikenne siirron aikana (ei tallenneta) | Julkinen sisääntunneli itse-hostatulle ympäristölle, kun käytössä |
+| **GBIF, Wikidata/Wikimedia** | ETA / Yhdysvallat | Vain kasvi*tietokannan* kyselyt — ei koskaan henkilötietoja | Kasvitietokannan taustarikastus |
+
+### Siirrot ETA:n ulkopuolelle
+
+AskTheGarden lähettää kirjoittamasi kysymyksen **Groq, Inc.:lle Yhdysvaltoihin** AI-päättelyä varten ja — vain kun puutarhan oma korpus ei pysty vastaamaan ja live-haku käynnistyy — **Wikipedialle/Wikimedialle (Yhdysvallat)**. Kun palveluun tullaan **ngrok**-sisääntunnelin kautta, liikenne kulkee yhdysvaltalaisen infrastruktuurin läpi (salattuna siirron aikana; ngrok ei säilytä sisältöä). Nämä siirrot perustuvat Euroopan komission **vakiosopimuslausekkeisiin (SCC)** ja AskTheGardenin osalta vuorovaikutukseesi avustajan kanssa sekä **oikeutettuun etuumme** (Art. 6(1)(f)) vastata siihen. **Älä syötä henkilötietoja (nimiä, yhteystietoja, maksutietoja) AskTheGarden-keskusteluun** — se on tarkoitettu vain kasviaiheisiin kysymyksiin. Maksu-, kuitti- tai tilitietoja ei koskaan siirretä ETA:n ulkopuolelle.
 
 ## 4. Oikeutesi
 
@@ -146,9 +166,11 @@ Vi behandlar personuppgifter enligt GDPR Art. 6(1)(b) (fullgörande av avtal) oc
 
 Detaljerade kategorier matchar den finska versionen ovan.
 
-## 3. Mottagare av uppgifterna
+## 3. Mottagare av uppgifterna (personuppgiftsbiträden + underbiträden)
 
-Paytrail Oyj (FI), Vipps MobilePay AS (NO, EES), egen Postal SMTP, egen MinIO. Inga överföringar utanför EES.
+Paytrail Oyj (FI, EES) och Vipps MobilePay AS (NO, EES) för betalningar; egen SMTP och egen MinIO (EES) för e-post och dokument.
+
+**Överföringar utanför EES:** AskTheGarden skickar din fråga till **Groq, Inc. (USA)** för AI-svar och — endast när en webbsökningsfallback körs för en fråga som trädgårdens egen korpus inte kan besvara — till **Wikipedia/Wikimedia (USA)**. När tjänsten nås via **ngrok**-tunneln passerar trafik USA-baserad infrastruktur (krypterad under överföring; ingen nyttolast lagras). Dessa överföringar bygger på EU-kommissionens **standardavtalsklausuler (SCC)**. Bakgrundsberikning av växtkatalogen frågar GBIF/Wikidata — aldrig personuppgifter. **Skriv inte personuppgifter i AskTheGarden-chatten.** Betalnings-, kvitto- och kontouppgifter överförs aldrig utanför EES.
 
 ## 4. Dina rättigheter
 

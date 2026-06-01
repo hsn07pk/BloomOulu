@@ -39,6 +39,12 @@ export const QUEUE_RECURRING_BENEFITS = 'recurring-benefits';
 /// Monthly CSR quarterly impact report — fires for every active
 /// Corporate-tier adoption. Generates a PDF, emails the donor.
 export const QUEUE_CSR_QUARTERLY = 'csr-quarterly';
+/// Daily GDPR retention sweep — prunes/pseudonymises data past its
+/// retention window (AskMessage, AuditLog, Session, VerificationToken,
+/// PlantScan, KioskEvent, ObservabilityEvent) and pseudonymises long-
+/// inactive donor Users. Windows are admin/env-configurable; see
+/// retention.processor.ts.
+export const QUEUE_RETENTION = 'retention';
 
 export const defaultJobOpts: JobsOptions = {
   attempts: 5,

@@ -161,8 +161,11 @@ on first boot. After deploy, edit per-tier prices in /admin → Tier.
 | `VAT_PERK_RATE_BP` | `2400` | 24% on physical perks (gift-wrap etc.) |
 | `RECEIPT_PREFIX` | `BLO` | renders as `BLO-2026-000001` |
 | `RECEIPT_YEAR_RESET` | `true` | counter resets on Jan 1 |
-| `GDPR_AUDIT_RETENTION_DAYS` | `2190` (6 years) | Finnish Kirjanpitolaki 2:5 § |
-| `GDPR_PSEUDONYMISE_AFTER_DAYS` | `2190` | applied to inactive donors |
+| `GDPR_AUDIT_RETENTION_DAYS` | `2190` (6 years) | Finnish Kirjanpitolaki 2:5 §. Non-financial AuditLog pruned by the daily retention sweep past this window |
+| `GDPR_PSEUDONYMISE_AFTER_DAYS` | `2190` | inactive donor Users pseudonymised by the retention sweep past this window |
+| `GDPR_ASK_MESSAGE_RETENTION_DAYS` | `365` | AskTheGarden transcript text pseudonymised after this window (policy: 12 months) |
+| `GDPR_ANALYTICS_RETENTION_DAYS` | `90` | PlantScan / KioskEvent / ObservabilityEvent deleted after this window (policy: 90 days) |
+| `RETENTION_CRON_DISABLED` | `false` | set `true` to skip registering the daily 03:45 UTC GDPR retention sweep |
 | `KIOSK_DEFAULT_AMOUNT_CENTS` | `2500` | preset when QR doesn't carry amount |
 
 ### AskTheGarden (RAG)

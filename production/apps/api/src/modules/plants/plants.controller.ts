@@ -19,7 +19,7 @@
  */
 import { Body, Controller, Get, HttpCode, Ip, NotFoundException, Param, Post, Query, Req } from '@nestjs/common';
 import type { FastifyRequest } from 'fastify';
-import { createHash } from 'node:crypto';
+import { createHmac } from 'node:crypto';
 import { LocaleEnum } from '@bloomoulu/constants';
 import { z } from 'zod';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -461,11 +461,16 @@ export class PlantsController {
    * can build "what's popular today" + the scan → adoption funnel in
    * /admin.
    *
-   * GDPR posture: no IP / UA stored verbatim. A SHA-256 over `ip|ua`
-   * becomes the `visitorHash`, which lets us collapse browser refreshes
-   * into one "session" without retaining anything personal. We also
-   * bump Plant.scanCount in the same transaction so list views can
-   * sort by popularity cheaply.
+   * GDPR posture (data minimisation, Art. 5(1)(c)): neither the raw IP
+   * nor the raw User-Agent is stored. The `visitorHash` is a keyed HMAC
+   * (key = AUTH_SECRET) over `${utcDay}|${ip}|${ua}`. Because the daily
+   * UTC date is mixed in, the salt rotates every 24h, so the same visitor
+   * produces a DIFFERENT hash on a different day — it cannot be used as a
+   * long-lived tracking key, only to collapse same-day refreshes into one
+   * "session". The User-Agent is coarsened to a browser family (e.g.
+   * "Chrome" / "Safari") rather than stored verbatim. We also bump
+   * Plant.scanCount in the same transaction so list views can sort by
+   * popularity cheaply.
    */
   @Post(':slug/scan')
   @HttpCode(204)
@@ -482,8 +487,16 @@ export class PlantsController {
     if (!plant) throw new NotFoundException();
 
     const ua = (req.headers['user-agent'] as string) ?? '';
+    // Rotating daily salt: the UTC date is folded into the HMAC input so the
+    // hash is unusable as a cross-day tracking key (see method docstring).
+    // The HMAC key is AUTH_SECRET; fall back to a fixed dev key so localhost
+    // works without env (prod always sets AUTH_SECRET — see docs/ENV.md).
     const visitorHash =
-      ip || ua ? createHash('sha256').update(`${ip}|${ua}`).digest('hex') : '';
+      ip || ua
+        ? createHmac('sha256', process.env.AUTH_SECRET ?? 'bloomoulu-dev-scan-salt')
+            .update(`${utcDayStamp()}|${ip}|${ua}`)
+            .digest('hex')
+        : '';
     await this.prisma.$transaction([
       this.prisma.plantScan.create({
         data: {
@@ -491,7 +504,8 @@ export class PlantsController {
           locale: dto.locale ?? 'fi',
           kioskId: dto.kioskId ?? null,
           visitorHash,
-          userAgent: ua ? ua.slice(0, 240) : null,
+          // Coarsen to a browser family — never store the verbatim UA.
+          userAgent: browserFamily(ua),
         },
       }),
       this.prisma.plant.update({
@@ -525,4 +539,28 @@ export class PlantsController {
     });
     return;
   }
+}
+
+/** Current UTC date as `YYYY-MM-DD` — the rotating salt for visitorHash. */
+function utcDayStamp(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/**
+ * Coarsen a raw User-Agent string to a single browser-family token so the
+ * stored value can never re-identify a visitor. Returns null when the UA is
+ * empty/unknown so we don't persist a constant placeholder either.
+ */
+function browserFamily(ua: string): string | null {
+  if (!ua) return null;
+  // Order matters: Edge/Opera/Chrome all contain "Chrome"; Safari excludes
+  // Chrome. Bots are bucketed so kiosk/QR analytics aren't skewed by crawlers.
+  if (/\bbot\b|crawler|spider|slurp|bingpreview|headless/i.test(ua)) return 'Bot';
+  if (/Edg\//.test(ua)) return 'Edge';
+  if (/OPR\/|Opera/.test(ua)) return 'Opera';
+  if (/SamsungBrowser/.test(ua)) return 'Samsung';
+  if (/Firefox\//.test(ua)) return 'Firefox';
+  if (/Chrome\//.test(ua)) return 'Chrome';
+  if (/Safari\//.test(ua)) return 'Safari';
+  return 'Other';
 }

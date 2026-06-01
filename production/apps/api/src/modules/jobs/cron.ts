@@ -9,6 +9,7 @@
  *   tax-cert-annual      → annually Jan 5 04:00 (sweeps prior tax year)
  *   rag-eval             → monthly 1st of month 04:30 (ADR-0005 — curator labels bottom-50)
  *   audit-gap            → daily 03:30 (ADR-0008 — detects audit log gaps day-over-day)
+ *   retention            → daily 03:45 (GDPR storage-limitation sweep)
  *   backup (Postgres)    → daily 02:30 (kicked off by host cron, not BullMQ)
  */
 import { Queue } from 'bullmq';
@@ -24,6 +25,7 @@ import {
   QUEUE_DISBURSEMENT_MONTHLY,
   QUEUE_RECURRING_BENEFITS,
   QUEUE_CSR_QUARTERLY,
+  QUEUE_RETENTION,
   defaultJobOpts,
 } from './queues.js';
 
@@ -136,4 +138,19 @@ export async function registerCronJobs() {
     data: {},
     opts: defaultJobOpts,
   });
+
+  // Daily 03:45 UTC — GDPR retention sweep (storage limitation, Art.
+  // 5(1)(e)). Pseudonymises AskMessage past 12 months, prunes non-financial
+  // AuditLog past the 6-year window, deletes expired Session +
+  // VerificationToken, deletes PlantScan / KioskEvent / ObservabilityEvent
+  // past 90 days, and pseudonymises long-inactive donor Users. Disable with
+  // RETENTION_CRON_DISABLED=true (mirrors DISBURSEMENT_CRON_DISABLED).
+  const retention = new Queue(QUEUE_RETENTION, { connection });
+  if (process.env.RETENTION_CRON_DISABLED !== 'true') {
+    await retention.upsertJobScheduler('daily-0345', { pattern: '45 3 * * *' }, {
+      name: 'daily',
+      data: {},
+      opts: defaultJobOpts,
+    });
+  }
 }

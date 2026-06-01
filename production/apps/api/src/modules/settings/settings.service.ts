@@ -66,6 +66,12 @@ export interface BloomOuluSettings {
   gdpr: {
     auditRetentionDays: number;
     pseudonymiseAfterDays: number;
+    /** AskTheGarden chat transcript retention before pseudonymisation.
+     *  Privacy policy promises "12 months, then pseudonymised". */
+    askMessageRetentionDays: number;
+    /** Ephemeral analytics retention (PlantScan / KioskEvent /
+     *  ObservabilityEvent). Privacy policy promises 90 days. */
+    analyticsRetentionDays: number;
   };
   /** Default donation amount when none is specified (kiosk fallback) */
   defaultAmountCents: number;
@@ -244,6 +250,8 @@ export function buildSettingsDefaults(): BloomOuluSettings {
     gdpr: {
       auditRetentionDays: envInt('GDPR_AUDIT_RETENTION_DAYS', 365 * 6),
       pseudonymiseAfterDays: envInt('GDPR_PSEUDONYMISE_AFTER_DAYS', 365 * 6),
+      askMessageRetentionDays: envInt('GDPR_ASK_MESSAGE_RETENTION_DAYS', 365),
+      analyticsRetentionDays: envInt('GDPR_ANALYTICS_RETENTION_DAYS', 90),
     },
     defaultAmountCents: envInt('KIOSK_DEFAULT_AMOUNT_CENTS', 2500),
     adoptionFlow: [
