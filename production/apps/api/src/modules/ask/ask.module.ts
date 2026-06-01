@@ -305,7 +305,14 @@ class AskController {
   }
 
   @Get('history')
-  async history(@Query('userId') userId?: string, @Query('limit') limitStr = '20') {
+  async history(
+    @Req() req: FastifyRequest,
+    @Query('limit') limitStr = '20',
+  ) {
+    // Subject comes from the verified Bearer JWT only — never a client-supplied
+    // userId (that was an IDOR exposing any donor's chat history). Anonymous
+    // visitors (no/invalid token) get an empty list.
+    const userId = await maybeUserId(req.headers['authorization'] as string | undefined);
     if (!userId) return { items: [] };
     const limit = Math.min(100, Math.max(1, parseInt(limitStr, 10) || 20));
     const rows = await this.prisma.askMessage.findMany({
