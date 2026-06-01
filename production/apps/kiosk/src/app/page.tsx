@@ -335,6 +335,57 @@ function PlantSparkQR({ url, size = 200 }: { url: string; size?: number }) {
   );
 }
 
+// ─── Auto-fit (digital-signage scaling) ─────────────────────────────
+// The kiosk is authored once at this reference canvas, then scaled to the
+// real screen so EVERY display — 1080p, 1440p, 4K, or an odd lobby panel —
+// shows the whole thing on ONE screen with no scrolling. No per-element
+// breakpoints needed; the forest background fills any letterbox.
+const BASE_W = 1920;
+const BASE_H = 1080;
+
+/** Largest scale that fits the BASE_W×BASE_H canvas inside the viewport
+ *  (contain). Recomputes on resize / orientation change. */
+function useFitScale(): number {
+  const [scale, setScale] = useState(1);
+  useEffect(() => {
+    const compute = () =>
+      setScale(Math.min(window.innerWidth / BASE_W, window.innerHeight / BASE_H));
+    compute();
+    window.addEventListener('resize', compute);
+    window.addEventListener('orientationchange', compute);
+    // Some kiosk browsers report a stale size at boot — recheck shortly after.
+    const boot = setTimeout(compute, 400);
+    return () => {
+      window.removeEventListener('resize', compute);
+      window.removeEventListener('orientationchange', compute);
+      clearTimeout(boot);
+    };
+  }, []);
+  return scale;
+}
+
+// ── Word-cloud sizing for the adopter wall ───────────────────────────
+// Deterministic per name+id so a name keeps its size across 60s feed
+// refreshes (no flicker). Institutional / memorial adoptions skew larger.
+function hashStr(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
+const CLOUD_SIZES = [30, 40, 52, 64, 80, 96];
+function cloudWord(a: RecentAdoption): { size: number; weight: number; opacity: number } {
+  let bucket = hashStr(a.publicName + a.id) % CLOUD_SIZES.length;
+  if (a.intent === 'memorial' || a.intent === 'corporate' || a.intent === 'class') {
+    bucket = Math.min(CLOUD_SIZES.length - 1, bucket + 2);
+  }
+  const size = CLOUD_SIZES[bucket]!;
+  return {
+    size,
+    weight: size >= 64 ? 600 : size >= 44 ? 500 : 400,
+    opacity: 0.5 + bucket * 0.08,
+  };
+}
+
 // ─── Page ────────────────────────────────────────────────────────────
 
 export default function KioskPage() {
@@ -348,6 +399,7 @@ export default function KioskPage() {
   const lastHeartbeatOk = useRef<number>(Date.now());
 
   const t = STRINGS[locale];
+  const scale = useFitScale();
 
   useEffect(() => {
     setNow(new Date());
@@ -476,14 +528,13 @@ export default function KioskPage() {
   return (
     <main
       style={{
+        position: 'fixed',
+        inset: 0,
         background: 'var(--forest-deep, #1F3C2D)',
         color: 'var(--cream, #FAF7EE)',
-        minHeight: '100vh',
-        padding: '32px 48px 24px',
+        overflow: 'hidden',
         fontFamily:
           "'Manrope', -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-        position: 'relative',
-        overflow: 'hidden',
       }}
     >
       <style>{`
@@ -492,6 +543,27 @@ export default function KioskPage() {
           50% { opacity: 0.35; }
         }
       `}</style>
+
+      {/* Scale-to-fit canvas: authored at BASE_W×BASE_H, transform-scaled to
+          fill any screen on a single page with no scroll (digital-signage fit). */}
+      <div
+        style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          width: BASE_W,
+          height: BASE_H,
+          transform: `translate(-50%, -50%) scale(${scale})`,
+          transformOrigin: 'center center',
+          background: 'var(--forest-deep, #1F3C2D)',
+          color: 'var(--cream, #FAF7EE)',
+          padding: '40px 56px 28px',
+          boxSizing: 'border-box',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+        }}
+      >
 
       {/* Decorative glows + veining */}
       <div
@@ -515,7 +587,16 @@ export default function KioskPage() {
         }}
       />
 
-      <div style={{ position: 'relative', zIndex: 1 }}>
+      <div
+        style={{
+          position: 'relative',
+          zIndex: 1,
+          flex: 1,
+          minHeight: 0,
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
         {/* ─── HEADER ──────────────────────────────────────────────── */}
         <header
           style={{
@@ -699,7 +780,9 @@ export default function KioskPage() {
         {/* ─── MAIN 3-COL GRID ─────────────────────────────────────── */}
         <section
           style={{
-            marginTop: 32,
+            flex: 1.6,
+            minHeight: 0,
+            marginTop: 26,
             display: 'grid',
             gridTemplateColumns:
               'minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr)',
@@ -716,7 +799,7 @@ export default function KioskPage() {
               padding: 24,
               display: 'flex',
               flexDirection: 'column',
-              minHeight: 380,
+              minHeight: 0,
             }}
           >
             <div
@@ -1014,7 +1097,9 @@ export default function KioskPage() {
         {/* ─── BOTTOM ROW: ADOPTER WALL + STATS STACK ──────────────── */}
         <section
           style={{
-            marginTop: 24,
+            flex: 1,
+            minHeight: 0,
+            marginTop: 22,
             display: 'grid',
             gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1.2fr)',
             gap: 24,
@@ -1029,6 +1114,8 @@ export default function KioskPage() {
               padding: 28,
               position: 'relative',
               overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
             }}
           >
             <div
@@ -1095,30 +1182,39 @@ export default function KioskPage() {
               </span>
             </div>
 
+            {/* Word cloud — names sized by a deterministic hash (+ emphasis for
+                memorial/institutional), coloured by intent, centred + wrapped to
+                fill the wall. overflow hidden keeps it on the single screen. */}
             <div
               style={{
+                flex: 1,
+                minHeight: 0,
                 display: 'flex',
-                gap: 10,
                 flexWrap: 'wrap',
-                maxHeight: 220,
+                alignContent: 'center',
+                justifyContent: 'center',
+                alignItems: 'baseline',
+                gap: '4px 30px',
                 overflow: 'hidden',
+                lineHeight: 1.05,
               }}
             >
               {adoptions.map((a) => {
-                const style = INTENT_CHIP[a.intent] ?? INTENT_CHIP.for_self;
+                const w = cloudWord(a);
+                const color = (INTENT_CHIP[a.intent] ?? INTENT_CHIP.for_self).color;
                 return (
                   <span
                     key={a.id}
-                    style={{
-                      padding: '8px 14px',
-                      borderRadius: 999,
-                      background: style.bg,
-                      color: style.color,
-                      fontSize: 13,
-                      fontStyle: style.italic ? 'italic' : 'normal',
-                      border: '1px solid rgba(250,247,238,0.08)',
-                    }}
                     title={`${a.plantNameFi} · ${a.tierName}`}
+                    style={{
+                      fontFamily: "'Fraunces', serif",
+                      fontSize: w.size,
+                      fontWeight: w.weight,
+                      fontStyle: a.intent === 'memorial' ? 'italic' : 'normal',
+                      color,
+                      opacity: w.opacity,
+                      whiteSpace: 'nowrap',
+                    }}
                   >
                     {a.publicName}
                   </span>
@@ -1129,27 +1225,13 @@ export default function KioskPage() {
                   style={{
                     color: 'rgba(250,247,238,0.5)',
                     fontStyle: 'italic',
+                    fontSize: 24,
                   }}
                 >
                   {t.beFirst}
                 </p>
               )}
             </div>
-
-            {/* Bottom fade for the chip cloud */}
-            <div
-              aria-hidden="true"
-              style={{
-                position: 'absolute',
-                bottom: 0,
-                left: 0,
-                right: 0,
-                height: 60,
-                background:
-                  'linear-gradient(180deg, transparent, var(--forest-deep, #1F3C2D))',
-                pointerEvents: 'none',
-              }}
-            />
           </div>
 
           {/* Today's stats — vertical 3-stack. */}
@@ -1282,6 +1364,7 @@ export default function KioskPage() {
             {t.footerVersion} · {now ? now.toLocaleDateString(intlLocale(locale)) : ''}
           </span>
         </footer>
+        </div>
       </div>
     </main>
   );
