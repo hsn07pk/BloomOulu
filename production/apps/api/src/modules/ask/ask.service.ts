@@ -404,12 +404,15 @@ export class AskService {
     const seenIds = new Set(combined.map((c) => c.id));
     const rerankInput = [...named.filter((n) => !seenIds.has(n.id)), ...combined];
     // Rerank the top-N hybrid candidates plus any injected named-species
-    // chunks: the bge-reranker is a CPU cross-encoder (~0.33s/doc), so we
-    // cap the set to keep latency down. Env-tunable.
-    const rerankN = Number(process.env.ASK_RERANK_TOPN ?? 6);
+    // chunks. The bge-reranker is a CPU cross-encoder (~0.3-1s/doc depending
+    // on length), so the rerank set size is the dominant latency knob: we
+    // keep top-N small AND hard-cap the total (named injections can add a
+    // few) so a multi-species question can't blow the <5s budget. Env-tunable.
+    const rerankN = Number(process.env.ASK_RERANK_TOPN ?? 4);
+    const rerankCap = Number(process.env.ASK_RERANK_CAP ?? 8);
     const reranked =
       rerankInput.length > 0
-        ? await this.rerank(rerankQuery, rerankInput.slice(0, rerankN + named.length))
+        ? await this.rerank(rerankQuery, rerankInput.slice(0, Math.min(rerankN + named.length, rerankCap)))
         : [];
 
     // 6. Score floor + web-search augmentation.
@@ -1034,6 +1037,34 @@ export class AskService {
     // tsquery friendly form — strip operators that break to_tsquery and
     // fall back to plainto_tsquery (safer for arbitrary user input).
     const ftsQuery = queryText.replace(/[^\p{L}\p{N}\s]/gu, ' ').trim();
+    // Trigram fuzzy-match is only worth its cost on SHORT queries (a likely
+    // misspelled plant name). On a long conversational question `text % $3`
+    // matches almost every chunk, so the GIN heap-recheck recomputes
+    // similarity across the whole corpus (~3s at 25k chunks) for zero useful
+    // hits. Skip it there and lean on vector + FTS (+ the named-species
+    // injection in answerStream) — the dominant latency lever found in the
+    // 2026-06 sub-5s tuning.
+    // Off by default: bge-m3 vector retrieval is already typo-robust and FTS
+    // covers exact tokens, so the trigram pass mostly just added latency — on
+    // common words `text % $3` rechecks nearly every chunk (~3s at 25k). Opt
+    // back in for very short (≤2-word) queries via ASK_USE_TRGM=1 if fuzzy
+    // name-matching is ever needed.
+    const useTrgm =
+      process.env.ASK_USE_TRGM === '1' && ftsQuery.split(/\s+/).filter(Boolean).length <= 2;
+    const trgmCte = useTrgm
+      ? `,
+       trgm_hits AS (
+         SELECT id, text, ROW_NUMBER() OVER (ORDER BY similarity(text, $3) DESC) AS r
+         FROM "RagChunk"
+         WHERE locale IN ($2::"Locale", 'en'::"Locale") AND text % $3
+         ORDER BY similarity(text, $3) DESC LIMIT 10
+       )`
+      : '';
+    const trgmUnion = useTrgm
+      ? `
+           UNION ALL
+           SELECT id, text, 1.0 / (60 + r) AS rrf FROM trgm_hits`
+      : '';
     const rows = await this.prisma.$queryRawUnsafe<
       Array<{ id: string; text: string; score: number }>
     >(
@@ -1046,11 +1077,8 @@ export class AskService {
          LIMIT 30
        ),
        fts_hits AS (
-         -- The tsvector column is multi-language: english-stemmed
-         -- ("conifers" → "conifer"), finnish-stemmed ("kihokkeja" →
-         -- "kihokki"), swedish-stemmed, plus simple-tokenized for Latin
-         -- binomials. Query union of all four configs catches morphology
-         -- in every supported locale.
+         -- multi-language tsvector (english/finnish/swedish stemmed + simple
+         -- for Latin binomials); union of all four configs catches morphology.
          SELECT id, text,
                 ROW_NUMBER() OVER (
                   ORDER BY ts_rank_cd("searchVector",
@@ -1075,16 +1103,7 @@ export class AskService {
                     plainto_tsquery('simple', $3)
                   ) DESC
          LIMIT 30
-       ),
-       trgm_hits AS (
-         SELECT id, text,
-                ROW_NUMBER() OVER (ORDER BY similarity(text, $3) DESC) AS r
-         FROM "RagChunk"
-         WHERE locale IN ($2::"Locale", 'en'::"Locale")
-           AND text % $3
-         ORDER BY similarity(text, $3) DESC
-         LIMIT 10
-       ),
+       )${trgmCte},
        fused AS (
          SELECT id,
                 MAX(text) AS text,
@@ -1092,9 +1111,7 @@ export class AskService {
          FROM (
            SELECT id, text, 1.0 / (60 + r) AS rrf FROM vector_hits
            UNION ALL
-           SELECT id, text, 1.0 / (60 + r) AS rrf FROM fts_hits
-           UNION ALL
-           SELECT id, text, 1.0 / (60 + r) AS rrf FROM trgm_hits
+           SELECT id, text, 1.0 / (60 + r) AS rrf FROM fts_hits${trgmUnion}
          ) u
          GROUP BY id
        )
@@ -1141,10 +1158,26 @@ export class AskService {
       take: 5,
     });
     const found = new Set(plants.map((p) => p.taxon.latinName.toLowerCase()));
-    // Binomials the donor named that we DON'T have a plant for — the corpus
-    // can't speak to those species specifically, so the caller forces a live
-    // web lookup instead of letting a genus-sibling match deflect the answer.
-    const missingNames = Array.from(names).filter((n) => !found.has(n.toLowerCase()));
+    // Binomials the donor named that we DON'T have a plant for. We only treat
+    // a not-found candidate as a real out-of-collection species — and thus
+    // force a live web lookup — when its GENUS is one we actually hold. This
+    // is critical: the loose `Genus species` regex also matches ordinary
+    // sentence fragments ("What family", "Which plants"), and without the
+    // genus gate every such query triggered a slow Wikipedia round-trip
+    // (~13s) on top of the corpus answer. "Encephalartos woodii" still fires
+    // (we have other Encephalartos); "What family" never does.
+    const notFound = Array.from(names).filter((n) => !found.has(n.toLowerCase()));
+    let missingNames: string[] = [];
+    if (notFound.length > 0) {
+      const genera = [...new Set(notFound.map((n) => n.split(' ')[0]!))];
+      const known = await this.prisma.taxon.findMany({
+        where: { OR: genera.map((g) => ({ latinName: { startsWith: `${g} ` } })) },
+        select: { latinName: true },
+        take: 25,
+      });
+      const knownGenera = new Set(known.map((t) => t.latinName.split(' ')[0]!.toLowerCase()));
+      missingNames = notFound.filter((n) => knownGenera.has(n.split(' ')[0]!.toLowerCase()));
+    }
     const chunks = plants.length
       ? await this.prisma.ragChunk.findMany({
           where: {
@@ -1165,7 +1198,13 @@ export class AskService {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           query,
-          texts: chunks.map((c) => c.text),
+          // Cap each doc to its first ~512 chars before the cross-encoder.
+          // bge-reranker on CPU is ~1.1s/doc at full length but the relevance
+          // signal (plant name, family, status) sits at the top of every
+          // per-plant doc — truncating cuts rerank latency ~3x with no quality
+          // loss. THE key sub-5s lever (full-length rerank of the post-ingest
+          // chunks was ~16s for a dozen docs).
+          texts: chunks.map((c) => c.text.slice(0, 512)),
           truncate: true,
         }),
       });
