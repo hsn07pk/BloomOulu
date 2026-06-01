@@ -340,8 +340,11 @@ function PlantSparkQR({ url, size = 200 }: { url: string; size?: number }) {
 // real screen so EVERY display — 1080p, 1440p, 4K, or an odd lobby panel —
 // shows the whole thing on ONE screen with no scrolling. No per-element
 // breakpoints needed; the forest background fills any letterbox.
-const BASE_W = 1920;
-const BASE_H = 1080;
+// Smaller reference canvas than the panel's native 1920×1080: the scale factor
+// to a real screen is then ≥1.2, so text renders LARGER (more readable) on
+// typical displays + browser previews while still fitting one screen.
+const BASE_W = 1600;
+const BASE_H = 900;
 
 /** Largest scale that fits the BASE_W×BASE_H canvas inside the viewport
  *  (contain). Recomputes on resize / orientation change. */
@@ -372,17 +375,23 @@ function hashStr(s: string): number {
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
   return Math.abs(h);
 }
-const CLOUD_SIZES = [30, 40, 52, 64, 80, 96];
-function cloudWord(a: RecentAdoption): { size: number; weight: number; opacity: number } {
-  let bucket = hashStr(a.publicName + a.id) % CLOUD_SIZES.length;
-  if (a.intent === 'memorial' || a.intent === 'corporate' || a.intent === 'class') {
-    bucket = Math.min(CLOUD_SIZES.length - 1, bucket + 2);
-  }
-  const size = CLOUD_SIZES[bucket]!;
+interface CloudAdopter {
+  name: string;
+  count: number;
+  intent: Intent;
+  id: string;
+}
+// Size a unique adopter by how many adoptions they have (frequency), with a
+// small per-name jitter so equal-count names still read like a cloud.
+function cloudWord(count: number, max: number, seed: number): { size: number; weight: number; opacity: number } {
+  const r = max <= 1 ? 0 : (count - 1) / (max - 1); // 0..1 by frequency
+  const jitter = ((seed % 7) / 7) * 0.22;
+  const t = Math.min(1, r * 0.78 + jitter);
+  const size = Math.round(36 + t * 56); // 36..92
   return {
     size,
-    weight: size >= 64 ? 600 : size >= 44 ? 500 : 400,
-    opacity: 0.5 + bucket * 0.08,
+    weight: size >= 60 ? 600 : size >= 48 ? 500 : 400,
+    opacity: 0.66 + t * 0.34,
   };
 }
 
@@ -510,6 +519,19 @@ export default function KioskPage() {
     raisedTodayCents: 0,
   };
   const adoptions = feed?.recentAdoptions ?? [];
+  // Deduplicate the wall by adopter name; size each unique name by frequency.
+  const cloudAdopters: CloudAdopter[] = (() => {
+    const m = new Map<string, CloudAdopter>();
+    for (const a of adoptions) {
+      const key = a.publicName.trim().toLowerCase();
+      if (!key) continue;
+      const ex = m.get(key);
+      if (ex) ex.count += 1;
+      else m.set(key, { name: a.publicName, count: 1, intent: a.intent, id: a.id });
+    }
+    return [...m.values()].sort((x, y) => y.count - x.count);
+  })();
+  const maxAdopterCount = Math.max(1, ...cloudAdopters.map((a) => a.count));
   // Fall back to `blooming` if mostVisited is missing (e.g. cached
   // payload from a pre-deploy client) — keeps the kiosk filled.
   const visited = (feed?.mostVisited ?? feed?.blooming ?? []).slice(0, 6);
@@ -610,23 +632,30 @@ export default function KioskPage() {
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            {/* Same leaf mark as the web header (served from the web root, same
+                origin) on a cream disc so it reads on the dark forest bg. */}
             <span
               aria-hidden="true"
               style={{
-                width: 48,
-                height: 48,
+                width: 56,
+                height: 56,
                 borderRadius: '50%',
-                background:
-                  'linear-gradient(135deg, #2D5440 0%, #5FB0A0 50%, #A8C060 100%)',
+                background: '#FAF7EE',
                 display: 'inline-flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontFamily: "'Fraunces', serif",
-                fontSize: 26,
-                fontWeight: 600,
+                flexShrink: 0,
               }}
             >
-              B
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/logo-mark.png"
+                alt=""
+                aria-hidden="true"
+                width={38}
+                height={38}
+                style={{ display: 'block', objectFit: 'contain' }}
+              />
             </span>
             <div>
               <div
@@ -1199,13 +1228,13 @@ export default function KioskPage() {
                 lineHeight: 1.05,
               }}
             >
-              {adoptions.map((a) => {
-                const w = cloudWord(a);
+              {cloudAdopters.map((a) => {
+                const w = cloudWord(a.count, maxAdopterCount, hashStr(a.name));
                 const color = (INTENT_CHIP[a.intent] ?? INTENT_CHIP.for_self).color;
                 return (
                   <span
                     key={a.id}
-                    title={`${a.plantNameFi} · ${a.tierName}`}
+                    title={a.count > 1 ? `${a.name} · ${a.count} adoptions` : a.name}
                     style={{
                       fontFamily: "'Fraunces', serif",
                       fontSize: w.size,
@@ -1216,11 +1245,11 @@ export default function KioskPage() {
                       whiteSpace: 'nowrap',
                     }}
                   >
-                    {a.publicName}
+                    {a.name}
                   </span>
                 );
               })}
-              {!adoptions.length && (
+              {!cloudAdopters.length && (
                 <p
                   style={{
                     color: 'rgba(250,247,238,0.5)',
