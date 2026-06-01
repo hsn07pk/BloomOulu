@@ -32,6 +32,7 @@ export function FeedbackButton(): JSX.Element {
 
   return (
     <a
+      className="feedback-fab"
       href={FEEDBACK_FORM_URL}
       target="_blank"
       rel="noopener noreferrer"
@@ -40,7 +41,7 @@ export function FeedbackButton(): JSX.Element {
       style={{
         position: 'fixed',
         bottom: 16,
-        left: 220,
+        right: 16,
         zIndex: 100,
         display: 'inline-flex',
         alignItems: 'center',

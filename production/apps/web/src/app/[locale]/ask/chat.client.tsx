@@ -651,10 +651,10 @@ export default function AskChat({
                         >
                           ✓{' '}
                           {locale === 'fi'
-                            ? `Välitetty puutarhurille (${ask.curatorName}).`
+                            ? 'Kiitos — merkitty tarkistettavaksi.'
                             : locale === 'sv'
-                              ? `Vidarebefordrat till trädgårdsmästaren (${ask.curatorName}).`
-                              : `Forwarded to ${ask.curatorName}.`}
+                              ? 'Tack — markerad för granskning.'
+                              : 'Thanks — flagged for review.'}
                         </span>
                       )}
                     </div>
@@ -714,10 +714,10 @@ export default function AskChat({
           }}
         >
           {locale === 'fi'
-            ? `Vastaukset perustuvat puutarhan kokoelmaan. Jos asia jää epävarmaksi, voimme välittää kysymyksen puutarhurille (${ask.curatorName}).`
+            ? 'Vastaukset perustuvat puutarhan kokoelmaan ja viittaavat lähteisiinsä. Tekoäly voi tehdä virheitä — tarkista tärkeät tiedot.'
             : locale === 'sv'
-              ? `Svaren bygger på trädgårdens samling. Vid osäkerhet kan vi vidarebefordra frågan till trädgårdsmästaren (${ask.curatorName}).`
-              : `Answers are drawn from the Garden's living collection. If something looks off, we can forward your question to Curator ${ask.curatorName}.`}
+              ? 'Svaren bygger på trädgårdens samling och anger sina källor. AI kan göra misstag — dubbelkolla viktiga uppgifter.'
+              : "Answers are drawn from the Garden's living collection and cite their sources. AI can make mistakes — please double-check important details."}
         </p>
       </section>
 
@@ -736,8 +736,6 @@ export default function AskChat({
          *  stats + out-of-domain remain since they describe the Garden,
          *  not per-answer citations. */}
         {corpusStats && <CorpusBlock locale={locale} stats={corpusStats} />}
-        <OutOfDomainBlock locale={locale} ask={ask} />
-        {auditMetric && <AuditBlock locale={locale} metric={auditMetric} />}
       </aside>
     </div>
   );
@@ -1137,8 +1135,6 @@ function CorpusBlock({ locale, stats }: { locale: Locale; stats: CorpusStats }) 
   const rows: Array<{ label: string; n: number; desc: string }> = [
     { label: labels.plants[0]!, n: stats.plants, desc: labels.plants[1]! },
     { label: labels.ragDocs[0]!, n: stats.ragDocs, desc: labels.ragDocs[1]! },
-    { label: labels.citations[0]!, n: stats.citations, desc: labels.citations[1]! },
-    { label: labels.accessions[0]!, n: stats.accessions, desc: labels.accessions[1]! },
   ];
   return (
     <div>

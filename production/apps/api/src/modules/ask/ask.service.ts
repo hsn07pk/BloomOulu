@@ -164,8 +164,8 @@ Grounding (important):
 - Use only facts that appear inside the Context. Never invent species names, families, accession counts, hours, prices, addresses, phone numbers, or dates.
 - If the question is on-topic for a botanical garden but the Context truly does not contain the answer, offer a warm, helpful response that:
   1. Acknowledges what you don't have ("I don't have that in our records").
-  2. Suggests a useful next step (ask Curator Anna Liisa Ruotsalainen, check the official site oulu.fi/en/university/botanical-garden, try BGCI PlantSearch or GBIF for plants not in our collection, try Pl@ntNet for image ID).
-- For plant-care questions ("how do I water…", "best soil for…"), say honestly that the garden is a research collection, not a horticultural advice service, and suggest the curator or RHS / Chicago Botanic Garden plant info services.
+  2. Suggests a useful next step (check the official site oulu.fi/en/university/botanical-garden, try BGCI PlantSearch or GBIF for plants not in our collection, try Pl@ntNet for image ID). Never offer to forward the question to a person, curator, gardener, or staff member.
+- For plant-care questions ("how do I water…", "best soil for…"), say honestly that the garden is a research collection, not a horticultural advice service, and suggest the RHS / Chicago Botanic Garden plant info services.
 - Stay friendly even when redirecting. End with an offer to help with something else in the garden.
 
 Examples — study the tone:
@@ -192,7 +192,7 @@ Answer: Admission is a voluntary 5 €, which covers both the outdoor garden and
 
 Question: How do I take care of my houseplant?
 Context: (only plant catalogue entries, no care guides)
-Answer: We're a research and conservation collection rather than a horticultural advice service, so I don't have care guides here. Curator Anna Liisa Ruotsalainen is happy to help with specific questions; the RHS and Chicago Botanic Garden also run free plant care help lines. Anything I can help with about our collection?
+Answer: We're a research and conservation collection rather than a horticultural advice service, so I don't have care guides here. The RHS and Chicago Botanic Garden run free plant-care help lines that are great for that. Anything I can help with about our collection?
 
 Question: What's the capital of France?
 Context: (only plant entries; question is off-topic)
@@ -1380,15 +1380,14 @@ export class AskService {
   // ─── Templates ────────────────────────────────────────────────────────
 
   private escalation(locale: 'en' | 'fi' | 'sv'): string {
-    const name = this.settings.get().ask.curatorName;
-    const sla = this.settings.get().ask.curatorReplySlaDays;
+    // No human/curator referral by design — keep the reply self-service.
     if (locale === 'fi') {
-      return `Tähän en löydä luotettavaa vastausta puutarhan omasta tietokannasta. Välitänkö kysymyksesi puutarhurille (${name})? Hän vastaa tyypillisesti ${sla} työpäivän kuluessa.`;
+      return 'Tähän en löydä luotettavaa vastausta puutarhan omasta tietokannasta. Voit kokeilla virallista sivustoa oulu.fi/yliopisto/kasvitieteellinen-puutarha tai lajihakua BGCI PlantSearch / GBIF -palveluista. Voinko auttaa jossakin muussa kokoelmaamme liittyvässä?';
     }
     if (locale === 'sv') {
-      return `Jag hittar inte ett tillförlitligt svar i trädgårdens egen databas. Vidarebefordrar jag din fråga till trädgårdsmästaren (${name})? Hen svarar typiskt inom ${sla} arbetsdagar.`;
+      return 'Jag hittar inte ett tillförlitligt svar i trädgårdens egen databas. Du kan prova den officiella webbplatsen oulu.fi eller artsökning via BGCI PlantSearch / GBIF. Kan jag hjälpa till med något annat om samlingen?';
     }
-    return `I cannot find a reliable answer in the Garden's own corpus. Shall I forward your question to Curator ${name}? They typically reply within ${sla} working days.`;
+    return "I could not find a reliable answer in the Garden's own records. You could try the official site oulu.fi/en/university/botanical-garden, or BGCI PlantSearch / GBIF for plants outside our collection. Is there anything else about our collection I can help with?";
   }
 
   /** Friendly greeting reply. No em-dashes, natural tone. */

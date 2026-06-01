@@ -355,7 +355,7 @@ body.bloom-high-contrast .card { border: 1.5px solid #000 !important; }
      overlapping it). Feedback stacks above the A11y pill, both on the left
      edge so neither runs off a 320px screen. */
   .a11y-fab { bottom: 76px !important; }
-  .feedback-fab { left: 16px !important; bottom: 128px !important; }
+  .feedback-fab { right: 16px !important; bottom: 76px !important; }
   .brand { font-size: 1.2rem !important; }
   .brand-mark { width: 28px !important; height: 28px !important; }
   [style*='grid-template-columns'] { grid-template-columns: 1fr !important; gap: 16px !important; }
