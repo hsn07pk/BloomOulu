@@ -12,6 +12,7 @@
  * these aggregates are safe to surface to operators.
  */
 import { Controller, Get, Query } from '@nestjs/common';
+import { Roles } from '../../common/roles.decorator.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 
 const DEFAULT_WINDOW_DAYS = 30;
@@ -26,6 +27,8 @@ function windowStart(daysParam: string | undefined, fallback: number): Date {
 }
 
 @Controller('admin/metrics')
+@Roles('admin') // operator-only — same posture as admin-audit; without this the
+// scan funnel + leaderboard (business metrics) were world-readable via /v1.
 export class AdminMetricsController {
   constructor(private readonly prisma: PrismaService) {}
 
