@@ -36,7 +36,7 @@ write_files:
     permissions: "0644"
     content: |
       REPO_URL=https://github.com/hsn07pk/BloomOulu.git
-      REPO_BRANCH=csc-deploy
+      REPO_BRANCH=main
       CLONE_DIR=/opt/bloomoulu
 
   # `bloomoulu-deploy [PUBLIC_HOST]` — auto-detects the floating IP via sslip.io
