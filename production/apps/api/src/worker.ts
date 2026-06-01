@@ -32,6 +32,7 @@ import {
   QUEUE_AUDIT_GAP,
   QUEUE_PLANT_ENRICH,
   QUEUE_ENRICHMENT_SWEEP,
+  QUEUE_RETENTION,
 } from './modules/jobs/queues.js';
 import { registerCronJobs } from './modules/jobs/cron.js';
 import { processReceipt } from './modules/jobs/processors/receipt.processor.js';
@@ -59,6 +60,7 @@ import { processRagEval } from './modules/jobs/processors/rag-eval.processor.js'
 import { processAuditGap } from './modules/jobs/processors/audit-gap.processor.js';
 import { makePlantEnrichProcessor } from './modules/jobs/processors/plant-enrich.processor.js';
 import { makeEnrichmentSweepProcessor } from './modules/jobs/processors/enrichment-sweep.processor.js';
+import { processRetention } from './modules/jobs/processors/retention.processor.js';
 import { buildSettingsDefaults } from './modules/settings/settings.service.js';
 
 const logger = new Logger('Worker');
@@ -136,6 +138,7 @@ const QUEUES: ReadonlyArray<QueueDef> = [
   { name: QUEUE_TAX_CERT_ANNUAL, concurrency: 1, handler: processTaxCertAnnual },
   { name: QUEUE_RAG_EVAL,       concurrency: 1,  handler: processRagEval },
   { name: QUEUE_AUDIT_GAP,      concurrency: 1,  handler: processAuditGap },
+  { name: QUEUE_RETENTION,      concurrency: 1,  handler: processRetention },
   // Static settings snapshot is fine for the worker — admin edits roll
   // through Redis pub/sub but the worker stays alive across builds anyway;
   // the new value lands on the next process restart.

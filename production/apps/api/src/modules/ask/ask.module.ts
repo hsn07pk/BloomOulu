@@ -226,22 +226,32 @@ class AskController {
   @Get('starters')
   async starters() {
     const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    // GDPR (data minimisation): this endpoint is PUBLIC, so it must never
+    // surface a question typed by a signed-in donor — that text is their
+    // personal data. Restrict to anonymous (userId = null) messages only,
+    // and additionally screen each candidate for anything that looks
+    // personal (emails, phone numbers, long digit runs, "my name is …")
+    // before it can become a public suggestion chip.
     const rows = await this.prisma.askMessage.findMany({
       where: {
         createdAt: { gte: since },
+        userId: null,
+        intent: 'on_topic',
         answer: { reaction: 'helpful' },
       },
       select: { text: true, locale: true },
       orderBy: { createdAt: 'desc' },
-      take: 50,
+      take: 100,
     });
     const seen = new Set<string>();
     const dedup: Array<{ text: string; locale: string }> = [];
     for (const r of rows) {
-      const key = r.text.trim().toLowerCase();
+      const text = r.text.trim();
+      if (!isSafeStarter(text)) continue;
+      const key = text.toLowerCase();
       if (!seen.has(key)) {
         seen.add(key);
-        dedup.push(r);
+        dedup.push({ text, locale: r.locale });
       }
       if (dedup.length >= 5) break;
     }
@@ -548,6 +558,27 @@ class AskController {
       )
       .map((p) => ({ slug: p.slug, nameEn: p.nameEn, primaryImage: p.primaryImage }));
   }
+}
+
+/**
+ * Guard for the public /v1/ask/starters list: returns false for any
+ * candidate question that looks like it might carry personal data, so a
+ * stray PII-bearing question can never be promoted into a public suggestion
+ * chip even though it was asked anonymously and rated helpful.
+ */
+function isSafeStarter(text: string): boolean {
+  if (!text) return false;
+  if (text.length < 8 || text.length > 160) return false;
+  // Email addresses.
+  if (/[\w.+-]+@[\w-]+\.[\w.-]+/.test(text)) return false;
+  // URLs (can embed identifiers / tracking).
+  if (/https?:\/\/|www\./i.test(text)) return false;
+  // Phone numbers / long digit runs (IBAN fragments, order ids, etc.).
+  if (/(?:\+?\d[\s-]?){7,}/.test(text)) return false;
+  if (/\d{5,}/.test(text)) return false;
+  // Self-identifying phrases in FI / SV / EN.
+  if (/\b(my name is|i am|i'm|jag heter|mitt namn|nimeni on|olen )\b/i.test(text)) return false;
+  return true;
 }
 
 @Module({ controllers: [AskController], providers: [AskService] })

@@ -29,6 +29,7 @@ import { RedListStatusEnum } from '@bloomoulu/constants';
 import { Roles } from '../../common/roles.decorator.js';
 import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.decorator.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { collectUserExport } from '../gdpr/gdpr.data.js';
 
 const PlantImportRow = z.object({
   slug: z.string().regex(/^[a-z0-9-]+$/),
@@ -60,32 +61,20 @@ export class ExportsController {
   /**
    * GDPR donor data export. Returns every row tied to the authenticated
    * user across all tables. Format is intentionally machine-readable.
+   *
+   * Uses the shared collectUserExport so this synchronous path returns the
+   * exact same complete set as the async export processor — passwordHash and
+   * OAuth tokens are always stripped (see gdpr/gdpr.data.ts).
    */
   @Get('exports/me/data')
   @Roles('donor', 'curator', 'finance', 'admin')
   async exportMe(@CurrentUser() session: AuthenticatedUser) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: session.sub },
-      include: {
-        adoptions: { include: { plant: { select: { slug: true, nameEn: true } } } },
-        payments: true,
-        receipts: true,
-        taxCertificates: true,
-        askMessages: { include: { answer: true } },
-        savedPlants: { include: { plant: { select: { slug: true, nameEn: true } } } },
-        dataExports: true,
-        erasures: true,
-      },
-    });
-    if (!user) throw new UnauthorizedException();
+    const bundle = await collectUserExport(this.prisma, session.sub);
+    if (!bundle) throw new UnauthorizedException();
     await this.prisma.dataExportRequest.create({
-      data: { userId: user.id, status: 'completed', completedAt: new Date() },
+      data: { userId: session.sub, status: 'completed', completedAt: new Date() },
     });
-    const { passwordHash: _ph, ...safeUser } = user as { passwordHash?: string } & typeof user;
-    return {
-      exportedAt: new Date().toISOString(),
-      user: safeUser,
-    };
+    return bundle;
   }
 
   @Get('exports/plants.csv')

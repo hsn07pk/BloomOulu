@@ -1,13 +1,15 @@
 /**
- * GDPR Art. 15 — Subject Access Request fulfilment.
+ * GDPR Art. 15 / 20 — Subject Access Request fulfilment.
  *
- * Collect every row referencing the user, write JSON to MinIO, email a
- * pre-signed link (24h TTL).
+ * Collect every row referencing the user (via the shared collectUserExport
+ * so this stays in lock-step with the synchronous controller path), write
+ * JSON to MinIO, email a pre-signed link (24h TTL).
  */
 import type { Job } from 'bullmq';
 import { prisma } from '@bloomoulu/db';
 import { uploadToS3, presign } from '../../../infra/storage.js';
 import { enqueueEmail } from '../enqueue.js';
+import { collectUserExport } from '../../gdpr/gdpr.data.js';
 
 export interface GdprExportJob {
   requestId: string;
@@ -21,28 +23,8 @@ export async function processGdprExport(job: Job<GdprExportJob>) {
   if (!req) throw new Error(`Export request ${job.data.requestId} not found`);
 
   const u = req.user;
-  const exportBundle = {
-    exportedAt: new Date().toISOString(),
-    subjectRights: 'GDPR Article 15',
-    user: {
-      id: u.id,
-      email: u.email,
-      name: u.name,
-      locale: u.locale,
-      homeRegion: u.homeRegion,
-      postalAddress: u.postalAddress,
-      createdAt: u.createdAt,
-    },
-    adoptions: await prisma.adoption.findMany({
-      where: { donorId: u.id },
-      include: { plant: { select: { nameEn: true, slug: true } }, tier: true },
-    }),
-    payments: await prisma.payment.findMany({ where: { donorId: u.id } }),
-    receipts: await prisma.receipt.findMany({ where: { donorId: u.id } }),
-    taxCertificates: await prisma.taxCertificate.findMany({ where: { donorId: u.id } }),
-    askMessages: await prisma.askMessage.findMany({ where: { userId: u.id } }),
-    auditLog: await prisma.auditLog.findMany({ where: { actorUserId: u.id } }),
-  };
+  const exportBundle = await collectUserExport(prisma, u.id);
+  if (!exportBundle) throw new Error(`User ${u.id} not found for export ${req.id}`);
 
   const key = `gdpr-exports/${req.id}.json`;
   const bytes = Buffer.from(JSON.stringify(exportBundle, null, 2), 'utf-8');

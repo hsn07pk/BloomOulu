@@ -27,6 +27,8 @@ import { cancelAdoption } from '@bloomoulu/db';
 import { Queue } from 'bullmq';
 import { Redis } from 'ioredis';
 import bcrypt from 'bcryptjs';
+import { Signer } from '@fastify/cookie';
+import { MemoryStore } from '@fastify/session';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -1971,6 +1973,106 @@ const adminConfig = new AdminJS({
   },
 } as any);
 
+// ── Admin session secret + shared store/signer (GDPR / security) ─────────
+// The custom Fastify routes (camt.054 reconcile, downloads, dashboard
+// stats, observability, bulk-jobs) are served from an `onRequest` hook
+// that fires BEFORE @adminjs/fastify registers @fastify/session +
+// @fastify/cookie inside buildAuthenticatedRouter — so `req.session` is
+// not yet populated there. To gate those routes on a valid admin session
+// without changing AdminJS's own auth, we own the session store + cookie
+// signer here and pass them into buildAuthenticatedRouter. The early hook
+// then unsigns the `bloomoulu_admin` cookie with the SAME signer and looks
+// the session id up in the SAME store the plugin writes to, so the two
+// views of the session are always consistent.
+const ADMIN_COOKIE_NAME = 'bloomoulu_admin';
+// Must be ≥32 chars (@fastify/session requirement). Keep this fallback in
+// sync with the buildAuthenticatedRouter call below; in prod AUTH_SECRET is
+// always set (see docs/ENV.md) and the fallback is never used.
+const ADMIN_SESSION_SECRET =
+  process.env.AUTH_SECRET ?? 'change-me-in-prod-32+chars-please';
+const adminSessionStore = new MemoryStore();
+const adminCookieSigner = new Signer(ADMIN_SESSION_SECRET);
+
+/** Minimal Cookie-header value reader (avoids relying on @fastify/cookie's
+ *  untyped `parse` export). Returns the URL-decoded value or undefined. */
+function readCookie(cookieHeader: string, name: string): string | undefined {
+  for (const part of cookieHeader.split(';')) {
+    const eq = part.indexOf('=');
+    if (eq === -1) continue;
+    if (part.slice(0, eq).trim() !== name) continue;
+    const value = part.slice(eq + 1).trim();
+    try {
+      return decodeURIComponent(value);
+    } catch {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * True when the request carries a valid `bloomoulu_admin` session cookie
+ * that resolves to a stored session with an `adminUser`. Used by the early
+ * onRequest hook to protect the custom routes, mirroring AdminJS's own
+ * `request.session.get('adminUser')` check (which only runs in a later
+ * preHandler that the custom routes never reach).
+ */
+async function hasValidAdminSession(cookieHeader: string | undefined): Promise<boolean> {
+  if (!cookieHeader) return false;
+  const raw = readCookie(cookieHeader, ADMIN_COOKIE_NAME);
+  if (!raw) return false;
+  const unsigned = adminCookieSigner.unsign(raw);
+  if (!unsigned.valid || !unsigned.value) return false;
+  const sessionId = unsigned.value;
+  const session = await new Promise<unknown>((resolve) => {
+    adminSessionStore.get(sessionId, (err, s) => {
+      resolve(err ? null : (s ?? null));
+    });
+  });
+  if (!session || typeof session !== 'object') return false;
+  // The session object stores values as plain own-properties (see
+  // @fastify/session's Session class) — login sets `adminUser`. Expiry is
+  // also enforced by the plugin on decode; if the cookie is stale the store
+  // entry will already have been destroyed, so a present adminUser is enough.
+  const adminUser = (session as { adminUser?: unknown }).adminUser;
+  return Boolean(adminUser);
+}
+
+/**
+ * The custom routes that must NOT be reachable without an admin session.
+ * Matched as a prefix/exact set against the request URL (path only). The
+ * favicon shim, AdminJS's own assets/login/logout, and the public health/
+ * metrics endpoints are intentionally excluded — they either carry no PII
+ * or are needed pre-auth. Anything under one of these prefixes that mutates
+ * state or returns donor PII is gated.
+ */
+function isProtectedCustomRoute(pathname: string): boolean {
+  // Exact matches.
+  const exact = new Set<string>([
+    '/admin/dl/reconcile-camt054',
+    '/admin/downloads',
+    '/admin/dashboard-stats',
+    '/admin/rebuild-summaries',
+    '/admin/translations/import',
+    '/admin/plants/create-from-assistant',
+    '/admin/plants/bulk-jobs',
+    '/admin/ingest-doc',
+    '/admin/manual-docs',
+    '/admin/settings/batch',
+    '/admin/backups',
+    '/admin/backups/run',
+    '/admin/reconciliation/entries',
+  ]);
+  if (exact.has(pathname)) return true;
+  // Prefix matches (sub-resources with ids / actions).
+  const prefixes = [
+    '/admin/dl/', // disbursement CSV/PDF, receipts, tax certs, gdpr exports
+    '/admin/plants/bulk-jobs/',
+    '/admin/observability/',
+  ];
+  return prefixes.some((p) => pathname.startsWith(p));
+}
+
 async function bootstrap() {
   const app = Fastify({ logger: true, trustProxy: true });
 
@@ -2022,6 +2124,32 @@ async function bootstrap() {
           .header('location', clean.replace(/\?$/, ''))
           .send();
         return;
+      }
+    }
+    // ── Auth gate for the custom routes (GDPR / security) ────────────
+    // This onRequest hook runs BEFORE @adminjs/fastify's session +
+    // protected-routes preHandler, so every custom route below would
+    // otherwise be reachable with no admin session — including
+    // /admin/dl/reconcile-camt054 (marks payments succeeded!) and
+    // /admin/downloads (donor PII). Gate them here by verifying the
+    // signed bloomoulu_admin session cookie against our shared session
+    // store. AdminJS's own resources/login/assets are untouched (they
+    // are not in isProtectedCustomRoute and AdminJS guards them itself).
+    {
+      const pathname = (req.url ?? '').split('?', 1)[0]!;
+      if (isProtectedCustomRoute(pathname)) {
+        const ok = await hasValidAdminSession(req.headers.cookie);
+        if (!ok) {
+          obs.warn('admin', 'unauthenticated custom-route blocked', {
+            method: req.method,
+            url: pathname,
+          });
+          reply
+            .code(401)
+            .header('content-type', 'application/json')
+            .send({ error: 'unauthorized', message: 'Admin session required.' });
+          return;
+        }
       }
     }
     // ── camt.054 bank-statement reconciliation ──────────────────────
@@ -3533,13 +3661,19 @@ async function bootstrap() {
         }
         return null;
       },
-      cookiePassword: process.env.AUTH_SECRET ?? 'change-me-in-prod-32+chars-please',
-      cookieName: 'bloomoulu_admin',
+      cookiePassword: ADMIN_SESSION_SECRET,
+      cookieName: ADMIN_COOKIE_NAME,
     },
     app as any,
     {
       saveUninitialized: false,
-      secret: process.env.AUTH_SECRET ?? 'change-me-in-prod-32+chars',
+      // Use OUR signer + store so the early onRequest auth gate
+      // (hasValidAdminSession) reads exactly the same session data the
+      // plugin writes on login. The signer doubles as the secret here
+      // (@fastify/session accepts a Signer object in `secret`).
+      secret: adminCookieSigner,
+      store: adminSessionStore,
+      cookieName: ADMIN_COOKIE_NAME,
       cookie: { httpOnly: true, secure: process.env.NODE_ENV === 'production' },
     },
   );
