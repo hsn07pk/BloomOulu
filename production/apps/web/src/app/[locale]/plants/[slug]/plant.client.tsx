@@ -329,7 +329,9 @@ export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled,
     void fetch(`${api}/v1/plants/${encodeURIComponent(plant.slug)}/scan`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ locale, kioskId: qrKioskId }),
+      // Omit kioskId entirely when there's no kiosk (don't send null — the
+      // scan DTO treats null/omitted the same, but a clean payload is clearer).
+      body: JSON.stringify(qrKioskId ? { locale, kioskId: qrKioskId } : { locale }),
       keepalive: true,
     }).catch(() => {
       /* analytics ping — never block the page on a failure */

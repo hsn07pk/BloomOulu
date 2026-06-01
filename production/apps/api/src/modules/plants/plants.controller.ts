@@ -30,8 +30,13 @@ import { ZodValidationPipe } from '../../common/zod.pipe.js';
  *  the controller derives a stable visitorHash from IP + UA so we never
  *  store raw PII. */
 const RecordScanDto = z.object({
-  locale: LocaleEnum.optional(),
-  kioskId: z.string().max(64).optional(),
+  // `.nullish()` (= optional + nullable), not `.optional()`: a fire-and-forget
+  // analytics ping must never 400. Web clients legitimately POST
+  // `{ kioskId: null }` for the common non-kiosk arrival, and `.optional()`
+  // rejects an explicit null — which silently dropped every QR scan. The
+  // handler coalesces null/undefined below (`?? 'fi'` / `?? null`).
+  locale: LocaleEnum.nullish(),
+  kioskId: z.string().max(64).nullish(),
 });
 type RecordScanDto = z.infer<typeof RecordScanDto>;
 
