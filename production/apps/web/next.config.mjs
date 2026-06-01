@@ -122,11 +122,17 @@ const nextConfig = {
     // dashboard too — no second subdomain/tunnel needed. Env-driven so it
     // points at the admin container in Docker and localhost in dev.
     const adminTarget = process.env.ADMIN_REWRITE_TARGET ?? 'http://localhost:4100';
+    // The kiosk (Next standalone, basePath '/kiosk') is proxied under the same
+    // host so the single public origin serves the lobby display too. Build-time-
+    // baked like the others; points at the kiosk container in Docker.
+    const kioskTarget = process.env.KIOSK_REWRITE_TARGET ?? 'http://localhost:3100';
     return [
       { source: '/v1/:path*',       destination: `${target}/v1/:path*` },
       { source: '/webhooks/:path*', destination: `${target}/webhooks/:path*` },
       { source: '/admin',           destination: `${adminTarget}/admin` },
       { source: '/admin/:path*',    destination: `${adminTarget}/admin/:path*` },
+      { source: '/kiosk',           destination: `${kioskTarget}/kiosk` },
+      { source: '/kiosk/:path*',    destination: `${kioskTarget}/kiosk/:path*` },
     ];
   },
 };

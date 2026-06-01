@@ -15,6 +15,11 @@ try {
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
+  // Served under /kiosk on the single public host (ngrok), proxied by the web
+  // app's rewrite (see apps/web/next.config.mjs). basePath prefixes every route
+  // AND asset (/kiosk/_next/*) so it never collides with the web app at root.
+  // Safe because every outbound link uses an absolute WEB_URL/API_URL.
+  basePath: '/kiosk',
   reactStrictMode: true,
   // The kiosk's ESLint config references react-hooks/exhaustive-deps,
   // a rule that the Docker build's pnpm resolution can't always load

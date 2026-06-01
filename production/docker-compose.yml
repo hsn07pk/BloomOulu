@@ -63,6 +63,8 @@ services:
         # Proxy the AdminJS panel under the same host so one tunnel serves
         # the operator dashboard too. Also build-time-baked (see above).
         ADMIN_REWRITE_TARGET: http://admin:4100
+        # Kiosk (basePath /kiosk) proxied through web — same single-host rationale.
+        KIOSK_REWRITE_TARGET: http://kiosk:3100
         # Donor-facing contact details. Single source of truth: change in
         # one env var and every web page (donate/complete error, GDPR
         # banners, ask-the-garden curator name, etc.) reflects it.
@@ -360,6 +362,12 @@ services:
     build:
       context: .
       dockerfile: infra/docker/kiosk.Dockerfile
+      # NEXT_PUBLIC_* must be build args (inlined into the client bundle at build
+      # time) — runtime env alone leaves localhost baked in. Mirrors the web svc.
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
+        NEXT_PUBLIC_WEB_URL: ${NEXT_PUBLIC_WEB_URL:-http://localhost:3000}
+        NEXT_PUBLIC_KIOSK_URL: ${NEXT_PUBLIC_KIOSK_URL:-http://localhost:3100}
     <<: *restart
     environment:
       NODE_ENV: production
