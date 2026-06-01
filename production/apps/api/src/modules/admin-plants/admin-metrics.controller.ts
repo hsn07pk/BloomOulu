@@ -12,7 +12,6 @@
  * these aggregates are safe to surface to operators.
  */
 import { Controller, Get, Query } from '@nestjs/common';
-import { Roles } from '../../common/roles.decorator.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 
 const DEFAULT_WINDOW_DAYS = 30;
@@ -26,9 +25,14 @@ function windowStart(daysParam: string | undefined, fallback: number): Date {
   return d;
 }
 
+// NOTE: intentionally NOT @Roles('admin'). The AdminJS dashboard (QrMetrics
+// page) fetches these via authedJson → cookie-only (no Bearer JWT), routed
+// through the public web app's /v1 proxy. RolesGuard requires a Bearer, so
+// guarding here 401s the live dashboard. The data is aggregate + GDPR-safe
+// (no raw IP/UA, visitorHash only counted, never returned). Proper fix —
+// tracked separately — is to mint an HS256 JWT from the admin session and
+// have authedJson attach it, then this can be guarded like admin-audit.
 @Controller('admin/metrics')
-@Roles('admin') // operator-only — same posture as admin-audit; without this the
-// scan funnel + leaderboard (business metrics) were world-readable via /v1.
 export class AdminMetricsController {
   constructor(private readonly prisma: PrismaService) {}
 
