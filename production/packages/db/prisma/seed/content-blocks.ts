@@ -410,9 +410,15 @@ const BLOCKS: Block[] = [
 
 export async function seedContentBlocks(prisma: PrismaClient) {
   for (const b of BLOCKS) {
+    // Legal blocks (privacy / terms / accessibility) encode compliance
+    // statements — a stale copy can be a FALSE legal claim (e.g. the old
+    // "no transfers outside the EEA" line), so on every seed they are
+    // force-refreshed from this canonical source, which always wins over a
+    // DB copy. Marketing copy (home.hero) is operator-editable in /admin, so
+    // we only insert it and never clobber later edits.
+    const isLegal = b.slug.startsWith('legal.');
     await prisma.contentBlock.upsert({
       where: { slug: b.slug },
-      // Only set the body on first insert; never overwrite operator edits.
       create: {
         slug: b.slug,
         kind: b.kind,
@@ -424,7 +430,9 @@ export async function seedContentBlocks(prisma: PrismaClient) {
         isPublished: b.isPublished ?? true,
         sortOrder: b.sortOrder ?? 0,
       },
-      update: {},
+      update: isLegal
+        ? { kind: b.kind, bodyEn: b.bodyEn, bodyFi: b.bodyFi, bodySv: b.bodySv }
+        : {},
     });
   }
 }
