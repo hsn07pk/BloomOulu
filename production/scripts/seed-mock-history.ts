@@ -346,7 +346,7 @@ async function purgeMockData(): Promise<Record<string, number>> {
     await prisma.askMessage.deleteMany({
       where: {
         OR: [
-          userIds.length ? { userId: { in: userIds } } : { userId: 'never' },
+          userIds.length ? { userId: { in: userIds } } : { userId: '00000000-0000-0000-0000-000000000000' },
           { text: { startsWith: `[${MOCK_TAG}] ` } },
         ],
       },
@@ -364,7 +364,7 @@ async function purgeMockData(): Promise<Record<string, number>> {
       where: {
         OR: [
           { action: { startsWith: MOCK_AUDIT_PREFIX } },
-          userIds.length ? { actorUserId: { in: userIds } } : { actorUserId: 'never' },
+          userIds.length ? { actorUserId: { in: userIds } } : { actorUserId: '00000000-0000-0000-0000-000000000000' },
         ],
       },
     })
