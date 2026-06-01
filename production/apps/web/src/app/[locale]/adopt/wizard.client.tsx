@@ -2471,24 +2471,6 @@ function Step4Pay({
             </div>
           </fieldset>
 
-          <div
-            style={{
-              padding: 16,
-              background: 'rgba(31,58,44,0.04)',
-              borderRadius: 12,
-              fontSize: '0.867rem',
-              color: 'var(--ink-soft)',
-              lineHeight: 1.6,
-            }}
-          >
-            ℹ{' '}
-            {t('taxDisclosure', {
-              total: euros(totalCents, locale),
-              donation: euros(donationShare, locale),
-              benefits: euros(benefitsShare, locale),
-            })}
-          </div>
-
           {errorMessage && (
             <div
               role="alert"
@@ -2506,23 +2488,6 @@ function Step4Pay({
             </div>
           )}
 
-          <label
-            style={{
-              display: 'flex',
-              gap: 10,
-              alignItems: 'flex-start',
-              padding: 14,
-              cursor: 'pointer',
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={marketingOptIn}
-              onChange={(e) => setMarketingOptIn(e.target.checked)}
-              style={{ accentColor: 'var(--forest)', marginTop: 3 }}
-            />
-            <span className="small">{t('marketingOptIn')}</span>
-          </label>
         </div>
 
         <aside style={{ position: 'sticky', top: 140, alignSelf: 'flex-start' }}>
@@ -2550,20 +2515,6 @@ function Step4Pay({
               ? t('submitting')
               : `✓ ${t('confirmPay', { amount: euros(totalCents, locale), suffix: recurringSuffix })}`}
           </button>
-          <div
-            className="tiny"
-            style={{
-              textAlign: 'center',
-              marginTop: 12,
-              textTransform: 'none',
-              letterSpacing: 0,
-              lineHeight: 1.5,
-            }}
-          >
-            {t('refundsPolicy')}
-            <br />
-            {t('plantDiedPolicy')}
-          </div>
         </aside>
       </div>
     </section>
