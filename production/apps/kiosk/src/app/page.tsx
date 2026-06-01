@@ -343,8 +343,8 @@ function PlantSparkQR({ url, size = 200 }: { url: string; size?: number }) {
 // Smaller reference canvas than the panel's native 1920×1080: the scale factor
 // to a real screen is then ≥1.2, so text renders LARGER (more readable) on
 // typical displays + browser previews while still fitting one screen.
-const BASE_W = 1600;
-const BASE_H = 900;
+const BASE_W = 1760;
+const BASE_H = 990;
 
 /** Largest scale that fits the BASE_W×BASE_H canvas inside the viewport
  *  (contain). Recomputes on resize / orientation change. */
@@ -669,7 +669,7 @@ export default function KioskPage() {
               </div>
               <div
                 style={{
-                  fontSize: 11,
+                  fontSize: 13,
                   letterSpacing: '0.24em',
                   textTransform: 'uppercase',
                   color: '#A8C060',
@@ -715,7 +715,7 @@ export default function KioskPage() {
                       border: 'none',
                       background: active ? '#FAF7EE' : 'transparent',
                       color: active ? '#1F3C2D' : '#FAF7EE',
-                      fontSize: 12,
+                      fontSize: 14,
                       fontWeight: 600,
                       letterSpacing: '0.12em',
                       textTransform: 'uppercase',
@@ -747,7 +747,7 @@ export default function KioskPage() {
               </div>
               <div
                 style={{
-                  fontSize: 11,
+                  fontSize: 13,
                   letterSpacing: '0.24em',
                   textTransform: 'uppercase',
                   color: '#A8C060',
@@ -782,7 +782,7 @@ export default function KioskPage() {
                     display: 'flex',
                     alignItems: 'center',
                     gap: 8,
-                    fontSize: 16,
+                    fontSize: 18,
                   }}
                 >
                   <span aria-hidden="true">{weatherInfo.icon}</span>
@@ -792,7 +792,7 @@ export default function KioskPage() {
                 </div>
                 <div
                   style={{
-                    fontSize: 11,
+                    fontSize: 13,
                     color: 'rgba(250,247,238,0.65)',
                     letterSpacing: '0.04em',
                   }}
@@ -833,7 +833,7 @@ export default function KioskPage() {
           >
             <div
               style={{
-                fontSize: 11,
+                fontSize: 13,
                 letterSpacing: '0.24em',
                 textTransform: 'uppercase',
                 color: '#A8C060',
@@ -843,7 +843,7 @@ export default function KioskPage() {
             </div>
             <div
               style={{
-                fontSize: 12,
+                fontSize: 14,
                 color: 'rgba(250,247,238,0.6)',
                 marginTop: 6,
                 marginBottom: 16,
@@ -908,7 +908,7 @@ export default function KioskPage() {
                     <div
                       style={{
                         fontFamily: "'Fraunces', serif",
-                        fontSize: 15,
+                        fontSize: 17,
                         lineHeight: 1.2,
                         color: '#FAF7EE',
                       }}
@@ -919,7 +919,7 @@ export default function KioskPage() {
                       <div
                         style={{
                           fontFamily: "'Fraunces', serif",
-                          fontSize: 11,
+                          fontSize: 13,
                           fontStyle: 'italic',
                           color: 'rgba(168,192,96,0.85)',
                         }}
@@ -946,7 +946,7 @@ export default function KioskPage() {
           >
             <div
               style={{
-                fontSize: 11,
+                fontSize: 13,
                 letterSpacing: '0.24em',
                 textTransform: 'uppercase',
                 color: '#2D5440',
@@ -963,7 +963,7 @@ export default function KioskPage() {
             >
               {t.exploreHomepage}
             </h3>
-            <p style={{ marginTop: 6, fontSize: 13, color: '#5C6E60' }}>
+            <p style={{ marginTop: 6, fontSize: 15, color: '#5C6E60' }}>
               {t.exploreSubtitle}
             </p>
             <div
@@ -981,7 +981,7 @@ export default function KioskPage() {
             <div
               style={{
                 marginTop: 10,
-                fontSize: 11,
+                fontSize: 13,
                 letterSpacing: '0.18em',
                 textTransform: 'uppercase',
                 color: '#5C6E60',
@@ -1007,7 +1007,7 @@ export default function KioskPage() {
                     display: 'flex',
                     alignItems: 'center',
                     gap: 10,
-                    fontSize: 13,
+                    fontSize: 15,
                     color: '#3F5045',
                     lineHeight: 1.4,
                   }}
@@ -1025,7 +1025,7 @@ export default function KioskPage() {
                       alignItems: 'center',
                       justifyContent: 'center',
                       fontFamily: "'IBM Plex Mono', ui-monospace, monospace",
-                      fontSize: 11,
+                      fontSize: 13,
                       fontWeight: 600,
                     }}
                   >
@@ -1053,7 +1053,7 @@ export default function KioskPage() {
             <div>
               <div
                 style={{
-                  fontSize: 11,
+                  fontSize: 13,
                   letterSpacing: '0.24em',
                   textTransform: 'uppercase',
                 }}
@@ -1072,7 +1072,7 @@ export default function KioskPage() {
               <p
                 style={{
                   marginTop: 12,
-                  fontSize: 14,
+                  fontSize: 16,
                   lineHeight: 1.5,
                   color: 'rgba(31,60,45,0.8)',
                 }}
@@ -1092,7 +1092,7 @@ export default function KioskPage() {
                     marginBottom: 8,
                     background: 'rgba(31,60,45,0.10)',
                     color: '#1F3C2D',
-                    fontSize: 13,
+                    fontSize: 15,
                     fontWeight: 500,
                     textDecoration: 'none',
                   }}
@@ -1112,7 +1112,7 @@ export default function KioskPage() {
                   borderRadius: 10,
                   background: '#1F3C2D',
                   color: '#FAF7EE',
-                  fontSize: 14,
+                  fontSize: 16,
                   fontWeight: 600,
                   textDecoration: 'none',
                 }}
@@ -1160,7 +1160,7 @@ export default function KioskPage() {
               <div>
                 <div
                   style={{
-                    fontSize: 11,
+                    fontSize: 13,
                     letterSpacing: '0.24em',
                     textTransform: 'uppercase',
                     color: '#A8C060',
@@ -1191,7 +1191,7 @@ export default function KioskPage() {
                   borderRadius: 999,
                   background: 'rgba(250,247,238,0.10)',
                   border: '1px solid rgba(250,247,238,0.18)',
-                  fontSize: 12,
+                  fontSize: 14,
                   color: '#FAF7EE',
                   letterSpacing: '0.06em',
                   textTransform: 'uppercase',
@@ -1329,7 +1329,7 @@ export default function KioskPage() {
                       display: 'inline-flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      fontSize: 14,
+                      fontSize: 16,
                     }}
                   >
                     {s.icon}
@@ -1348,7 +1348,7 @@ export default function KioskPage() {
                 <div>
                   <div
                     style={{
-                      fontSize: 11,
+                      fontSize: 13,
                       letterSpacing: '0.18em',
                       textTransform: 'uppercase',
                       color: '#A8C060',
@@ -1358,7 +1358,7 @@ export default function KioskPage() {
                   </div>
                   <div
                     style={{
-                      fontSize: 11,
+                      fontSize: 13,
                       color: 'rgba(250,247,238,0.55)',
                       marginTop: 2,
                     }}
@@ -1379,7 +1379,7 @@ export default function KioskPage() {
             borderTop: '1px solid rgba(250,247,238,0.14)',
             display: 'flex',
             justifyContent: 'space-between',
-            fontSize: 11,
+            fontSize: 13,
             color: 'rgba(250,247,238,0.5)',
             fontFamily: "'IBM Plex Mono', ui-monospace, monospace",
             letterSpacing: '0.16em',
