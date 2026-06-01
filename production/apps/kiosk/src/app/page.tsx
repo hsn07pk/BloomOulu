@@ -348,22 +348,33 @@ const BASE_H = 990;
 
 /** Largest scale that fits the BASE_W×BASE_H canvas inside the viewport
  *  (contain). Recomputes on resize / orientation change. */
-function useFitScale(): number {
-  const [scale, setScale] = useState(1);
+function useFitScale(ref: { current: HTMLElement | null }): number {
+  const [scale, setScale] = useState(0);
   useEffect(() => {
-    const compute = () =>
-      setScale(Math.min(window.innerWidth / BASE_W, window.innerHeight / BASE_H));
+    const el = ref.current;
+    if (!el) return;
+    // Measure the REAL natural content size (offsetHeight ignores the CSS
+    // transform) and contain it in the viewport. Measuring instead of assuming
+    // a fixed canvas height means the layout can NEVER overflow or overlap, no
+    // matter how much content there is (variable adopter wall, plant tiles…).
+    const compute = () => {
+      const w = el.offsetWidth || BASE_W;
+      const h = el.offsetHeight || 1;
+      setScale(Math.min(window.innerWidth / w, window.innerHeight / h));
+    };
     compute();
+    const ro = new ResizeObserver(compute);
+    ro.observe(el);
     window.addEventListener('resize', compute);
     window.addEventListener('orientationchange', compute);
-    // Some kiosk browsers report a stale size at boot — recheck shortly after.
     const boot = setTimeout(compute, 400);
     return () => {
+      ro.disconnect();
       window.removeEventListener('resize', compute);
       window.removeEventListener('orientationchange', compute);
       clearTimeout(boot);
     };
-  }, []);
+  }, [ref]);
   return scale;
 }
 
@@ -408,7 +419,8 @@ export default function KioskPage() {
   const lastHeartbeatOk = useRef<number>(Date.now());
 
   const t = STRINGS[locale];
-  const scale = useFitScale();
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const scale = useFitScale(canvasRef);
 
   useEffect(() => {
     setNow(new Date());
@@ -569,21 +581,21 @@ export default function KioskPage() {
       {/* Scale-to-fit canvas: authored at BASE_W×BASE_H, transform-scaled to
           fill any screen on a single page with no scroll (digital-signage fit). */}
       <div
+        ref={canvasRef}
         style={{
           position: 'absolute',
           top: '50%',
           left: '50%',
           width: BASE_W,
-          height: BASE_H,
           transform: `translate(-50%, -50%) scale(${scale})`,
           transformOrigin: 'center center',
+          visibility: scale > 0 ? 'visible' : 'hidden',
           background: 'var(--forest-deep, #1F3C2D)',
           color: 'var(--cream, #FAF7EE)',
-          padding: '40px 56px 28px',
+          padding: '40px 56px 32px',
           boxSizing: 'border-box',
           display: 'flex',
           flexDirection: 'column',
-          overflow: 'hidden',
         }}
       >
 
@@ -613,8 +625,6 @@ export default function KioskPage() {
         style={{
           position: 'relative',
           zIndex: 1,
-          flex: 1,
-          minHeight: 0,
           display: 'flex',
           flexDirection: 'column',
         }}
@@ -809,13 +819,12 @@ export default function KioskPage() {
         {/* ─── MAIN 3-COL GRID ─────────────────────────────────────── */}
         <section
           style={{
-            flex: 1.6,
-            minHeight: 0,
             marginTop: 26,
             display: 'grid',
             gridTemplateColumns:
               'minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr)',
             gap: 24,
+            alignItems: 'stretch',
           }}
         >
           {/* Most visited — 3x2 grid of plant tiles */}
@@ -828,7 +837,6 @@ export default function KioskPage() {
               padding: 24,
               display: 'flex',
               flexDirection: 'column',
-              minHeight: 0,
             }}
           >
             <div
@@ -855,9 +863,10 @@ export default function KioskPage() {
               style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(3, 1fr)',
-                gridTemplateRows: 'repeat(2, 1fr)',
+                gridTemplateRows: 'repeat(2, auto)',
                 gap: 12,
                 flex: 1,
+                marginTop: 4,
               }}
             >
               {visited.length === 0 &&
@@ -1126,12 +1135,11 @@ export default function KioskPage() {
         {/* ─── BOTTOM ROW: ADOPTER WALL + STATS STACK ──────────────── */}
         <section
           style={{
-            flex: 1,
-            minHeight: 0,
             marginTop: 22,
             display: 'grid',
             gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1.2fr)',
             gap: 24,
+            alignItems: 'stretch',
           }}
         >
           {/* Adopter wall — all-time */}
@@ -1142,9 +1150,9 @@ export default function KioskPage() {
               border: '1px solid rgba(250,247,238,0.12)',
               padding: 28,
               position: 'relative',
-              overflow: 'hidden',
               display: 'flex',
               flexDirection: 'column',
+              justifyContent: 'center',
             }}
           >
             <div
@@ -1216,19 +1224,17 @@ export default function KioskPage() {
                 fill the wall. overflow hidden keeps it on the single screen. */}
             <div
               style={{
-                flex: 1,
-                minHeight: 0,
                 display: 'flex',
                 flexWrap: 'wrap',
                 alignContent: 'center',
                 justifyContent: 'center',
                 alignItems: 'baseline',
-                gap: '4px 30px',
-                overflow: 'hidden',
-                lineHeight: 1.05,
+                gap: '8px 30px',
+                lineHeight: 1.1,
+                paddingTop: 8,
               }}
             >
-              {cloudAdopters.map((a) => {
+              {cloudAdopters.slice(0, 18).map((a) => {
                 const w = cloudWord(a.count, maxAdopterCount, hashStr(a.name));
                 const color = (INTENT_CHIP[a.intent] ?? INTENT_CHIP.for_self).color;
                 return (

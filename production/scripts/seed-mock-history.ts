@@ -1015,8 +1015,10 @@ async function main() {
       ['sv', 12],
     ]);
     const question = pick(ASK_QUESTIONS[locale]);
-    // ~70% are signed-in (a mock user asked it); the rest anonymous (kiosk/web).
-    const userId = rand() < 0.7 ? pick(users).id : null;
+    // Always attribute to a mock donor so the row is purgeable by userId — no
+    // visible text tag needed (a tag like "[mockhist]" leaks into the public
+    // "trending questions" list on the Ask page).
+    const userId = pick(users).id;
     // A handful land today for the kiosk's live "questions today" counter.
     const isToday = i < randInt(5, 12);
     const createdAt = isToday ? todayAt(randInt(9, 19)) : recentWeightedDate(args.days);
@@ -1031,7 +1033,7 @@ async function main() {
 
     const msg = await prisma.askMessage.create({
       data: {
-        text: `[${MOCK_TAG}] ${question}`, // tagged for anonymous-row purge
+        text: question, // clean text; purged via userId (mock donor) above
         locale,
         userId,
         intent,
