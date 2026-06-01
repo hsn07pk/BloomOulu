@@ -543,7 +543,18 @@ export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled,
     }
   };
 
-  const qrUrl = typeof window !== 'undefined' ? window.location.href : '';
+  // The QR/print modal is for the plant's physical label, so it must encode
+  // the canonical plant URL with `?qr=1`: the page only fires its PlantScan
+  // ping for `?qr=1` arrivals (see arrivedViaQr above), so without it scans
+  // never reach the QR funnel. Build from origin+slug (not
+  // window.location.href) so it's stable regardless of how *this* viewer
+  // arrived and carries no unrelated query params. The page-level Share
+  // button (handleShare) intentionally keeps the clean URL for organic
+  // sharing, preserving the QR-vs-organic split the metrics rely on.
+  const qrUrl =
+    typeof window !== 'undefined'
+      ? `${window.location.origin}/${locale}/plants/${encodeURIComponent(plant.slug)}?qr=1`
+      : '';
   const qrDataUrl = useMemo(() => (qrUrl ? makeQrDataUrl(qrUrl) : ''), [qrUrl]);
 
   const quickFacts: Array<[string, string]> = (() => {
