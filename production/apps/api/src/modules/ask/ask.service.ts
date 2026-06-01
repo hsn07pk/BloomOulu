@@ -389,13 +389,28 @@ export class AskService {
     // 0.70). For EN queries this collapses to the original.
     const rerankQuery =
       translatedQuery && translatedQuery.length > 3 ? translatedQuery : queryForEmbedding;
-    // Rerank only the top-N hybrid-retrieval candidates: the bge-reranker is a
-    // CPU cross-encoder (~0.33s/doc), so reranking all 12 cost ~4s. The RRF
-    // fusion already surfaces the best candidates, so capping the rerank set
-    // keeps the final top-5 essentially unchanged while cutting latency. Env-tunable.
+    // Guarantee the named species' own chunk is a rerank candidate. A
+    // verbose factual query ("what family / conservation status of
+    // <Genus species>?") frequently ranks generic family/status chunks
+    // above the specific plant's doc in hybrid RRF, so the chunk that
+    // literally holds the answer falls outside the rerank slice and the
+    // bot escalates a question the corpus can answer. Pulling the named
+    // plant's chunk in directly fixed conservation recall 0% → high in
+    // scripts/rag-eval.ts.
+    const { chunks: named, missingNames } = await this.analyzeNamedSpecies(
+      queryForEmbedding,
+      locale,
+    ).catch(() => ({ chunks: [] as Array<{ id: string; text: string }>, missingNames: [] as string[] }));
+    const seenIds = new Set(combined.map((c) => c.id));
+    const rerankInput = [...named.filter((n) => !seenIds.has(n.id)), ...combined];
+    // Rerank the top-N hybrid candidates plus any injected named-species
+    // chunks: the bge-reranker is a CPU cross-encoder (~0.33s/doc), so we
+    // cap the set to keep latency down. Env-tunable.
     const rerankN = Number(process.env.ASK_RERANK_TOPN ?? 6);
     const reranked =
-      combined.length > 0 ? await this.rerank(rerankQuery, combined.slice(0, rerankN)) : [];
+      rerankInput.length > 0
+        ? await this.rerank(rerankQuery, rerankInput.slice(0, rerankN + named.length))
+        : [];
 
     // 6. Score floor + web-search augmentation.
     //    Two thresholds:
@@ -413,12 +428,23 @@ export class AskService {
     // while letting decent corpus matches answer fast. Override via env.
     const augmentBand = Number(process.env.ASK_AUGMENT_BAND ?? 0.05);
     const top = reranked[0];
+    // A species the donor named that isn't in our collection: the corpus
+    // can't answer about it specifically (retrieval often surfaces genus
+    // siblings above the band and would otherwise deflect), so force the
+    // live web lookup — this is the "not in RAG → search online, fetch,
+    // ground, and cache" path.
+    const forceWeb = missingNames.length > 0;
     let webResults: WebResult[] = [];
-    if (!top || top.score < augmentBand) {
+    if (!top || top.score < augmentBand || forceWeb) {
       // Use the standalone (rewritten) query for the web search and
       // prefer English Wikipedia regardless of locale because it has
       // the broadest species coverage.
-      webResults = await searchWeb(queryForEmbedding, 'en');
+      // When the donor named a species we don't have, search Wikipedia for
+      // the bare binomial — it matches the species article far more reliably
+      // than the full conversational sentence (which can mis-match, e.g. to
+      // an unrelated page).
+      const webQuery = missingNames.length > 0 ? missingNames.join(' ') : queryForEmbedding;
+      webResults = await searchWeb(webQuery, 'en');
       // Persist web results to the corpus so the second query on the
       // same topic finds them via normal hybrid retrieval (no Wikipedia
       // round-trip needed). Fire-and-forget — never blocks the user
@@ -1084,6 +1110,52 @@ export class AskService {
     // returns vector hits (since UNION ALL just leaves the fts/trgm
     // branches empty). No special-case needed.
     return rows;
+  }
+
+  /**
+   * Corpus chunks for any plant whose Latin binomial is named in the
+   * query. Each plant has one self-describing chunk (name, family,
+   * conservation status, origin, habitat) cross-linked by `plantId`, so a
+   * direct lookup guarantees the answer-bearing chunk reaches the reranker
+   * even when verbose factual phrasing buries it in hybrid retrieval. EN
+   * chunks are always included (the corpus is EN-primary; non-EN locales
+   * lean on cross-lingual rerank — same rationale as the translatedQuery
+   * pass above). Best-effort: any failure returns [] and retrieval is
+   * unaffected.
+   */
+  private async analyzeNamedSpecies(
+    text: string,
+    locale: 'en' | 'fi' | 'sv',
+  ): Promise<{ chunks: Array<{ id: string; text: string }>; missingNames: string[] }> {
+    const re = /\b([A-Z][a-z]{2,})\s+([a-z]{3,})\b/g;
+    const names = new Set<string>();
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text)) !== null) {
+      names.add(`${m[1]} ${m[2]}`);
+      if (names.size >= 5) break;
+    }
+    if (names.size === 0) return { chunks: [], missingNames: [] };
+    const plants = await this.prisma.plant.findMany({
+      where: { taxon: { latinName: { in: Array.from(names) } } },
+      select: { id: true, taxon: { select: { latinName: true } } },
+      take: 5,
+    });
+    const found = new Set(plants.map((p) => p.taxon.latinName.toLowerCase()));
+    // Binomials the donor named that we DON'T have a plant for — the corpus
+    // can't speak to those species specifically, so the caller forces a live
+    // web lookup instead of letting a genus-sibling match deflect the answer.
+    const missingNames = Array.from(names).filter((n) => !found.has(n.toLowerCase()));
+    const chunks = plants.length
+      ? await this.prisma.ragChunk.findMany({
+          where: {
+            plantId: { in: plants.map((p) => p.id) },
+            locale: { in: locale === 'en' ? ['en'] : [locale, 'en'] },
+          },
+          select: { id: true, text: true },
+          take: 8,
+        })
+      : [];
+    return { chunks, missingNames };
   }
 
   private async rerank(query: string, chunks: Array<{ id: string; text: string }>) {

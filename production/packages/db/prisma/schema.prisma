@@ -248,7 +248,14 @@ model PlantImage {
   plant           Plant?   @relation("plantImages", fields: [plantId], references: [id], onDelete: Cascade)
   primaryFor      Plant?   @relation("primaryImage")
 
+  // `url` is the SERVING url — the root-relative /v1/files/plant-images/<id>.<ext>
+  // local copy. `sourceUrl` is the canonical third-party origin (Wikimedia /
+  // iNaturalist) and is NEVER lost: the /v1/files route falls back to it when
+  // the local copy isn't present yet (fresh deploy, or download still pending),
+  // so the front end is never image-less while a background job caches images
+  // locally to avoid hammering third parties.
   url             String
+  sourceUrl       String?   // canonical upstream image URL (fallback + re-host source)
   altEn           String
   altFi           String
   altSv           String

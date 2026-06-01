@@ -10,18 +10,20 @@
  * use a plain Fastify wildcard at the controller path and read the key
  * from `request.params['*']` — the standard way to capture a multi-
  * segment URL suffix on Fastify.
+ *
+ * Plant-image fallback: a PlantImage.url is the stable local key
+ * `/v1/files/plant-images/<id>.<ext>`, but the bytes may not be cached
+ * locally yet (a fresh deploy with an empty volume, or a download still
+ * pending). Rather than 404 — which would leave the grid image-less — we
+ * 302 to the row's `sourceUrl` (the canonical Wikimedia / iNaturalist
+ * URL). The background cache job then fills the local copy and subsequent
+ * requests serve from disk, so third parties aren't hit on every view.
  */
 import { Controller, Get, NotFoundException, Req, Res } from '@nestjs/common';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { readFile } from '../../infra/storage.js';
+import { PrismaService } from '../prisma/prisma.service.js';
 
-/**
- * Content types we serve INLINE — browser-native renderers exist and the
- * donor benefits from previewing in-tab (receipt PDFs, audio narrations,
- * plant images). Anything not in this set is served as an attachment so
- * a click on the email link triggers a Save dialog rather than a wall of
- * raw JSON in a Chrome tab.
- */
 const INLINE_CONTENT_TYPES = new Set([
   'application/pdf',
   'image/png',
@@ -36,25 +38,38 @@ const INLINE_CONTENT_TYPES = new Set([
 
 function basename(key: string): string {
   const last = key.split('/').pop() ?? key;
-  // Strip the .meta.json sidecar suffix on the off-chance a key was
-  // mis-routed through us (the readFile path shouldn't allow it, but
-  // belt-and-suspenders).
   return last.replace(/\.meta\.json$/, '');
 }
 
 @Controller('files')
 export class FilesController {
+  constructor(private readonly prisma: PrismaService) {}
+
   @Get('*')
   async serve(@Req() request: FastifyRequest, @Res() reply: FastifyReply) {
     const params = (request.params ?? {}) as Record<string, string | undefined>;
-    // Fastify maps a trailing `*` wildcard to `params['*']`.
     const key = params['*'] ?? '';
     if (!key) throw new NotFoundException('file path missing');
-    const file = await readFile(decodeURIComponent(key));
-    if (!file) throw new NotFoundException(`file not found: ${key}`);
-    // `?download=1` forces attachment regardless of content type — used
-    // by the GDPR / disbursement download buttons that want a save-as
-    // prompt even for pdfs.
+    const decodedKey = decodeURIComponent(key);
+    const file = await readFile(decodedKey);
+    if (!file) {
+      // Plant-image fallback: redirect to the upstream source so the page
+      // is never image-less while the local copy is still being cached.
+      if (decodedKey.startsWith('plant-images/')) {
+        const row = await this.prisma.plantImage.findFirst({
+          where: { url: `/v1/files/${decodedKey}` },
+          select: { sourceUrl: true },
+        });
+        if (row?.sourceUrl) {
+          // 302 (not 301) — the local copy is expected to land soon and
+          // should win once present. Short cache so the redirect itself
+          // isn't pinned for long.
+          reply.header('cache-control', 'public, max-age=300').redirect(row.sourceUrl, 302);
+          return;
+        }
+      }
+      throw new NotFoundException(`file not found: ${key}`);
+    }
     const query = (request.query ?? {}) as Record<string, string | undefined>;
     const forceDownload = query['download'] === '1' || query['download'] === 'true';
     const disposition =

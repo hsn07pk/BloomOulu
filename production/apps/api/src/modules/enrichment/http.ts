@@ -7,8 +7,12 @@
  */
 import { setTimeout as sleep } from 'node:timers/promises';
 
+// Wikimedia's User-Agent / robot policy (https://w.wiki/4wJS) throttles or
+// blocks bulk access from a UA with no way to contact the operator. Include
+// a project URL + email so upload.wikimedia.org grants standard rate limits
+// instead of the strict anonymous-bot budget that 429s a backfill run.
 export const ENRICH_UA =
-  'BloomOulu-Enrich/1.0 (University of Oulu Botanical Garden adoption platform)';
+  'BloomOulu-Enrich/1.0 (+https://github.com/hsn07pk/BloomOulu; mailto:hassan.sohail3750@gmail.com) University of Oulu Botanical Garden adoption platform';
 
 const DEFAULT_TIMEOUT_MS = 20_000;
 

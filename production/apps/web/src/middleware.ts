@@ -89,9 +89,10 @@ export default async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  // Exclude the same-origin api proxy paths (`/v1/*` and `/webhooks/*`,
-  // see next.config.mjs rewrites) so the locale middleware doesn't
-  // redirect a JSON fetch through /fi/v1/... — only Next.js rewrites
-  // should handle those. Everything else still goes through intl.
-  matcher: ['/((?!api|v1|webhooks|_next|_vercel|.*\\..*).*)'],
+  // Exclude the same-origin proxy paths (`/v1/*`, `/webhooks/*`, and
+  // `/admin/*` — see next.config.mjs rewrites) so the locale middleware
+  // doesn't redirect them through /fi/...: a JSON fetch or the AdminJS
+  // panel must be handled by the Next.js rewrite, not localised. Everything
+  // else still goes through intl.
+  matcher: ['/((?!api|v1|webhooks|admin|_next|_vercel|.*\\..*).*)'],
 };

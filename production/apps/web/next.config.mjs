@@ -117,9 +117,16 @@ const nextConfig = {
   // rewrites them to localhost:4000.
   async rewrites() {
     const target = process.env.API_REWRITE_TARGET ?? 'http://localhost:4000';
+    // The AdminJS panel (rootPath '/admin') is proxied under the same host
+    // so a single public origin (e.g. one ngrok domain) serves the operator
+    // dashboard too — no second subdomain/tunnel needed. Env-driven so it
+    // points at the admin container in Docker and localhost in dev.
+    const adminTarget = process.env.ADMIN_REWRITE_TARGET ?? 'http://localhost:4100';
     return [
       { source: '/v1/:path*',       destination: `${target}/v1/:path*` },
       { source: '/webhooks/:path*', destination: `${target}/webhooks/:path*` },
+      { source: '/admin',           destination: `${adminTarget}/admin` },
+      { source: '/admin/:path*',    destination: `${adminTarget}/admin/:path*` },
     ];
   },
 };

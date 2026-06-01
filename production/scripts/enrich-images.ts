@@ -79,6 +79,14 @@ function parseArgs(): CliArgs {
   return out;
 }
 
+/** Best-effort file extension from a URL, for the stable serving key when a
+ *  local download hasn't landed yet (the /v1/files route falls back to
+ *  sourceUrl in that case, so the extension is only a stable identifier). */
+function guessExt(url: string): string {
+  const m = url.toLowerCase().match(/\.(jpe?g|png|webp|gif)(?:[?#]|$)/);
+  return m ? (m[1] === 'jpeg' ? 'jpg' : m[1]!) : 'jpg';
+}
+
 /** Split an array into fixed-size chunks. */
 function chunk<T>(arr: T[], size: number): T[][] {
   const out: T[][] = [];
@@ -431,11 +439,14 @@ async function main() {
             `        ${img.url}`,
         );
       } else {
-        // Create the row first so we have a stable id to key the S3
-        // object by. If hosting fails, roll back the row so we don't
-        // leave a PlantImage pointing at an unfetchable upstream URL —
-        // exactly the failure mode that produced the 225 dead seed
-        // images cleaned up in 2026-05-24.
+        // Create the row first so we have a stable id to key the stored
+        // object by. We KEEP `sourceUrl` (the upstream Wikimedia /
+        // iNaturalist URL) permanently, and try to cache the bytes
+        // locally. Crucially we DON'T roll back when the download fails:
+        // the /v1/files route falls back to sourceUrl, so the plant still
+        // shows an image (served from upstream) and a later re-run caches
+        // it locally. This is what makes "no plant image-less" achievable
+        // even when a single download times out.
         if (plant.primaryImageId) {
           await prisma.plant.update({
             where: { id: plant.id },
@@ -446,7 +457,8 @@ async function main() {
         const draftImage = await prisma.plantImage.create({
           data: {
             plantId: plant.id,
-            url: img.url,
+            url: '',
+            sourceUrl: img.url,
             altEn: plant.nameEn,
             altFi: plant.nameFi,
             altSv: plant.nameSv,
@@ -457,30 +469,30 @@ async function main() {
           },
         });
         const hosted = await hostPlantImage(img.url, draftImage.id);
-        if (!hosted) {
-          await prisma.plantImage.delete({ where: { id: draftImage.id } });
-          errors++;
-          console.error(
-            `[${n}/${target.length}] ! ${latin} — image host failed; row rolled back`,
-          );
-          continue;
-        }
+        // Stable serving key either way — the file server resolves it to
+        // the local copy if present, else 302s to sourceUrl.
+        const serveUrl = hosted ?? `/v1/files/plant-images/${draftImage.id}.${guessExt(img.url)}`;
         await prisma.plantImage.update({
           where: { id: draftImage.id },
-          data: { url: hosted },
+          data: { url: serveUrl },
         });
         await prisma.plant.update({
           where: { id: plant.id },
           data: { primaryImageId: draftImage.id },
         });
         updated++;
-        console.log(`[${n}/${target.length}] + ${latin} — via ${provider} (${img.licenseSpdx})`);
+        console.log(
+          `[${n}/${target.length}] + ${latin} — via ${provider} (${img.licenseSpdx})${hosted ? '' : ' [source-fallback]'}`,
+        );
       }
     } catch (err) {
       // One plant failing must never stop the run.
       errors++;
       console.error(`[${n}/${target.length}] ! ${latin} — ${(err as Error)?.message ?? String(err)}`);
     }
+    // Optional gentle pacing for bulk cloud backfills (env-gated so normal
+    // `pnpm rag` runs are unaffected) — keeps Wikimedia's robot policy happy.
+    if (process.env.IMG_DELAY_MS) await sleep(Number(process.env.IMG_DELAY_MS));
   }
 
   const provLine = Object.entries(byProvider)

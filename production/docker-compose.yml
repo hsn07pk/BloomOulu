@@ -60,6 +60,9 @@ services:
         # in-Docker api hostname so the single-tunnel /v1/* + /webhooks/*
         # rewrites resolve. (Runtime env can't change it on standalone.)
         API_REWRITE_TARGET: http://api:4000
+        # Proxy the AdminJS panel under the same host so one tunnel serves
+        # the operator dashboard too. Also build-time-baked (see above).
+        ADMIN_REWRITE_TARGET: http://admin:4100
         # Donor-facing contact details. Single source of truth: change in
         # one env var and every web page (donate/complete error, GDPR
         # banners, ask-the-garden curator name, etc.) reflects it.
