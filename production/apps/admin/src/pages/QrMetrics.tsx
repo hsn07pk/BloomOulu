@@ -8,6 +8,7 @@
  *   3. Timeline  — daily scans for the window with hover-able bars
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { ApiClient } from 'adminjs';
 import {
   Button,
   Card,
@@ -62,8 +63,31 @@ const WINDOWS = [
   { value: 365, label: 'Last year' },
 ];
 
+// The api guards /v1/admin/* with RolesGuard, which needs an HS256 Bearer JWT
+// — the AdminJS session cookie alone yields 401. The dashboard handler mints
+// one for the logged-in admin (GET /admin/api/dashboard); fetch it once,
+// cache it, and attach it. On 401 the token may have expired (12h TTL) — drop
+// the cache and retry once.
+let cachedApiToken: string | null = null;
+async function apiToken(force = false): Promise<string | null> {
+  if (cachedApiToken && !force) return cachedApiToken;
+  try {
+    const res = await new ApiClient().getDashboard();
+    cachedApiToken = (res.data as { apiToken?: string | null })?.apiToken ?? null;
+  } catch {
+    cachedApiToken = null;
+  }
+  return cachedApiToken;
+}
+
 async function authedJson<T>(url: string): Promise<T> {
-  const res = await fetch(url, { credentials: 'include' });
+  const send = (token: string | null) =>
+    fetch(url, {
+      credentials: 'include',
+      headers: token ? { authorization: `Bearer ${token}` } : {},
+    });
+  let res = await send(await apiToken());
+  if (res.status === 401) res = await send(await apiToken(true));
   if (!res.ok) throw new Error(`${url} → ${res.status}`);
   return res.json() as Promise<T>;
 }

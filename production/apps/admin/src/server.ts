@@ -30,6 +30,7 @@ import bcrypt from 'bcryptjs';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { createHmac } from 'node:crypto';
 import {
   cancelJob as cancelBulkAddJob,
   computeTotals as bulkAddJobTotals,
@@ -666,6 +667,25 @@ void BackupsPage;
 void ReconciliationPage;
 void IngestDocPage;
 
+// ── Admin → API bearer token ────────────────────────────────────────────────
+// The api guards /v1/admin/* with RolesGuard, which requires an HS256 Bearer
+// JWT ({ sub, role }) signed with AUTH_SECRET — NOT the AdminJS session cookie.
+// AdminJS pages reach the api via authedJson through the public web /v1 proxy,
+// so they must attach such a Bearer. We mint one here (admin + api share
+// AUTH_SECRET) for the logged-in admin and hand it to the browser via the
+// dashboard handler below. Hand-rolled HS256 (node:crypto) so we don't add a
+// jose dependency; the byte layout is identical to what the api's jose verify
+// expects (key = utf-8 bytes of AUTH_SECRET, unpadded base64url segments).
+function mintApiToken(sub: string, role: string): string {
+  const secret = process.env.AUTH_SECRET ?? 'dev-secret';
+  const b64 = (o: unknown) => Buffer.from(JSON.stringify(o)).toString('base64url');
+  const now = Math.floor(Date.now() / 1000);
+  const head = b64({ alg: 'HS256', typ: 'JWT' });
+  const body = b64({ sub, role, iat: now, exp: now + 12 * 60 * 60 });
+  const sig = createHmac('sha256', secret).update(`${head}.${body}`).digest('base64url');
+  return `${head}.${body}.${sig}`;
+}
+
 // AdminJS 7's exported types are looser than its runtime accepts (page `label`,
 // `branding.softwareBrothers`, the static `AdminJS.bundle` helper, action
 // handlers `(req, res, ctx)` signature). We cast the config to `any` so the
@@ -675,9 +695,24 @@ const adminConfig = new AdminJS({
   rootPath: '/admin',
   componentLoader,
   // Replace the AdminJS welcome page with the BloomOulu dashboard.
-  // The component fetches /admin/api/dashboard-stats every 30s and
-  // renders metrics tiles + curator escalations + quick-action links.
-  dashboard: { component: DashboardPage } as any,
+  // The component fetches /admin/dashboard-stats every 30s and renders metrics
+  // tiles + curator escalations + quick-action links.
+  // The handler (GET /admin/api/dashboard, AdminJS-routed with currentAdmin
+  // from the session) mints a short-lived api Bearer for the logged-in admin —
+  // pages call ApiClient().getDashboard() to obtain it, then attach it to
+  // guarded /v1/admin/* fetches (see pages/QrMetrics.tsx authedJson).
+  dashboard: {
+    component: DashboardPage,
+    handler: async (
+      _req: unknown,
+      _res: unknown,
+      context: { currentAdmin?: { id?: string; role?: string } },
+    ) => {
+      const ca = context?.currentAdmin;
+      if (!ca?.id || !ca.role) return { apiToken: null };
+      return { apiToken: mintApiToken(ca.id, ca.role) };
+    },
+  } as any,
   branding: {
     companyName: 'BloomOulu',
     softwareBrothers: false,
