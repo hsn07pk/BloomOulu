@@ -1,8 +1,8 @@
 'use client';
 /**
  * AskTheGarden chat — SSE streaming + citation chips (with source title) +
- * helpful / off-base / escalate reactions + 3-column shell (sidebar,
- * messages, sources + corpus stats + curator-audit metric).
+ * helpful / off-base / flag-for-review reactions + 3-column shell (sidebar,
+ * messages, sources + corpus stats).
  *
  * Streaming contract from /v1/ask/stream:
  *   start  — { question, locale }
@@ -564,10 +564,10 @@ export default function AskChat({
                     <span>
                       {isEscalation
                         ? locale === 'fi'
-                          ? 'Ohjaus puutarhurille'
+                          ? 'Merkitty tarkistettavaksi'
                           : locale === 'sv'
-                            ? 'Vidarebefordran'
-                            : 'Curator referral'
+                            ? 'Markerad för granskning'
+                            : 'Flagged for review'
                         : 'AskTheGarden'}
                     </span>
                   </div>
@@ -1159,52 +1159,6 @@ function CorpusBlock({ locale, stats }: { locale: Locale; stats: CorpusStats }) 
   );
 }
 
-function OutOfDomainBlock({ locale, ask }: { locale: Locale; ask: AskSettings }) {
-  return (
-    <div style={{ padding: 14, background: 'var(--cream)', borderRadius: 10 }}>
-      <div className="tiny" style={{ color: 'var(--rust-on-light)' }}>
-        {locale === 'fi' ? 'Aiheen ulkopuolinen kysymys' : locale === 'sv' ? 'Utanför ämnet' : 'Out-of-domain policy'}
-      </div>
-      <p className="small" style={{ marginTop: 8, color: 'var(--ink-soft)', lineHeight: 1.55 }}>
-        {locale === 'fi'
-          ? 'Jos kysyt kasvista, joka ei ole kokoelmassamme, linkitämme '
-          : locale === 'sv'
-            ? 'Om du frågar om en växt vi inte har länkar vi till '
-            : 'If you ask about a plant not in our collection, we link out to '}
-        <a href={ask.outOfDomain.bgci} target="_blank" rel="noopener noreferrer">BGCI PlantSearch</a>
-        {' · '}
-        <a href={ask.outOfDomain.gbif} target="_blank" rel="noopener noreferrer">GBIF</a>
-        {locale === 'fi' ? '. Kuvatunnistus ohjataan ' : locale === 'sv' ? '. Bildigenkänning skickas till ' : '. For image ID we forward to '}
-        <a href={ask.outOfDomain.plantnet} target="_blank" rel="noopener noreferrer">Pl@ntNet</a>
-        {locale === 'fi' ? ' ja varmistetaan kokoelmaa vasten.' : locale === 'sv' ? ' och verifieras mot samlingen.' : ' and verify against our accessions.'}
-      </p>
-    </div>
-  );
-}
-
-function AuditBlock({ locale, metric }: { locale: Locale; metric: AuditMetric }) {
-  const ratePct = (metric.errorRate * 100).toFixed(1);
-  const targetPct = (metric.target * 100).toFixed(0);
-  const withinTarget = metric.errorRate <= metric.target;
-  return (
-    <div
-      style={{
-        padding: 14,
-        background: withinTarget ? 'rgba(168,192,96,0.12)' : 'rgba(184,81,58,0.10)',
-        borderRadius: 10,
-      }}
-    >
-      <div className="tiny" style={{ color: withinTarget ? 'var(--forest)' : 'var(--rust-on-light)' }}>
-        {locale === 'fi' ? 'Viimeisin kuraattoritarkastus' : locale === 'sv' ? 'Senaste kuratorrevision' : 'Last curator audit'}
-      </div>
-      <div className="small" style={{ marginTop: 8, color: 'var(--ink-soft)' }}>
-        <b style={{ fontFamily: 'var(--f-display)' }}>{ratePct}%</b>{' '}
-        {locale === 'fi'
-          ? `virheprosentti ${metric.window} vastauksen otoksessa. ${withinTarget ? `Alle ${targetPct} %:n julkaisukynnyksen.` : `Yli ${targetPct} %:n kynnyksen — uudelleenarviointi käynnissä.`}`
-          : locale === 'sv'
-            ? `felprocent över ${metric.window} svar. ${withinTarget ? `Under ${targetPct} % -tröskeln.` : `Över ${targetPct} % -tröskeln — granskning pågår.`}`
-            : `error rate across ${metric.window} answers. ${withinTarget ? `Below the ${targetPct}% public-launch threshold.` : `Above the ${targetPct}% threshold — re-audit in progress.`}`}
-      </div>
-    </div>
-  );
-}
+// OutOfDomainBlock + AuditBlock removed (user request): the out-of-domain
+// and "curator audit" cards are no longer shown, and no curator/gardener
+// referral language survives in the donor-facing chat.
