@@ -1400,6 +1400,7 @@ function Step2PickPlant({
   const [redListFilter, setRedListFilter] = useState<'' | 'CR' | 'EN' | 'VU' | 'NT' | 'LC'>('');
   const [results, setResults] = useState<AdoptPlant[]>(plants);
   const [searching, setSearching] = useState(false);
+  const [pickerPage, setPickerPage] = useState(1);
 
   // Debounced server-side search.
   useEffect(() => {
@@ -1427,6 +1428,14 @@ function Step2PickPlant({
   }, [query, redListFilter, plants]);
 
   const visible = results;
+  // Page-number pagination, like the Browse /plants page.
+  const PICKER_PER_PAGE = 12;
+  const pickerPageCount = Math.max(1, Math.ceil(visible.length / PICKER_PER_PAGE));
+  const pickerPageSafe = Math.min(pickerPage, pickerPageCount);
+  const pageItems = visible.slice((pickerPageSafe - 1) * PICKER_PER_PAGE, pickerPageSafe * PICKER_PER_PAGE);
+  useEffect(() => {
+    setPickerPage(1);
+  }, [query, redListFilter]);
   const pickedSlugs = new Set(pickedItems.map((it) => it.plantSlug));
   const headerHint =
     pickedItems.length === 0
@@ -1704,7 +1713,7 @@ function Step2PickPlant({
         }
         style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}
       >
-        {visible.map((p) => {
+        {pageItems.map((p) => {
           const isSelected = pickedSlugs.has(p.slug);
           const funded = plantFundedPct(p);
           const needs = funded < 80;
@@ -1851,6 +1860,46 @@ function Step2PickPlant({
         })}
       </div>
 
+      {pickerPageCount > 1 && (
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            gap: 10,
+            marginTop: 24,
+          }}
+        >
+          <button
+            type="button"
+            className="btn btn-secondary"
+            disabled={pickerPageSafe <= 1}
+            onClick={() => setPickerPage((p) => Math.max(1, p - 1))}
+            style={{ padding: '8px 14px' }}
+            aria-label={locale === 'fi' ? 'Edellinen sivu' : locale === 'sv' ? 'Föregående sida' : 'Previous page'}
+          >
+            ←
+          </button>
+          <span className="small" style={{ color: 'var(--ink-soft)', minWidth: 96, textAlign: 'center' }}>
+            {locale === 'fi'
+              ? `Sivu ${pickerPageSafe} / ${pickerPageCount}`
+              : locale === 'sv'
+                ? `Sida ${pickerPageSafe} / ${pickerPageCount}`
+                : `Page ${pickerPageSafe} of ${pickerPageCount}`}
+          </span>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            disabled={pickerPageSafe >= pickerPageCount}
+            onClick={() => setPickerPage((p) => Math.min(pickerPageCount, p + 1))}
+            style={{ padding: '8px 14px' }}
+            aria-label={locale === 'fi' ? 'Seuraava sivu' : locale === 'sv' ? 'Nästa sida' : 'Next page'}
+          >
+            →
+          </button>
+        </div>
+      )}
+
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 32 }}>
         <button
           type="button"
@@ -1973,7 +2022,6 @@ function Step3Personalise(props: Step3Props) {
     { id: 'for_self', label: t('intentSelf'), icon: '👤' },
     { id: 'gift', label: t('intentGift'), icon: '🎁' },
     { id: 'memorial', label: t('intentMemorial'), icon: '🤍' },
-    { id: 'class', label: t('intentClass'), icon: '🎓' },
   ];
 
   const addCoAdopter = () => {
@@ -2102,59 +2150,6 @@ function Step3Personalise(props: Step3Props) {
             </div>
           </fieldset>
 
-          <fieldset
-            className="card card-pad"
-            style={{
-              background:
-                'linear-gradient(135deg, rgba(168,192,96,0.10) 0%, rgba(95,176,160,0.10) 100%)',
-              borderColor: 'var(--sage)',
-            }}
-          >
-            <legend
-              className="tiny"
-              style={{
-                padding: '0 6px',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 10,
-                color: 'var(--forest)',
-              }}
-            >
-              <span
-                style={{
-                  fontFamily: 'var(--f-mono)',
-                  fontSize: "0.867rem",
-                  fontWeight: 700,
-                  color: 'var(--forest)',
-                  padding: '3px 8px',
-                  background: 'var(--cream)',
-                  borderRadius: 4,
-                  letterSpacing: '0.04em',
-                }}
-              >
-                I@H
-              </span>
-              {t('iahTitle')}
-            </legend>
-            <p
-              className="small"
-              style={{ color: 'var(--ink-soft)', lineHeight: 1.55, marginTop: 6 }}
-            >
-              {t('iahBlurb')}
-            </p>
-            <div style={{ marginTop: 14 }}>
-              <Field
-                label={t('iahHomeRegionLabel')}
-                type="select"
-                value={homeRegion}
-                onChange={setHomeRegion}
-                options={[
-                  { value: '', label: t('regionSkip') },
-                  ...HOME_REGIONS.map((r) => ({ value: r, label: t(`region${r}` as 'regionSkip') })),
-                ]}
-              />
-            </div>
-          </fieldset>
 
           {intent === 'gift' && (
             <fieldset
@@ -2289,76 +2284,6 @@ function Step3Personalise(props: Step3Props) {
             </fieldset>
           )}
 
-          <div className="card card-pad" style={{ background: 'var(--paper)' }}>
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                gap: 16,
-                flexWrap: 'wrap',
-              }}
-            >
-              <div>
-                <div className="small" style={{ fontWeight: 500 }}>
-                  {t('coAdoptTitle')}
-                </div>
-                <div
-                  className="tiny"
-                  style={{ textTransform: 'none', letterSpacing: 0, marginTop: 2 }}
-                >
-                  {t('coAdoptHint')}
-                </div>
-              </div>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={addCoAdopter}
-                style={{ padding: '8px 14px', fontSize: '0.867rem' }}
-                disabled={coAdopters.length >= adopt.coAdopterMax}
-              >
-                {t('addCoAdopter')}
-              </button>
-            </div>
-            {coAdopters.length > 0 && (
-              <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {coAdopters.map((c, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: '1fr 1fr auto',
-                      gap: 10,
-                      alignItems: 'end',
-                    }}
-                  >
-                    <Field
-                      label={t('coAdopterName')}
-                      placeholder={t('placeholderRecipientName')}
-                      value={c.name}
-                      onChange={(v) => updateCoAdopter(i, { name: v })}
-                    />
-                    <Field
-                      label={t('coAdopterEmail')}
-                      placeholder={t('placeholderRecipientEmail')}
-                      type="email"
-                      value={c.email}
-                      onChange={(v) => updateCoAdopter(i, { email: v })}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeCoAdopter(i)}
-                      className="btn btn-ghost small"
-                      aria-label={`${t('removeCoAdopter')} ${i + 1}`}
-                      style={{ padding: '8px 10px', height: 40 }}
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
         </div>
 
         <aside style={{ position: 'sticky', top: 140, alignSelf: 'flex-start' }}>
