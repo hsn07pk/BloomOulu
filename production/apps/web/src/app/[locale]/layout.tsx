@@ -9,6 +9,7 @@ import { A11yPanel } from '../../components/A11yPanel';
 import { FeedbackButton } from '../../components/FeedbackButton';
 import { CookieBanner } from '../../components/CookieBanner';
 import { Topbar } from '../../components/Topbar';
+import { MobileTabBar } from '../../components/MobileTabBar';
 import LiveSync from '../../components/LiveSync.client';
 import '../globals.css';
 
@@ -90,6 +91,7 @@ export default async function RootLayout({
               without a hard reload. */}
           <LiveSync apiUrl={getBrowserApiUrl()} />
           <Topbar locale={locale} />
+          <MobileTabBar />
           <main id="main">{children}</main>
           <footer
             className="site-footer"

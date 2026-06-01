@@ -332,6 +332,30 @@ body.bloom-high-contrast .card { border: 1.5px solid #000 !important; }
   h3 { font-size: clamp(1.25rem, 5.5vw, 1.75rem) !important; line-height: 1.15 !important; }
   .topbar-inner { padding: 10px 14px !important; gap: 10px !important; }
   .nav { display: none !important; }
+  /* Mobile bottom tab bar — replaces the hidden desktop .nav so Adopt/Ask/
+     Garden stay reachable. !important on display so source order vs the base
+     `.mobile-tabs { display:none }` (end of file) doesn't matter. */
+  .mobile-tabs {
+    display: flex !important;
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
+    background: rgba(250, 247, 238, 0.97);
+    -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+    border-top: 1px solid var(--line);
+    padding: 6px 4px calc(8px + env(safe-area-inset-bottom));
+  }
+  .mobile-tabs a {
+    flex: 1; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 2px; min-height: 44px; padding: 4px 2px;
+    color: var(--ink-mute); font-size: 0.7rem; font-weight: 500;
+    text-decoration: none; text-align: center;
+  }
+  .mobile-tabs a[aria-current='page'] { color: var(--forest-deep); }
+  .mobile-tabs .mobile-tab-ico { font-size: 1.15rem; line-height: 1; }
+  /* Lift the bottom-left floating pills above the tab bar (were at bottom:16,
+     overlapping it). Feedback stacks above the A11y pill, both on the left
+     edge so neither runs off a 320px screen. */
+  .a11y-fab { bottom: 76px !important; }
+  .feedback-fab { left: 16px !important; bottom: 128px !important; }
   .brand { font-size: 1.2rem !important; }
   .brand-mark { width: 28px !important; height: 28px !important; }
   [style*='grid-template-columns'] { grid-template-columns: 1fr !important; gap: 16px !important; }
@@ -560,3 +584,7 @@ body.bloom-high-contrast .card { border: 1.5px solid #000 !important; }
   .bo-plant-card,
   .bo-plant-card__img { transition: none !important; transform: none !important; }
 }
+
+/* Bottom tab bar is mobile-only; the @media (max-width:768px) block above
+   flips it to display:flex !important. */
+.mobile-tabs { display: none; }

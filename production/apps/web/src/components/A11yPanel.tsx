@@ -233,7 +233,7 @@ export function A11yPanel() {
   };
 
   return (
-    <div style={{ position: 'fixed', bottom: 16, left: 16, zIndex: 100 }}>
+    <div className="a11y-fab" style={{ position: 'fixed', bottom: 16, left: 16, zIndex: 100 }}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
