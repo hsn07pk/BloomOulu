@@ -27,7 +27,7 @@ const STATUS_INFO: Array<{ code: string; name: string; aliases: string[] }> = [
   { code: 'VU', name: 'Vulnerable', aliases: ['vulnerable', 'declining'] },
   { code: 'NT', name: 'Near Threatened', aliases: ['near threatened', 'almost vulnerable'] },
   { code: 'LC', name: 'Least Concern', aliases: ['least concern', 'common'] },
-  { code: 'EW', name: 'Extinct in the Wild', aliases: ['extinct in the wild', 'only in cultivation'] },
+  { code: 'EX', name: 'Extinct', aliases: ['extinct', 'extinct in the wild', 'only in cultivation'] },
 ];
 
 function sha256(s: string): string { return createHash('sha256').update(s).digest('hex'); }
