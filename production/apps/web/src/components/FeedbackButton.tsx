@@ -22,7 +22,10 @@ import { useTranslations } from 'next-intl';
  * already wired to open it in a new tab.
  */
 
-const FEEDBACK_FORM_URL = 'https://forms.gle/6U2eujFaoZqfsiJQ6';
+// Env-driven so a new instance points the pill at its own form without a code
+// edit. Falls back to the BloomOulu form; build-time NEXT_PUBLIC_* inline.
+const FEEDBACK_FORM_URL =
+  process.env.NEXT_PUBLIC_FEEDBACK_FORM_URL ?? 'https://forms.gle/6U2eujFaoZqfsiJQ6';
 
 export function FeedbackButton(): JSX.Element {
   const t = useTranslations('Feedback');

@@ -220,7 +220,7 @@ export function buildSettingsDefaults(): BloomOuluSettings {
     },
     garden: {
       name: envStr('GARDEN_ORG_NAME', 'Oulun yliopiston kasvitieteellinen puutarha'),
-      vatId: envStr('GARDEN_VAT_ID', 'FI01234567'),
+      vatId: envStr('GARDEN_ORG_VAT_ID', 'FI02452579'),
       address: envStr(
         'GARDEN_ADDRESS',
         'Oulun yliopisto\nKasvitieteellinen puutarha\nPL 3000\n90014 Oulu',

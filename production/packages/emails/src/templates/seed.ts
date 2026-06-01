@@ -21,6 +21,15 @@ export interface SeedTemplate {
   mjmlSv: string;
 }
 
+// Org identity for the masthead/footer + CTA host is env-driven (the same
+// GARDEN_* / NEXT_PUBLIC_GARDEN_NAME_EN / NEXT_PUBLIC_WEB_URL the rest of the
+// app uses) so a new instance never edits template code. Read at seed time;
+// each template stays admin-editable afterwards.
+const BRAND = (process.env.NEXT_PUBLIC_GARDEN_NAME_EN ?? 'BloomOulu').split('—')[0]!.trim();
+const ORG_NAME = process.env.GARDEN_ORG_NAME ?? 'Oulun yliopiston kasvitieteellinen puutarha';
+const ORG_EMAIL = process.env.GARDEN_CONTACT_EMAIL ?? 'garden@bloomoulu.fi';
+const WEB_URL = (process.env.NEXT_PUBLIC_WEB_URL ?? 'http://localhost:3000').replace(/\/$/, '');
+
 const wrap = (heading: string, body: string, cta?: { label: string; href: string }) => `<mjml>
   <mj-head>
     <mj-title>${heading}</mj-title>
@@ -34,8 +43,8 @@ const wrap = (heading: string, body: string, cta?: { label: string; href: string
   <mj-body background-color="#F4F7EF">
     <mj-section padding="32px 24px">
       <mj-column>
-        <mj-text font-size="22px" font-weight="700" color="#2D5440">BloomOulu</mj-text>
-        <mj-text font-size="11px" color="#777">Oulun yliopiston kasvitieteellinen puutarha · Linnanmaa</mj-text>
+        <mj-text font-size="22px" font-weight="700" color="#2D5440">${BRAND}</mj-text>
+        <mj-text font-size="11px" color="#777">${ORG_NAME}</mj-text>
       </mj-column>
     </mj-section>
     <mj-section background-color="#FFFFFF" padding="32px 24px">
@@ -47,7 +56,7 @@ const wrap = (heading: string, body: string, cta?: { label: string; href: string
     </mj-section>
     <mj-section padding="16px 24px">
       <mj-column>
-        <mj-text font-size="11px" color="#777">© BloomOulu · 65.0617°N · garden@bloomoulu.fi</mj-text>
+        <mj-text font-size="11px" color="#777">© ${BRAND} · ${ORG_EMAIL}</mj-text>
       </mj-column>
     </mj-section>
   </mj-body>
@@ -195,17 +204,17 @@ export const EMAIL_TEMPLATES: ReadonlyArray<SeedTemplate> = [
     mjmlEn: wrap(
       'Quarterly notes · {{plantName}}',
       '<mj-text>Hello {{donorName}},<br/><br/>Your adopted plant, <em>{{plantName}}</em>, is doing well. Our curator has put together a short seasonal note covering what we’ve observed this quarter, including bloom progress, repotting news, and how the broader collection is faring under current conditions.<br/><br/>This quarterly mailing is one of the perks of your {{tierName}} adoption. Thank you for the continued support — every adoption keeps the Garden running.</mj-text>',
-      { label: 'Open your plant page', href: 'https://bloom-oulu.vercel.app/en/plants/{{plantSlug}}' },
+      { label: 'Open your plant page', href: WEB_URL + '/en/plants/{{plantSlug}}' },
     ),
     mjmlFi: wrap(
       'Vuosineljänneksen tiedote · {{plantName}}',
       '<mj-text>Hei {{donorName}},<br/><br/>Adoptoimasi kasvi <em>{{plantName}}</em> voi hyvin. Kuraattorimme on koonnut lyhyen kausitiedotteen tämän vuosineljänneksen havainnoista, mukaan lukien kukinnan eteneminen ja uudet havainnot kokoelmassamme.<br/><br/>Tämä vuosineljänneskirje on osa {{tierName}}-tason etujasi. Kiitos jatkuvasta tuestasi.</mj-text>',
-      { label: 'Avaa kasvisivu', href: 'https://bloom-oulu.vercel.app/fi/plants/{{plantSlug}}' },
+      { label: 'Avaa kasvisivu', href: WEB_URL + '/fi/plants/{{plantSlug}}' },
     ),
     mjmlSv: wrap(
       'Kvartalsanteckningar · {{plantName}}',
       '<mj-text>Hej {{donorName}},<br/><br/>Din adopterade växt <em>{{plantName}}</em> mår bra. Vår kurator har sammanställt ett kort säsongsbrev med observationer från detta kvartal.<br/><br/>Detta kvartalsbrev är en av förmånerna i din {{tierName}}-adoption.</mj-text>',
-      { label: 'Öppna växtsidan', href: 'https://bloom-oulu.vercel.app/sv/plants/{{plantSlug}}' },
+      { label: 'Öppna växtsidan', href: WEB_URL + '/sv/plants/{{plantSlug}}' },
     ),
   },
   {
@@ -216,17 +225,17 @@ export const EMAIL_TEMPLATES: ReadonlyArray<SeedTemplate> = [
     mjmlEn: wrap(
       'Seasonal photos · {{plantName}}',
       '<mj-text>Hello {{donorName}},<br/><br/>A small album of <em>{{plantName}}</em> from this season is now on its story page. Bloom timing, new growth, the angle of the leaves under low winter light — captured at the Garden so you can see what your adoption supports, no matter where you are.<br/><br/>This is a Rooted+ tier perk; the photographs are taken by our curatorial team.</mj-text>',
-      { label: 'View the album', href: 'https://bloom-oulu.vercel.app/en/plants/{{plantSlug}}' },
+      { label: 'View the album', href: WEB_URL + '/en/plants/{{plantSlug}}' },
     ),
     mjmlFi: wrap(
       'Vuodenaikakuvia · {{plantName}}',
       '<mj-text>Hei {{donorName}},<br/><br/>Olemme lisänneet kasvisivulle pienen kuva-albumin kasvista <em>{{plantName}}</em> tältä kaudelta. Kukinta, uusi kasvu, lehtien asento talven matalassa valossa.<br/><br/>Tämä on Rooted+-tason etu.</mj-text>',
-      { label: 'Avaa albumi', href: 'https://bloom-oulu.vercel.app/fi/plants/{{plantSlug}}' },
+      { label: 'Avaa albumi', href: WEB_URL + '/fi/plants/{{plantSlug}}' },
     ),
     mjmlSv: wrap(
       'Säsongsbilder · {{plantName}}',
       '<mj-text>Hej {{donorName}},<br/><br/>Vi har lagt till ett litet bildalbum av <em>{{plantName}}</em> från denna säsong på växtsidan.</mj-text>',
-      { label: 'Öppna albumet', href: 'https://bloom-oulu.vercel.app/sv/plants/{{plantSlug}}' },
+      { label: 'Öppna albumet', href: WEB_URL + '/sv/plants/{{plantSlug}}' },
     ),
   },
   {
@@ -237,17 +246,17 @@ export const EMAIL_TEMPLATES: ReadonlyArray<SeedTemplate> = [
     mjmlEn: wrap(
       'Annual seed packet · {{plantName}}',
       '<mj-text>Hello {{donorName}},<br/><br/>As part of your Endangered-tier adoption, we’re preparing your annual seed packet — a small hand-collected batch from the Garden’s own propagation programme. We’ll dispatch via Posti within the next two weeks; expect delivery 7-10 days after that.<br/><br/>If your shipping address has changed, please update it under My Garden → Profile so we don’t send it to the wrong place.<br/><br/>Next year’s packet will arrive around {{nextDate}}.</mj-text>',
-      { label: 'My Garden', href: 'https://bloom-oulu.vercel.app/en/garden' },
+      { label: 'My Garden', href: WEB_URL + '/en/garden' },
     ),
     mjmlFi: wrap(
       'Vuosittainen siemenpussi · {{plantName}}',
       '<mj-text>Hei {{donorName}},<br/><br/>Endangered-tason adoptiosi osana valmistelemme vuosittaista siemenpussiasi. Lähetämme Postin kautta kahden viikon kuluessa.<br/><br/>Jos toimitusosoitteesi on muuttunut, päivitä se kohdassa Oma puutarha → Profiili.<br/><br/>Seuraava pussi saapuu noin {{nextDate}}.</mj-text>',
-      { label: 'Oma puutarha', href: 'https://bloom-oulu.vercel.app/fi/garden' },
+      { label: 'Oma puutarha', href: WEB_URL + '/fi/garden' },
     ),
     mjmlSv: wrap(
       'Årlig fröpåse · {{plantName}}',
       '<mj-text>Hej {{donorName}},<br/><br/>Som en del av din Endangered-adoption förbereder vi din årliga fröpåse. Vi skickar via Posti inom två veckor.<br/><br/>Nästa påse anländer cirka {{nextDate}}.</mj-text>',
-      { label: 'Min trädgård', href: 'https://bloom-oulu.vercel.app/sv/garden' },
+      { label: 'Min trädgård', href: WEB_URL + '/sv/garden' },
     ),
   },
   {

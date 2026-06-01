@@ -46,7 +46,7 @@ const DEFAULT_ORG: OrgInfo = {
   vatId: process.env.GARDEN_ORG_VAT_ID ?? 'FI02452579',
   iban: process.env.GARDEN_IBAN ?? 'FI00 0000 0000 0000 00',
   address: process.env.GARDEN_ADDRESS ?? 'Linnanmaa, 90014 Oulun yliopisto',
-  email: 'garden@bloomoulu.fi',
+  email: process.env.GARDEN_CONTACT_EMAIL ?? 'garden@bloomoulu.fi',
 };
 
 const L = {

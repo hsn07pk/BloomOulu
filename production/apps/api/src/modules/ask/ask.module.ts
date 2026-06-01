@@ -25,7 +25,7 @@ import {
   Req,
 } from '@nestjs/common';
 import { z } from 'zod';
-import { LocaleEnum, getWebUrl } from '@bloomoulu/constants';
+import { LocaleEnum, getWebUrl, getKioskUrl, getAdminUrl } from '@bloomoulu/constants';
 import { Queue } from 'bullmq';
 import { jwtVerify } from 'jose';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -103,11 +103,7 @@ class AskController {
     @Res() res: FastifyReply,
   ) {
     const origin = (req.headers.origin as string | undefined) ?? '';
-    const allowedOrigins = new Set([
-      getWebUrl(),
-      'http://localhost:3000',
-      'http://localhost:3100',
-    ]);
+    const allowedOrigins = new Set([getWebUrl(), getKioskUrl(), getAdminUrl()]);
     const corsOrigin = allowedOrigins.has(origin) ? origin : '';
 
     res.raw.writeHead(200, {
