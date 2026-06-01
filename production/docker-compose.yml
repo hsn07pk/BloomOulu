@@ -52,10 +52,16 @@ services:
       context: .
       dockerfile: infra/docker/web.Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
-        NEXT_PUBLIC_WEB_URL: ${NEXT_PUBLIC_WEB_URL:-http://localhost:3000}
-        NEXT_PUBLIC_ADMIN_URL: ${NEXT_PUBLIC_ADMIN_URL:-http://localhost:4100}
-        NEXT_PUBLIC_KIOSK_URL: ${NEXT_PUBLIC_KIOSK_URL:-http://localhost:3100}
+        # ── SINGLE SOURCE OF TRUTH ────────────────────────────────────────
+        # Every public URL derives from PUBLIC_URL — the ONE origin that
+        # serves web at /, api at /v1, AdminJS at /admin, kiosk at /kiosk.
+        # Set PUBLIC_URL once per instance (.env, no trailing slash); all of
+        # these follow. Default = localhost dev (web proxies /v1 + /admin +
+        # /kiosk to the right containers, so one origin works in dev too).
+        NEXT_PUBLIC_WEB_URL: ${PUBLIC_URL:-http://localhost:3000}
+        NEXT_PUBLIC_API_URL: ${PUBLIC_URL:-http://localhost:3000}
+        NEXT_PUBLIC_ADMIN_URL: ${PUBLIC_URL:-http://localhost:3000}/admin
+        NEXT_PUBLIC_KIOSK_URL: ${PUBLIC_URL:-http://localhost:3000}/kiosk
         # Baked into routes-manifest.json by next build — must be the
         # in-Docker api hostname so the single-tunnel /v1/* + /webhooks/*
         # rewrites resolve. (Runtime env can't change it on standalone.)
@@ -76,10 +82,11 @@ services:
     <<: *restart
     environment:
       NODE_ENV: production
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
-      NEXT_PUBLIC_WEB_URL: ${NEXT_PUBLIC_WEB_URL:-http://localhost:3000}
-      NEXT_PUBLIC_ADMIN_URL: ${NEXT_PUBLIC_ADMIN_URL:-http://localhost:4100}
-      NEXT_PUBLIC_KIOSK_URL: ${NEXT_PUBLIC_KIOSK_URL:-http://localhost:3100}
+      # Derived from PUBLIC_URL (see build args above for the rationale).
+      NEXT_PUBLIC_WEB_URL: ${PUBLIC_URL:-http://localhost:3000}
+      NEXT_PUBLIC_API_URL: ${PUBLIC_URL:-http://localhost:3000}
+      NEXT_PUBLIC_ADMIN_URL: ${PUBLIC_URL:-http://localhost:3000}/admin
+      NEXT_PUBLIC_KIOSK_URL: ${PUBLIC_URL:-http://localhost:3000}/kiosk
       NEXT_PUBLIC_CURATOR_EMAIL: ${NEXT_PUBLIC_CURATOR_EMAIL:-curator@bloomoulu.fi}
       NEXT_PUBLIC_SUPPORT_EMAIL: ${NEXT_PUBLIC_SUPPORT_EMAIL:-donate@bloomoulu.fi}
       NEXT_PUBLIC_GARDEN_NAME_EN: ${NEXT_PUBLIC_GARDEN_NAME_EN:-BloomOulu — University of Oulu Botanical Garden}
@@ -91,7 +98,7 @@ services:
       # serves donor pages AND the payment webhooks/callbacks. See
       # apps/web/next.config.mjs rewrites().
       API_REWRITE_TARGET: http://api:4000
-      AUTH_URL: ${NEXT_PUBLIC_WEB_URL:-http://localhost:3000}
+      AUTH_URL: ${PUBLIC_URL:-http://localhost:3000}
       AUTH_SECRET: ${AUTH_SECRET}
       AUTH_OULU_OIDC_ISSUER: ${AUTH_OULU_OIDC_ISSUER:-}
       AUTH_OULU_OIDC_CLIENT_ID: ${AUTH_OULU_OIDC_CLIENT_ID:-}
@@ -123,11 +130,15 @@ services:
       # named volume so the data survives container rebuilds.
       STORAGE_DIR: /data/storage
       AUTH_SECRET: ${AUTH_SECRET}
-      AUTH_URL: ${NEXT_PUBLIC_WEB_URL:-http://localhost:3000}
-      NEXT_PUBLIC_WEB_URL: ${NEXT_PUBLIC_WEB_URL:-http://localhost:3000}
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
-      ALLOWED_ORIGINS: "${NEXT_PUBLIC_WEB_URL:-http://localhost:3000},${NEXT_PUBLIC_KIOSK_URL:-http://localhost:3100},${NEXT_PUBLIC_ADMIN_URL:-http://localhost:4100}"
-      WEB_ORIGIN: ${NEXT_PUBLIC_WEB_URL:-http://localhost:3000}
+      # All public URLs derive from PUBLIC_URL (single source of truth). In the
+      # single-origin model web/admin/kiosk share one origin, so CORS in code
+      # (getWebUrl/getKioskUrl/getAdminUrl) is satisfied by PUBLIC_URL; the
+      # dead ALLOWED_ORIGINS/WEB_ORIGIN keys were removed (unused in code).
+      AUTH_URL: ${PUBLIC_URL:-http://localhost:3000}
+      NEXT_PUBLIC_WEB_URL: ${PUBLIC_URL:-http://localhost:3000}
+      NEXT_PUBLIC_API_URL: ${PUBLIC_URL:-http://localhost:3000}
+      NEXT_PUBLIC_ADMIN_URL: ${PUBLIC_URL:-http://localhost:3000}/admin
+      NEXT_PUBLIC_KIOSK_URL: ${PUBLIC_URL:-http://localhost:3000}/kiosk
       # Ollama runs natively on host for Metal GPU; bridge from container.
       # We hardcode host.docker.internal here (instead of inheriting from
       # the host .env) because the host .env uses localhost — fine for
@@ -158,8 +169,8 @@ services:
       PAYTRAIL_SECRET: ${PAYTRAIL_SECRET:-SAIPPUAKAUPPIAS}
       PAYTRAIL_API_URL: ${PAYTRAIL_API_URL:-https://services.paytrail.com}
       PAYTRAIL_WEBHOOK_SECRET: ${PAYTRAIL_WEBHOOK_SECRET:-SAIPPUAKAUPPIAS}
-      PAYTRAIL_CALLBACK_URL: ${PAYTRAIL_CALLBACK_URL:-http://localhost:4000/webhooks/paytrail}
-      PAYTRAIL_RETURN_URL: ${PAYTRAIL_RETURN_URL:-http://localhost:3000/en/donate/complete}
+      PAYTRAIL_CALLBACK_URL: ${PUBLIC_URL:-http://localhost:3000}/webhooks/paytrail
+      PAYTRAIL_RETURN_URL: ${PUBLIC_URL:-http://localhost:3000}/en/donate/complete
       # Localhost runs Paytrail's signing pipeline against a locally-
       # hosted mock checkout (Paytrail itself rejects http:// callbacks).
       # In real deployment, unset / set to false and the live hosted
@@ -171,8 +182,8 @@ services:
       MOBILEPAY_SUBSCRIPTION_KEY: ${MOBILEPAY_SUBSCRIPTION_KEY:-}
       MOBILEPAY_MERCHANT_SERIAL_NUMBER: ${MOBILEPAY_MERCHANT_SERIAL_NUMBER:-}
       MOBILEPAY_WEBHOOK_SECRET: ${MOBILEPAY_WEBHOOK_SECRET:-}
-      MOBILEPAY_RETURN_URL: ${MOBILEPAY_RETURN_URL:-${NEXT_PUBLIC_WEB_URL:-http://localhost:3000}/en/donate/complete}
-      MOBILEPAY_CALLBACK_URL: ${MOBILEPAY_CALLBACK_URL:-${NEXT_PUBLIC_API_URL:-http://localhost:4000}/webhooks/mobilepay}
+      MOBILEPAY_RETURN_URL: ${PUBLIC_URL:-http://localhost:3000}/en/donate/complete
+      MOBILEPAY_CALLBACK_URL: ${PUBLIC_URL:-http://localhost:3000}/webhooks/mobilepay
       # ── BloomOulu garden identity (env-driven, .env-flip-to-prod) ─────
       # These are the runtime fallbacks for SystemSetting rows. Admin
       # edits in /admin → SystemSetting always win. Setting these here
@@ -187,7 +198,7 @@ services:
       GARDEN_ORG_NAME_SV: ${GARDEN_ORG_NAME_SV:-Uleåborgs universitets botaniska trädgård}
       GARDEN_ORG_VAT_ID: ${GARDEN_ORG_VAT_ID:-FI02452579}
       GARDEN_ADDRESS: ${GARDEN_ADDRESS:-Linnanmaa, 90014 Oulun yliopisto}
-      GARDEN_DONATE_URL: ${GARDEN_DONATE_URL:-${NEXT_PUBLIC_WEB_URL:-http://localhost:3000}/en/donate/pay}
+      GARDEN_DONATE_URL: ${PUBLIC_URL:-http://localhost:3000}/en/donate/pay
       # Contact details — used in receipts, error banners, ask-the-garden curator card.
       ASK_CURATOR_EMAIL: ${ASK_CURATOR_EMAIL:-curator@bloomoulu.fi}
       ASK_CURATOR_NAME: ${ASK_CURATOR_NAME:-Anna Liisa Ruotsalainen}
@@ -292,7 +303,7 @@ services:
       PAYTRAIL_SECRET: ${PAYTRAIL_SECRET:-SAIPPUAKAUPPIAS}
       PAYTRAIL_API_URL: ${PAYTRAIL_API_URL:-https://services.paytrail.com}
       PAYTRAIL_WEBHOOK_SECRET: ${PAYTRAIL_WEBHOOK_SECRET:-SAIPPUAKAUPPIAS}
-      PAYTRAIL_CALLBACK_URL: ${PAYTRAIL_CALLBACK_URL:-http://localhost:4000/webhooks/paytrail}
+      PAYTRAIL_CALLBACK_URL: ${PUBLIC_URL:-http://localhost:3000}/webhooks/paytrail
       PAYTRAIL_MOCK: ${PAYTRAIL_MOCK:-true}
       MOBILEPAY_API_URL: ${MOBILEPAY_API_URL:-https://apitest.vipps.no}
       MOBILEPAY_CLIENT_ID: ${MOBILEPAY_CLIENT_ID:-}
@@ -300,14 +311,14 @@ services:
       MOBILEPAY_SUBSCRIPTION_KEY: ${MOBILEPAY_SUBSCRIPTION_KEY:-}
       MOBILEPAY_MERCHANT_SERIAL_NUMBER: ${MOBILEPAY_MERCHANT_SERIAL_NUMBER:-}
       MOBILEPAY_WEBHOOK_SECRET: ${MOBILEPAY_WEBHOOK_SECRET:-}
-      MOBILEPAY_RETURN_URL: ${MOBILEPAY_RETURN_URL:-${NEXT_PUBLIC_WEB_URL:-http://localhost:3000}/en/donate/complete}
-      MOBILEPAY_CALLBACK_URL: ${MOBILEPAY_CALLBACK_URL:-${NEXT_PUBLIC_API_URL:-http://localhost:4000}/webhooks/mobilepay}
+      MOBILEPAY_RETURN_URL: ${PUBLIC_URL:-http://localhost:3000}/en/donate/complete
+      MOBILEPAY_CALLBACK_URL: ${PUBLIC_URL:-http://localhost:3000}/webhooks/mobilepay
       GARDEN_IBAN: ${GARDEN_IBAN:-FI00 0000 0000 0000 00}
       GARDEN_BIC: ${GARDEN_BIC:-NDEAFIHH}
       GARDEN_ORG_NAME: ${GARDEN_ORG_NAME:-Oulun yliopiston kasvitieteellinen puutarha}
-      GARDEN_DONATE_URL: ${GARDEN_DONATE_URL:-${NEXT_PUBLIC_WEB_URL:-http://localhost:3000}/en/donate/pay}
-      NEXT_PUBLIC_WEB_URL: ${NEXT_PUBLIC_WEB_URL:-http://localhost:3000}
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
+      GARDEN_DONATE_URL: ${PUBLIC_URL:-http://localhost:3000}/en/donate/pay
+      NEXT_PUBLIC_WEB_URL: ${PUBLIC_URL:-http://localhost:3000}
+      NEXT_PUBLIC_API_URL: ${PUBLIC_URL:-http://localhost:3000}
       BANK_TRANSFER_WEBHOOK_SECRET: ${BANK_TRANSFER_WEBHOOK_SECRET:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -365,9 +376,9 @@ services:
       # NEXT_PUBLIC_* must be build args (inlined into the client bundle at build
       # time) — runtime env alone leaves localhost baked in. Mirrors the web svc.
       args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
-        NEXT_PUBLIC_WEB_URL: ${NEXT_PUBLIC_WEB_URL:-http://localhost:3000}
-        NEXT_PUBLIC_KIOSK_URL: ${NEXT_PUBLIC_KIOSK_URL:-http://localhost:3100}
+        NEXT_PUBLIC_API_URL: ${PUBLIC_URL:-http://localhost:3000}
+        NEXT_PUBLIC_WEB_URL: ${PUBLIC_URL:-http://localhost:3000}
+        NEXT_PUBLIC_KIOSK_URL: ${PUBLIC_URL:-http://localhost:3000}/kiosk
     <<: *restart
     environment:
       NODE_ENV: production
@@ -376,7 +387,7 @@ services:
       # mapping below. HOSTNAME=0.0.0.0 makes it reachable from outside.
       PORT: 3100
       HOSTNAME: 0.0.0.0
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
+      NEXT_PUBLIC_API_URL: ${PUBLIC_URL:-http://localhost:3000}
     ports:
       - "${KIOSK_PORT:-3100}:3100"
     networks: [internal]
