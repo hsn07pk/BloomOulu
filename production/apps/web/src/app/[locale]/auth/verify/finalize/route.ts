@@ -14,6 +14,7 @@
  */
 import { NextResponse, type NextRequest } from 'next/server';
 import { getInternalApiUrl } from '@bloomoulu/constants';
+import { publicOrigin } from '@/lib/public-url';
 import { SignJWT } from 'jose';
 
 export const dynamic = 'force-dynamic';
@@ -23,7 +24,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ locale: str
   const url = new URL(req.url);
   const email = url.searchParams.get('email');
   const token = url.searchParams.get('token');
-  const origin = url.origin;
+  const origin = publicOrigin(req);
 
   if (!email || !token) {
     return NextResponse.redirect(new URL(`/${locale}/sign-in?reason=invalid`, origin));

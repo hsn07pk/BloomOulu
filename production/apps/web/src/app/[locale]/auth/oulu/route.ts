@@ -17,6 +17,7 @@
  */
 import { cookies } from 'next/headers';
 import { NextResponse, type NextRequest } from 'next/server';
+import { publicOrigin } from '@/lib/public-url';
 import { createRemoteJWKSet, jwtVerify, SignJWT } from 'jose';
 
 const STATE_COOKIE = 'bloomoulu.oidc.state';
@@ -48,7 +49,7 @@ function randomState(): string {
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ locale: string }> }) {
   const { locale } = await ctx.params;
-  const origin = new URL(req.url).origin;
+  const origin = publicOrigin(req);
   const issuer = process.env.AUTH_OULU_OIDC_ISSUER;
   const clientId = process.env.AUTH_OULU_OIDC_CLIENT_ID;
   if (!issuer || !clientId) {

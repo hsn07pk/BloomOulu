@@ -8,6 +8,7 @@
  */
 import { cookies } from 'next/headers';
 import { getInternalApiUrl } from '@bloomoulu/constants';
+import { publicOrigin } from '@/lib/public-url';
 import { NextResponse, type NextRequest } from 'next/server';
 import { jwtVerify } from 'jose';
 
@@ -37,7 +38,7 @@ export async function GET(
 ) {
   const session = await readSession();
   if (!session) {
-    return NextResponse.redirect(new URL(`/en/sign-in?reason=expired`, req.url));
+    return NextResponse.redirect(new URL(`/en/sign-in?reason=expired`, publicOrigin(req)));
   }
   const { id } = await ctx.params;
   try {

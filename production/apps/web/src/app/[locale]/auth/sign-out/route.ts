@@ -5,6 +5,7 @@
  */
 import { cookies } from 'next/headers';
 import { NextResponse, type NextRequest } from 'next/server';
+import { publicOrigin } from '@/lib/public-url';
 
 const COOKIE_NAME = 'bloomoulu.session';
 
@@ -26,10 +27,10 @@ async function clearAndRedirect(locale: string, origin: string) {
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ locale: string }> }) {
   const { locale } = await ctx.params;
-  return clearAndRedirect(locale, new URL(req.url).origin);
+  return clearAndRedirect(locale, publicOrigin(req));
 }
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ locale: string }> }) {
   const { locale } = await ctx.params;
-  return clearAndRedirect(locale, new URL(req.url).origin);
+  return clearAndRedirect(locale, publicOrigin(req));
 }

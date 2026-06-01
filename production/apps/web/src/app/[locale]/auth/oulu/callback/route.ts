@@ -5,6 +5,7 @@
  */
 import { cookies } from 'next/headers';
 import { getInternalApiUrl } from '@bloomoulu/constants';
+import { publicOrigin } from '@/lib/public-url';
 import { NextResponse, type NextRequest } from 'next/server';
 import { createRemoteJWKSet, jwtVerify, SignJWT } from 'jose';
 
@@ -23,7 +24,7 @@ async function discover(issuer: string) {
 export async function GET(req: NextRequest, ctx: { params: Promise<{ locale: string }> }) {
   const { locale } = await ctx.params;
   const url = new URL(req.url);
-  const origin = url.origin;
+  const origin = publicOrigin(req);
   const code = url.searchParams.get('code');
   const state = url.searchParams.get('state');
 

@@ -14,6 +14,7 @@
  */
 import { cookies } from 'next/headers';
 import { getInternalApiUrl } from '@bloomoulu/constants';
+import { publicOrigin } from '@/lib/public-url';
 import { NextResponse, type NextRequest } from 'next/server';
 import { jwtVerify } from 'jose';
 
@@ -44,9 +45,9 @@ async function readSession(): Promise<{ sub: string; locale: string; token: stri
 export async function POST(req: NextRequest) {
   const session = await readSession();
   if (!session) {
-    return NextResponse.redirect(new URL('/en/sign-in?reason=expired', req.url));
+    return NextResponse.redirect(new URL('/en/sign-in?reason=expired', publicOrigin(req)));
   }
-  const back = new URL(`/${session.locale}/garden`, req.url);
+  const back = new URL(`/${session.locale}/garden`, publicOrigin(req));
   try {
     const res = await fetch(`${apiBase()}/v1/gdpr/erase`, {
       method: 'POST',
@@ -71,5 +72,5 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   const session = await readSession();
   const locale = session?.locale ?? 'en';
-  return NextResponse.redirect(new URL(`/${locale}/garden`, req.url));
+  return NextResponse.redirect(new URL(`/${locale}/garden`, publicOrigin(req)));
 }
