@@ -296,8 +296,29 @@ export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled,
   // optionally &kiosk=<terminal-id>) so we can tell a browse visit from a
   // physical-label scan, show the "Scanned via QR" chip, and record a
   // PlantScan event when the donor actually walked up to the plant.
-  const arrivedViaQr = searchParams?.get('qr') === '1';
-  const qrKioskId = searchParams?.get('kiosk') ?? null;
+  //
+  // This route is statically generated (ISR, see page.tsx), and on a static
+  // route useSearchParams() can resolve to EMPTY on the client — so ?qr=1
+  // went undetected and the scan ping never fired (the unconditional view
+  // ping did, which is precisely why viewCount moved but scanCount stayed 0
+  // for QR arrivals). Read the live browser URL as the source of truth, with
+  // useSearchParams as a fallback. useState+effect (rather than a render-time
+  // window read) keeps SSR and the first client render in sync (no hydration
+  // mismatch); the effect then upgrades to the real value post-mount.
+  const [qrEntry, setQrEntry] = useState<{ qr: boolean; kiosk: string | null }>({
+    qr: searchParams?.get('qr') === '1',
+    kiosk: searchParams?.get('kiosk') ?? null,
+  });
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const sp = new URLSearchParams(window.location.search);
+    setQrEntry({
+      qr: sp.get('qr') === '1' || searchParams?.get('qr') === '1',
+      kiosk: sp.get('kiosk') ?? searchParams?.get('kiosk') ?? null,
+    });
+  }, [searchParams]);
+  const arrivedViaQr = qrEntry.qr;
+  const qrKioskId = qrEntry.kiosk;
   // QR-scan ping — only fires for `?qr=1` arrivals. Writes a PlantScan
   // row (with kioskId + visitorHash) and increments Plant.scanCount.
   const scanPingedRef = useRef(false);
