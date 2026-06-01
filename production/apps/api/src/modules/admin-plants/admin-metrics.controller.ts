@@ -123,39 +123,46 @@ export class AdminMetricsController {
   @Get('funnel')
   async funnel(@Query('days') days?: string) {
     const from = windowStart(days, DEFAULT_WINDOW_DAYS);
-    const [totalScans, uniqueVisitors, uniqueScannedPlants, scannedPlantIdsRows] =
-      await Promise.all([
-        this.prisma.plantScan.count({ where: { scannedAt: { gte: from } } }),
-        this.prisma.plantScan
-          .findMany({
-            where: { scannedAt: { gte: from }, visitorHash: { not: '' } },
-            distinct: ['visitorHash'],
-            select: { visitorHash: true },
-          })
-          .then((r) => r.length),
-        this.prisma.plantScan
-          .findMany({
-            where: { scannedAt: { gte: from } },
-            distinct: ['plantId'],
-            select: { plantId: true },
-          })
-          .then((r) => r.length),
-        this.prisma.plantScan.findMany({
+    const [totalScans, uniqueVisitors, uniqueScannedPlants] = await Promise.all([
+      this.prisma.plantScan.count({ where: { scannedAt: { gte: from } } }),
+      this.prisma.plantScan
+        .findMany({
+          where: { scannedAt: { gte: from }, visitorHash: { not: '' } },
+          distinct: ['visitorHash'],
+          select: { visitorHash: true },
+        })
+        .then((r) => r.length),
+      this.prisma.plantScan
+        .findMany({
           where: { scannedAt: { gte: from } },
           distinct: ['plantId'],
           select: { plantId: true },
-        }),
-      ]);
-    const scannedPlantIds = scannedPlantIdsRows.map((r) => r.plantId);
-    const adoptionsAfterScan = scannedPlantIds.length === 0
-      ? 0
-      : await this.prisma.adoption.count({
-          where: {
-            createdAt: { gte: from },
-            plantId: { in: scannedPlantIds },
-          },
-        });
-    const conversionRate = totalScans > 0 ? adoptionsAfterScan / totalScans : 0;
+        })
+        .then((r) => r.length),
+    ]);
+    // Adoptions genuinely attributable to a scan: an ACTIVE adoption (a
+    // started-but-unpaid `pending` checkout is not a conversion, nor are
+    // cancelled/expired) of a plant that was scanned BEFORE that adoption was
+    // created, within the window. The previous query counted *every*
+    // adoption of any scanned plant in the window regardless of status or
+    // timing — so pre-existing and pending adoptions inflated it (e.g. 8
+    // adoptions vs 1 scan → an impossible 800% conversion). Without a
+    // visitor→donor link this is a correlation proxy, not causal attribution,
+    // but the status + temporal gate keeps it honest and bounded.
+    const adoptionsAfterScanRows = await this.prisma.$queryRaw<Array<{ n: number }>>`
+      SELECT count(*)::int AS n
+      FROM "Adoption" a
+      WHERE a.status = 'active'::"AdoptionStatus"
+        AND a."createdAt" >= ${from}
+        AND EXISTS (
+          SELECT 1 FROM "PlantScan" ps
+          WHERE ps."plantId" = a."plantId"
+            AND ps."scannedAt" >= ${from}
+            AND ps."scannedAt" <= a."createdAt"
+        )`;
+    const adoptionsAfterScan = Number(adoptionsAfterScanRows[0]?.n ?? 0);
+    // Per the dashboard copy: post-scan adoptions ÷ unique scanning visitors.
+    const conversionRate = uniqueVisitors > 0 ? adoptionsAfterScan / uniqueVisitors : 0;
     return {
       windowStart: from.toISOString(),
       totalScans,
