@@ -10,6 +10,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
@@ -1382,10 +1383,12 @@ export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled,
         </div>
       </div>
 
-      {/* QR MODAL */}
-      {showQR && (
-        <div
-          role="dialog"
+      {/* QR MODAL — portalled to <body> so the page's .fade-in transform can't
+          trap its position:fixed and push it into the middle of the document. */}
+      {showQR &&
+        createPortal(
+          <div
+            role="dialog"
           aria-modal="true"
           aria-label={t('shareQr')}
           onClick={() => setShowQR(false)}
@@ -1508,8 +1511,9 @@ export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled,
               </a>
             </div>
           </div>
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
 
       {/* QUIZ MODAL (school mode) */}
       {showQuiz && (

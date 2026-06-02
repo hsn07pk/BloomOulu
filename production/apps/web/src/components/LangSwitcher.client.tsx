@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
 /**
@@ -21,6 +22,11 @@ export function LangSwitcher({ locale }: { locale: string }): JSX.Element {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const current = LOCALES.find((l) => l.code === locale) ?? LOCALES[0];
+  // Switch locale on the SAME page: keep the current path and swap only the
+  // locale segment (e.g. /en/plants/rose → /fi/plants/rose). Query strings are
+  // not preserved — using useSearchParams() here would force the layout to
+  // render dynamically.
+  const rest = (usePathname() ?? `/${locale}`).replace(/^\/(en|fi|sv)(?=\/|$)/, '');
 
   // Close the mobile popover on outside-click / Escape.
   useEffect(() => {
@@ -62,7 +68,7 @@ export function LangSwitcher({ locale }: { locale: string }): JSX.Element {
         {LOCALES.map((l) => (
           <Link
             key={l.code}
-            href={`/${l.code}`}
+            href={`/${l.code}${rest}`}
             className={locale === l.code ? 'active' : ''}
             hrefLang={l.code}
             aria-label={l.name}
