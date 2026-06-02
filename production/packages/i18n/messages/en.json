@@ -19,6 +19,7 @@
     "plants": "Plants",
     "adopt": "Adopt",
     "ask": "Ask the Garden",
+    "askShort": "Ask",
     "garden": "My Garden",
     "signIn": "Sign in"
   },
@@ -35,7 +36,7 @@
   "Plants": {
     "collection": "The living collection",
     "indexTitle": "Browse the living index",
-    "indexDesc": "Every plant in the outdoor garden and the Romeo & Julia greenhouses has its own page, its own audio narration, and — for many — a sponsorship invitation.",
+    "indexDesc": "Every plant in the outdoor garden and the Romeo & Julia greenhouses has its own page and — for many — a sponsorship invitation.",
     "search": "Search plants by name…",
     "searchAria": "Search plants by common name, Latin name, or family",
     "clearSearch": "Clear search",
@@ -84,7 +85,6 @@
     "showOnMap": "Show on map",
     "shareQr": "Share this plant",
     "citations": "Sources",
-    "audio": "Listen to the story",
     "modeAdult": "Adult mode",
     "modeKid": "Kid mode",
     "modeSchool": "School mode",

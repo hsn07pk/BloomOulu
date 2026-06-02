@@ -1047,13 +1047,15 @@ function Step1ChooseTier({
       </div>
 
       <div
-        data-grid-mobile="2"
         style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}
       >
         {tiers.map((tier) => {
           const cents = recurring && tier.monthlyPriceCents ? tier.monthlyPriceCents : tier.annualPriceCents;
           const isSelected = tier.id === tierId;
-          const tag = tierTag(tier, locale);
+          // Only the "Best value" tier keeps its badge; the other promo tags
+          // (Most popular gift / Donor-wall listing / Plaque by YOUR plant) are
+          // intentionally hidden from the cards.
+          const tag = tier.tagEn === 'Best value' ? tierTag(tier, locale) : null;
           const perks = (Array.isArray(tier.perks) ? tier.perks : []) as PerkEntry[];
           return (
             <button
@@ -1061,19 +1063,20 @@ function Step1ChooseTier({
               type="button"
               onClick={() => setTierId(tier.id)}
               aria-pressed={isSelected}
-              className="card"
+              className="card tier-card"
               style={{
                 padding: 0,
                 textAlign: 'left',
+                display: 'flex',
+                flexDirection: 'column',
                 border: isSelected ? `2px solid ${tier.color}` : '1px solid var(--line)',
                 overflow: 'hidden',
-                transition: 'transform 200ms, box-shadow 200ms',
-                transform: isSelected ? 'translateY(-4px)' : 'none',
+                transition: 'box-shadow 200ms, border-color 200ms',
                 boxShadow: isSelected ? 'var(--shadow-mid)' : 'var(--shadow-soft)',
                 cursor: 'pointer',
               }}
             >
-              <div style={{ padding: '20px 24px 24px', background: tier.bg, position: 'relative' }}>
+              <div className="tier-card__head" style={{ padding: '20px 24px 24px', background: tier.bg, position: 'relative' }}>
                 {tag && (
                   <div
                     className="badge"
@@ -1096,27 +1099,42 @@ function Step1ChooseTier({
                 )}
                 <div
                   aria-hidden="true"
+                  className="tier-card__icon"
                   style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 8,
+                    width: 44,
+                    height: 44,
+                    borderRadius: 14,
                     background: tier.color,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     color: 'white',
                     marginBottom: 20,
-                    fontSize: "1.2rem",
+                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.25)',
                   }}
                 >
-                  🌱
+                  <svg
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={1.8}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M7 20h10" />
+                    <path d="M10 20c5.5-2.5.8-6.4 3-10" />
+                    <path d="M9.5 9.4c1.1.8 1.8 2.2 2.3 3.7-2 .4-3.5.4-4.8-.3-1.2-.6-2.3-1.9-3-4.2 2.8-.5 4.4 0 5.5.8Z" />
+                    <path d="M14.1 6a7 7 0 0 0-1.1 4c1.9-.1 3.3-.6 4.3-1.4 1-1 1.6-2.3 1.7-4.6-2.7.1-4 1-4.9 2Z" />
+                  </svg>
                 </div>
                 <div className="tiny">{tier.nameFi}</div>
-                <div className="serif" style={{ fontSize: "1.867rem", marginTop: 4 }}>
+                <div className="serif tier-card__name" style={{ fontSize: "1.867rem", marginTop: 4 }}>
                   {tierName(tier, locale)}
                 </div>
                 <div style={{ marginTop: 16, display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                  <span className="serif" style={{ fontSize: "2.933rem" }}>
+                  <span className="serif tier-card__price" style={{ fontSize: "2.933rem" }}>
                     €{euros(cents, locale)}
                   </span>
                   <span className="muted small">
@@ -1129,7 +1147,7 @@ function Step1ChooseTier({
                   </div>
                 )}
               </div>
-              <div style={{ padding: 20 }}>
+              <div className="tier-card__body" style={{ padding: 20, flex: 1 }}>
                 <p className="small muted" style={{ marginBottom: 14, lineHeight: 1.5 }}>
                   {tierBlurb(tier, locale)}
                 </p>

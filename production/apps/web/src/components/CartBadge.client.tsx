@@ -143,6 +143,7 @@ export default function CartBadge({ locale }: { locale: string }) {
         <div
           role="menu"
           aria-label="Cart contents"
+          className="cart-dropdown"
           style={{
             position: 'absolute',
             top: 'calc(100% + 8px)',

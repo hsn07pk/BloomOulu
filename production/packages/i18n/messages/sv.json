@@ -19,6 +19,7 @@
     "plants": "Växter",
     "adopt": "Adoptera",
     "ask": "Fråga trädgården",
+    "askShort": "Fråga",
     "garden": "Min trädgård",
     "signIn": "Logga in"
   },
@@ -35,7 +36,7 @@
   "Plants": {
     "collection": "Den levande samlingen",
     "indexTitle": "Bläddra i levande indexet",
-    "indexDesc": "Varje växt i utomhusträdgården och Romeo & Julia-växthusen har en egen sida, en egen ljudberättelse — och för många också en adoptionsinbjudan.",
+    "indexDesc": "Varje växt i utomhusträdgården och Romeo & Julia-växthusen har en egen sida — och för många också en adoptionsinbjudan.",
     "search": "Sök växt med namn…",
     "searchAria": "Sök växter efter namn, latinskt namn eller familj",
     "clearSearch": "Rensa sökning",
@@ -84,7 +85,6 @@
     "showOnMap": "Visa på kartan",
     "shareQr": "Dela den här växten",
     "citations": "Källor",
-    "audio": "Lyssna på berättelsen",
     "modeAdult": "Vuxenläge",
     "modeKid": "Barnläge",
     "modeSchool": "Skolläge",

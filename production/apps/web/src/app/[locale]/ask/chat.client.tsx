@@ -572,7 +572,7 @@ export default function AskChat({
                     </span>
                   </div>
                 )}
-                <p style={{ whiteSpace: 'pre-wrap', margin: 0, lineHeight: 1.6 }}>
+                <p style={{ whiteSpace: 'pre-wrap', overflowWrap: 'break-word', margin: 0, lineHeight: 1.6 }}>
                   {tn.text}
                   {tn.streaming && <span aria-hidden="true">▍</span>}
                 </p>
@@ -690,6 +690,7 @@ export default function AskChat({
             disabled={busy}
             style={{
               flex: 1,
+              minWidth: 0,
               padding: '12px 16px',
               borderRadius: 999,
               border: '1px solid var(--line)',

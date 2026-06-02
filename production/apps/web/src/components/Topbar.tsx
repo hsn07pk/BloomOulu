@@ -2,21 +2,17 @@ import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 import { getSession } from '../lib/session';
 import CartBadge from './CartBadge.client';
+import PrimaryNav from './PrimaryNav.client';
+import { LangSwitcher } from './LangSwitcher.client';
 
 /**
  * Shared site chrome — logo · primary nav · locale switcher · sign-in/account.
  *
  * Renders server-side so it's part of the initial HTML payload (good for
- * cold ISR + crawler text). Active-state styling lives in CSS classes
- * driven by `active` prop.
+ * cold ISR + crawler text). The primary nav itself is split out into the
+ * client PrimaryNav so it can highlight the active tab live from the URL.
  */
-export async function Topbar({
-  locale,
-  active,
-}: {
-  locale: string;
-  active?: 'home' | 'plants' | 'adopt' | 'ask' | 'garden';
-}) {
+export async function Topbar({ locale }: { locale: string }) {
   const t = await getTranslations({ locale, namespace: 'Nav' });
   const tc = await getTranslations({ locale, namespace: 'Common' });
   const session = await getSession();
@@ -37,27 +33,10 @@ export async function Topbar({
           />
           <span>{tc('appName')}</span>
         </Link>
-        <nav className="nav" aria-label="primary">
-          <Link href={`/${locale}`} className={active === 'home' ? 'active' : ''}>
-            {t('home')}
-          </Link>
-          <Link href={`/${locale}/adopt`} className={active === 'adopt' ? 'active' : ''}>
-            {t('adopt')}
-          </Link>
-          <Link href={`/${locale}/ask`} className={active === 'ask' ? 'active' : ''}>
-            {t('ask')}
-          </Link>
-          <Link href={`/${locale}/garden`} className={active === 'garden' ? 'active' : ''}>
-            {t('garden')}
-          </Link>
-        </nav>
+        <PrimaryNav />
         <div className="topbar-right">
           <CartBadge locale={locale} />
-          <div className="lang-pill" role="group" aria-label="Language">
-            <Link href={`/en`} className={locale === 'en' ? 'active' : ''} hrefLang="en" aria-label="English">EN</Link>
-            <Link href={`/fi`} className={locale === 'fi' ? 'active' : ''} hrefLang="fi" aria-label="Suomi">FI</Link>
-            <Link href={`/sv`} className={locale === 'sv' ? 'active' : ''} hrefLang="sv" aria-label="Svenska">SV</Link>
-          </div>
+          <LangSwitcher locale={locale} />
           {session.user ? (
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginLeft: 8 }}>
               <Link
@@ -94,7 +73,7 @@ export async function Topbar({
                 >
                   {(accountLabel ?? '?').slice(0, 1).toUpperCase()}
                 </span>
-                {accountLabel}
+                <span className="account-name">{accountLabel}</span>
               </Link>
               <a
                 href={`/${locale}/auth/sign-out`}

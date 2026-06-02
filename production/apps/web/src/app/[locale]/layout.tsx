@@ -7,6 +7,7 @@ import { notFound } from 'next/navigation';
 import { LOCALES, type Locale } from '../../i18n';
 import { A11yPanel } from '../../components/A11yPanel';
 import { FeedbackButton } from '../../components/FeedbackButton';
+import { FloatingTools } from '../../components/FloatingTools.client';
 import { CookieBanner } from '../../components/CookieBanner';
 import { Topbar } from '../../components/Topbar';
 import { MobileTabBar } from '../../components/MobileTabBar';
@@ -123,8 +124,10 @@ export default async function RootLayout({
               </nav>
             </div>
           </footer>
-          <A11yPanel />
-          <FeedbackButton />
+          <FloatingTools>
+            <A11yPanel />
+            <FeedbackButton />
+          </FloatingTools>
           <CookieBanner
             message={cookie.message}
             acknowledge={cookie.acknowledge}

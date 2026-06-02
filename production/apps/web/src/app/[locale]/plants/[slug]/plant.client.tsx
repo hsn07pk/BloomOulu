@@ -3,8 +3,8 @@
 /**
  * Plant detail — ported from demo-design/screens-plant.jsx.
  *
- * Captures the full visitor flow: QR scan → audio narration with synced
- * captions → mode switch (adult/kid/school) → tabbed deep-dives → adopt
+ * Captures the full visitor flow: QR scan → mode switch (adult/kid/school) →
+ * tabbed deep-dives → adopt
  * CTAs → similar plants. Map + quiz are stubbed as follow-ups (DB doesn't
  * yet seed microLat/microLng for every plant).
  */
@@ -161,7 +161,6 @@ interface Plant {
   primaryImage?: { url: string; altEn: string; altFi: string; altSv: string; attribution?: string } | null;
   images?: Array<{ id: string; url: string; altEn: string; altFi: string; altSv: string; attribution?: string }>;
   taxon?: { latinName: string; family: string } | null;
-  narrations?: Array<{ locale: string; audioUrl: string; durationMs: number; transcript: string }>;
   citations?: Array<{ citation: { displayTitle: string; authors?: string | null; year?: number | null; url?: string | null } }>;
 }
 
@@ -222,13 +221,6 @@ function localisedAlt(
   return img.altEn || fallback;
 }
 
-function fmtTime(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds <= 0) return '0:00';
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return `${m}:${s.toString().padStart(2, '0')}`;
-}
-
 /**
  * Suppress placeholder strings the legacy seed/enrich scripts wrote into
  * the DB. The plant detail page must NEVER render these — show the field
@@ -286,7 +278,6 @@ function makeQrDataUrl(text: string, size = 280): string {
 }
 
 const SAVED_KEY = 'bloom_saved_plants';
-const CAPTIONS_KEY = 'bloom_captions';
 
 export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled, locale, apiUrl: _apiUrl, signedIn = false }: PlantPageClientProps) {
   const t = useTranslations('Plant');
@@ -352,7 +343,9 @@ export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled,
       /* analytics ping — never block the page on a failure */
     });
   }, [plant.slug]);
-  const [mode, setMode] = useState<Mode>('adult');
+  // Kid/School modes were retired from the UI — the page renders in adult mode
+  // only (the mode toggle was removed), so there's no setter.
+  const [mode] = useState<Mode>('adult');
   const [tab, setTab] = useState<Tab>('story');
   const hasCitations = (plant.citations?.length ?? 0) > 0;
   // If the citations tab was selected but the plant has no citations
@@ -361,16 +354,11 @@ export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled,
   useEffect(() => {
     if (tab === 'citations' && !hasCitations) setTab('story');
   }, [tab, hasCitations]);
-  const [audioPlaying, setAudioPlaying] = useState(false);
-  const [audioCurrent, setAudioCurrent] = useState(0);
-  const [audioDuration, setAudioDuration] = useState(0);
-  const [captionsOn, setCaptionsOn] = useState(false);
   const [showQR, setShowQR] = useState(false);
   const [showMap, setShowMap] = useState(false);
   const [showQuiz, setShowQuiz] = useState(false);
   const [saved, setSaved] = useState(false);
   const [shareToast, setShareToast] = useState<string | null>(null);
-  const audioRef = useRef<HTMLAudioElement>(null);
 
   const name = localisedName(plant, locale);
   const latin = plant.taxon?.latinName ?? plant.nameEn;
@@ -390,9 +378,6 @@ export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled,
   // the specific zone if we have it, falling back to the country of
   // origin only when both are real data.
   const cleanLocation = cleanGardenZone ?? cleanOrigin;
-  const narration = plant.narrations?.find((n) => n.locale === locale) ?? plant.narrations?.[0];
-  const transcript = narration?.transcript ?? '';
-  const audioProgress = audioDuration > 0 ? (audioCurrent / audioDuration) * 100 : 0;
   const altText = localisedAlt(plant.primaryImage, locale, name);
 
   // ── Tier + interval state, driven by the tiers prop (single source
@@ -423,7 +408,7 @@ export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled,
       ? ''
     : (locale === 'fi' ? '/vuosi' : locale === 'sv' ? '/år' : '/yr');
 
-  // Initial bookmark + captions state from localStorage. If signed in,
+  // Initial bookmark state from localStorage. If signed in,
   // also sync the localStorage shadow into the user's server-side
   // bookmark list (one-shot bulk merge) and then read the server list
   // for the current plant's authoritative state.
@@ -431,7 +416,6 @@ export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled,
     try {
       const list = JSON.parse(localStorage.getItem(SAVED_KEY) ?? '[]') as string[];
       setSaved(list.includes(plant.slug));
-      setCaptionsOn(localStorage.getItem(CAPTIONS_KEY) === '1');
       if (signedIn) {
         // Best-effort sync of any localStorage shadow into the server.
         if (list.length > 0) {
@@ -455,49 +439,12 @@ export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled,
     }
   }, [plant.id, plant.slug, signedIn]);
 
-  // Persist captions state
-  useEffect(() => {
-    try {
-      localStorage.setItem(CAPTIONS_KEY, captionsOn ? '1' : '0');
-    } catch {
-      /* ignore */
-    }
-  }, [captionsOn]);
-
-  // Reset audio when narration changes (locale switch)
-  useEffect(() => {
-    const a = audioRef.current;
-    if (!a) return;
-    a.pause();
-    try {
-      a.load();
-    } catch {
-      /* ignore */
-    }
-    setAudioPlaying(false);
-    setAudioCurrent(0);
-    setAudioDuration(0);
-  }, [narration?.audioUrl]);
-
   // Toast auto-dismiss
   useEffect(() => {
     if (!shareToast) return;
     const id = setTimeout(() => setShareToast(null), 2200);
     return () => clearTimeout(id);
   }, [shareToast]);
-
-  const toggleAudio = () => {
-    const a = audioRef.current;
-    if (!a) return;
-    if (a.paused) {
-      a.play()
-        .then(() => setAudioPlaying(true))
-        .catch(() => setAudioPlaying(false));
-    } else {
-      a.pause();
-      setAudioPlaying(false);
-    }
-  };
 
   const toggleSave = () => {
     // Optimistic UI: flip state immediately, persist to both localStorage
@@ -696,7 +643,24 @@ export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled,
               onClick={handleShare}
               aria-label={locale === 'fi' ? 'Jaa tämä kasvi' : locale === 'sv' ? 'Dela denna växt' : 'Share this plant'}
             >
-              <span aria-hidden="true">↗</span>
+              <span aria-hidden="true" style={{ display: 'inline-flex' }}>
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={1.9}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <circle cx="18" cy="5" r="3" />
+                  <circle cx="6" cy="12" r="3" />
+                  <circle cx="18" cy="19" r="3" />
+                  <path d="M8.59 13.51 15.42 17.49" />
+                  <path d="M15.41 6.51 8.59 10.49" />
+                </svg>
+              </span>
             </button>
           </div>
         </div>
@@ -773,149 +737,7 @@ export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled,
               )}
             </div>
 
-            {/* Audio overlay (only when narration present) */}
-            {narration && (
-              <div
-                style={{
-                  position: 'absolute',
-                  bottom: 20,
-                  left: 20,
-                  right: 20,
-                  display: 'flex',
-                  alignItems: 'end',
-                  justifyContent: 'space-between',
-                  gap: 12,
-                  flexWrap: 'wrap',
-                }}
-              >
-                <div
-                  style={{
-                    background: 'rgba(255,255,255,0.92)',
-                    padding: '12px 16px',
-                    borderRadius: 14,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 12,
-                  }}
-                >
-                  <audio
-                    ref={audioRef}
-                    key={narration.audioUrl}
-                    src={narration.audioUrl}
-                    preload="metadata"
-                    onLoadedMetadata={(e) => setAudioDuration(e.currentTarget.duration)}
-                    onTimeUpdate={(e) => setAudioCurrent(e.currentTarget.currentTime)}
-                    onEnded={() => {
-                      setAudioPlaying(false);
-                      setAudioCurrent(0);
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={toggleAudio}
-                    className="btn btn-primary"
-                    style={{ width: 44, height: 44, padding: 0, borderRadius: '50%' }}
-                    aria-label={audioPlaying ? (locale === 'fi' ? 'Tauko' : 'Pause') : (locale === 'fi' ? 'Toista' : 'Play')}
-                  >
-                    {audioPlaying ? '❚❚' : '▶'}
-                  </button>
-                  <div style={{ minWidth: 180 }}>
-                    <div className="tiny" style={{ color: 'var(--ink-2)' }}>
-                      {t('audio')}
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
-                      <div
-                        style={{
-                          flex: 1,
-                          height: 4,
-                          background: 'rgba(31,58,44,0.12)',
-                          borderRadius: 999,
-                          overflow: 'hidden',
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: `${audioProgress}%`,
-                            height: '100%',
-                            background: 'var(--forest)',
-                          }}
-                        />
-                      </div>
-                      <span
-                        className="mono small"
-                        style={{ color: 'var(--ink-2)', fontFamily: 'var(--f-mono)' }}
-                      >
-                        {fmtTime(audioCurrent)} / {fmtTime(audioDuration)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  className="icon-btn"
-                  onClick={() => setCaptionsOn((c) => !c)}
-                  aria-pressed={captionsOn}
-                  aria-label={
-                    captionsOn
-                      ? locale === 'fi'
-                        ? 'Piilota tekstitykset'
-                        : locale === 'sv'
-                          ? 'Dölj undertexter'
-                          : 'Hide captions'
-                      : locale === 'fi'
-                        ? 'Näytä tekstitykset'
-                        : locale === 'sv'
-                          ? 'Visa undertexter'
-                          : 'Show captions'
-                  }
-                  style={{
-                    background: captionsOn ? 'var(--forest)' : 'rgba(255,255,255,0.92)',
-                    color: captionsOn ? 'var(--cream)' : 'var(--ink-2)',
-                    borderColor: captionsOn ? 'var(--forest)' : 'var(--line)',
-                    fontFamily: 'var(--f-mono)',
-                    fontSize: 11,
-                    fontWeight: 700,
-                  }}
-                >
-                  CC
-                </button>
-              </div>
-            )}
           </div>
-
-          {/* Captions panel */}
-          {captionsOn && transcript && (
-            <div
-              role="region"
-              aria-label={locale === 'fi' ? 'Äänen tekstitys' : locale === 'sv' ? 'Ljudtranskription' : 'Audio transcript'}
-              style={{
-                marginTop: 18,
-                padding: '16px 20px',
-                background: 'var(--forest-deep)',
-                color: 'var(--cream)',
-                borderRadius: 14,
-                fontSize: 15,
-                lineHeight: 1.6,
-              }}
-            >
-              <div
-                className="tiny"
-                style={{ color: 'var(--sage-bright)', marginBottom: 8, letterSpacing: '0.12em' }}
-              >
-                {audioPlaying
-                  ? `▶ ${locale === 'fi' ? 'Toistetaan nyt' : locale === 'sv' ? 'Spelar nu' : 'Now playing'}`
-                  : locale === 'fi'
-                    ? 'Litterointi'
-                    : locale === 'sv'
-                      ? 'Transkription'
-                      : 'Transcript'}{' '}
-                · {locale.toUpperCase()}
-              </div>
-              <p lang={locale} style={{ margin: 0, color: 'rgba(250,247,238,0.92)' }}>
-                {transcript}
-              </p>
-            </div>
-          )}
 
           {/* Title block */}
           <div
@@ -1226,48 +1048,7 @@ export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled,
             locale={locale}
           />
           <div className="card" style={{ overflow: 'hidden', borderRadius: 24 }}>
-            {/* Mode toggle */}
-            <div
-              role="group"
-              aria-label={locale === 'fi' ? 'Tila' : locale === 'sv' ? 'Läge' : 'Mode'}
-              style={{
-                display: 'flex',
-                padding: 6,
-                background: 'var(--paper)',
-                margin: 16,
-                borderRadius: 999,
-              }}
-            >
-              {(
-                [
-                  ['adult', t('modeAdult')],
-                  ['kid', t('modeKid')],
-                  ['school', t('modeSchool')],
-                ] as const
-              ).map(([id, label]) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => setMode(id)}
-                  aria-pressed={mode === id}
-                  style={{
-                    flex: 1,
-                    padding: '8px 0',
-                    borderRadius: 999,
-                    fontSize: 13,
-                    background: mode === id ? 'var(--forest)' : 'transparent',
-                    color: mode === id ? 'var(--cream)' : 'var(--ink-2)',
-                    fontWeight: 500,
-                    border: 'none',
-                    cursor: 'pointer',
-                  }}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-
-            <div style={{ padding: '0 24px 24px' }}>
+            <div style={{ padding: 24 }}>
               <div className="tiny">
                 {locale === 'fi' ? 'Adoptiotila' : locale === 'sv' ? 'Adoptionsstatus' : 'Adoption status'}
               </div>
@@ -1481,14 +1262,6 @@ export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled,
                     >
                       💗{' '}
                       {locale === 'fi' ? 'Muistolahja' : locale === 'sv' ? 'Minnesgåva' : 'Memorial'}
-                    </Link>
-                    <Link
-                      href={`/${locale}/adopt?plant=${plant.slug}&tier=${selectedTierId}&interval=${billingInterval}&intent=class`}
-                      className="btn btn-ghost small"
-                      style={{ flex: 1, border: '1px solid var(--line)', textAlign: 'center' }}
-                    >
-                      🎓{' '}
-                      {locale === 'fi' ? 'Luokka' : locale === 'sv' ? 'Klass' : 'Class'}
                     </Link>
                   </div>
                   <AddToCartButton slug={plant.slug} tierId={selectedTierId} locale={locale} />

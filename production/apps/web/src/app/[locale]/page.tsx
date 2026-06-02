@@ -410,7 +410,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
         >
           {(
             [
-              ['01', '📱', locale === 'fi' ? 'Skannaa kasvi' : 'Scan a plant', locale === 'fi' ? 'Jokaisessa kyltissä on QR-koodi — kuuntele 30 s tarina suomeksi, ruotsiksi tai englanniksi.' : 'Every label has a QR code — 30-second audio in FI / SV / EN.'],
+              ['01', '📱', locale === 'fi' ? 'Skannaa kasvi' : 'Scan a plant', locale === 'fi' ? 'Jokaisessa kyltissä on QR-koodi — avaa kasvin sivu suomeksi, ruotsiksi tai englanniksi.' : 'Every label has a QR code — open its page in FI / SV / EN.'],
               ['02', '🤖', locale === 'fi' ? 'Kysy puutarhalta' : 'Ask the Garden', locale === 'fi' ? 'Tekoälymme nojaa puutarhan tietokantaan. Jokainen vastaus on lähteistetty.' : "Our AI is grounded in the Garden's accession database. Every answer cites its source."],
               ['03', '🌱', locale === 'fi' ? 'Adoptoi' : 'Adopt', locale === 'fi' ? '25 € siemenestä 1 250 € yritystasoon. Lahja-, muisto- ja luokka-adoptiot mahdollisia.' : '€25 Seedling to €1,250 Corporate. Gift, memorial, and class adoptions supported.'],
               ['04', '🔔', locale === 'fi' ? 'Palaa' : 'Return', locale === 'fi' ? 'Saat sähköpostin, kun kasvisi kukkii. Adoptoijien avoimet ovet kesäkuussa.' : 'When your plant flowers, we email you. Adopters\' Open Day in June.'],

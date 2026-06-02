@@ -19,6 +19,7 @@
     "plants": "Kasvit",
     "adopt": "Adoptoi",
     "ask": "Kysy puutarhalta",
+    "askShort": "Kysy",
     "garden": "Oma puutarhani",
     "signIn": "Kirjaudu"
   },
@@ -35,7 +36,7 @@
   "Plants": {
     "collection": "Elävä kokoelma",
     "indexTitle": "Selaa elävää indeksiä",
-    "indexDesc": "Jokaisella ulkopuutarhan ja Romeo & Julia -kasvihuoneen kasvilla on oma sivu, oma äänikerronta — ja monella myös adoptiokutsu.",
+    "indexDesc": "Jokaisella ulkopuutarhan ja Romeo & Julia -kasvihuoneen kasvilla on oma sivu — ja monella myös adoptiokutsu.",
     "search": "Hae kasvi nimellä…",
     "searchAria": "Hae kasveja nimellä, latinankielisellä nimellä tai heimolla",
     "clearSearch": "Tyhjennä haku",
@@ -84,7 +85,6 @@
     "showOnMap": "Näytä kartalla",
     "shareQr": "Jaa tämä kasvi",
     "citations": "Lähteet",
-    "audio": "Kuuntele tarina",
     "modeAdult": "Aikuisille",
     "modeKid": "Lapsille",
     "modeSchool": "Kouluille",

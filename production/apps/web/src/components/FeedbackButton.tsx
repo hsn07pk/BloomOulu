@@ -3,23 +3,16 @@
 import { useTranslations } from 'next-intl';
 
 /**
- * Floating "Feedback" pill — bottom-left, every page, sits horizontally
- * adjacent to the A11y pill. Just an external link to the Google Form
- * where we collect site-wide UX feedback. No panel to expand, no
- * preferences to persist.
+ * Floating "Feedback" pill — an external link to the Google Form where we
+ * collect site-wide UX feedback. No panel to expand, no preferences to persist.
  *
- * Placement notes:
- *   - The A11y pill is at left: 16. Its rendered width depends on
- *     locale ("Accessibility" / "Saavutettavuus" / "Tillgänglighet"),
- *     longest being Swedish at ~200px. We start this pill at left: 220
- *     so the two never overlap even in the widest-text locale.
- *   - zIndex matches the A11y pill (100). The CookieBanner sits at
- *     zIndex: 1000 on the OPPOSITE corner (bottom-right) so there's no
- *     interaction.
+ * Positioning is NOT here: it renders as a flex item inside the shared
+ * FloatingTools dock (bottom-left, below the Accessibility pill), which owns
+ * the fixed position, z-index and the footer-aware hide. On mobile the dock's
+ * CSS turns this into a compact icon-only circle (`.fab-label` is hidden).
  *
- * To rotate the form (new questions, different audience), just swap
- * the URL constant below — no other change is needed; the pill is
- * already wired to open it in a new tab.
+ * To rotate the form (new questions, different audience), just swap the URL
+ * constant below — no other change is needed; the pill opens it in a new tab.
  */
 
 // Env-driven so a new instance points the pill at its own form without a code
@@ -39,10 +32,6 @@ export function FeedbackButton(): JSX.Element {
       aria-label={t('aria')}
       title={t('title')}
       style={{
-        position: 'fixed',
-        bottom: 16,
-        right: 16,
-        zIndex: 100,
         display: 'inline-flex',
         alignItems: 'center',
         gap: 8,
@@ -61,7 +50,7 @@ export function FeedbackButton(): JSX.Element {
       <span aria-hidden="true" style={{ fontSize: 16, lineHeight: 1 }}>
         💬
       </span>
-      {t('title')}
+      <span className="fab-label">{t('title')}</span>
     </a>
   );
 }

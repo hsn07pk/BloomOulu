@@ -40,3 +40,8 @@ tsconfig.tsbuildinfo
 # Runtime local-disk storage — generated PDFs, plant images, narrations,
 # GDPR exports etc. STORAGE_DIR resolves here in dev; never commit.
 apps/api/var/
+
+# Local database backups — pg_dump output (.dump), the restore notes
+# (RESTORE.md) and the dump log. Large binaries + local-only docs that
+# are recreated on demand; never commit.
+db-dumps/

@@ -68,6 +68,10 @@
 html { font-size: 93.75%; }
 html, body {
   margin: 0; padding: 0;
+  /* Guard against accidental horizontal scroll from any element that slightly
+     exceeds the viewport. `clip` (not `hidden`) so it never turns body into a
+     scroll container — that would break the sticky topbar. */
+  overflow-x: clip;
   background: var(--cream); color: var(--ink);
   font-family: var(--f-body); font-weight: 400; font-size: 1rem;
   line-height: 1.55;
@@ -167,6 +171,7 @@ a { color: var(--forest); text-underline-offset: 3px; }
 .nav a { padding: 8px 14px; border-radius: 999px; font-size: 0.867rem; color: var(--ink-soft); font-weight: 500; transition: all 120ms; display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
 .nav a:hover { background: rgba(45, 84, 64, 0.07); color: var(--forest-deep); }
 .nav a.active { background: var(--forest-deep); color: var(--cream); }
+.nav a svg { width: 18px; height: 18px; flex-shrink: 0; }
 .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
 .lang-pill { display: flex; gap: 2px; padding: 3px; border-radius: 999px; background: rgba(45, 84, 64, 0.08); font-size: 0.733rem; font-weight: 500; font-family: var(--f-mono); }
 .lang-pill a {
@@ -181,6 +186,11 @@ a { color: var(--forest); text-underline-offset: 3px; }
   justify-content: center;
 }
 .lang-pill a.active { background: var(--cream); color: var(--forest-deep); box-shadow: var(--shadow-soft); }
+/* Collapsible language switcher (LangSwitcher.client): desktop keeps the inline
+   EN·FI·SV pill — the .lang-options wrapper dissolves so the links stay direct
+   flex children — and the toggle is hidden. Mobile rules are in the ≤768 block. */
+.lang-toggle { display: none; }
+.lang-options { display: contents; }
 
 /* Footer legal links — pad them so each one is a comfortable 32px tap target. */
 .site-footer__link {
@@ -192,6 +202,28 @@ a { color: var(--forest); text-underline-offset: 3px; }
   color: inherit;
 }
 .site-footer__link:hover { background: rgba(31,58,44,0.04); color: var(--ink); }
+
+/* Floating utility dock — bottom-left stack holding the Accessibility +
+   Feedback pills (see FloatingTools.client.tsx). It's the sole fixed/z-index
+   owner; the pills are flex items, Accessibility on top. Fades out over the
+   footer via [data-hidden]. Mobile rules (icon-only, lifted) live in the
+   max-width:768px block. */
+.floating-tools {
+  position: fixed;
+  bottom: 16px;
+  left: 16px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  transition: opacity 200ms ease, transform 200ms ease;
+}
+.floating-tools[data-hidden] {
+  opacity: 0;
+  transform: translateY(12px);
+  pointer-events: none;
+}
 
 /* Generic icon-only button — used for QR / save / share / etc. The class
    was referenced from JSX with no matching rule; without these the spans
@@ -325,7 +357,7 @@ body.bloom-high-contrast .card { border: 1.5px solid #000 !important; }
      grow with it — slightly larger but still proportionate. Headings are
      inline-styled px so they're unaffected. */
   html { font-size: 100%; }
-  body { padding-bottom: 64px; }
+  body { padding-bottom: calc(74px + env(safe-area-inset-bottom)); }
   .container { padding: 20px 16px !important; max-width: 100% !important; }
   h1 { font-size: clamp(1.875rem, 8vw, 2.75rem) !important; line-height: 1.05 !important; }
   h2 { font-size: clamp(1.5rem, 6.5vw, 2.125rem) !important; line-height: 1.1 !important; }
@@ -350,20 +382,93 @@ body.bloom-high-contrast .card { border: 1.5px solid #000 !important; }
     text-decoration: none; text-align: center;
   }
   .mobile-tabs a[aria-current='page'] { color: var(--forest-deep); }
-  .mobile-tabs .mobile-tab-ico { font-size: 1.15rem; line-height: 1; }
-  /* Lift the bottom-left floating pills above the tab bar (were at bottom:16,
-     overlapping it). Feedback stacks above the A11y pill, both on the left
-     edge so neither runs off a 320px screen. */
-  .a11y-fab { bottom: 76px !important; }
-  .feedback-fab { right: 16px !important; bottom: 76px !important; }
+  .mobile-tabs .mobile-tab-ico {
+    display: flex; line-height: 1;
+    padding: 3px 14px;
+    border-radius: 999px;
+    transition: background-color 150ms ease, color 150ms ease;
+  }
+  .mobile-tabs .mobile-tab-ico svg { width: 22px; height: 22px; }
+  /* Active tab: filled pill behind the icon — mirrors the desktop nav's
+     forest-deep/cream active pill. The SVG follows `color` via currentColor. */
+  .mobile-tabs a[aria-current='page'] .mobile-tab-ico {
+    background: var(--forest-deep);
+    color: var(--cream);
+  }
+  /* Lift the dock above the bottom tab bar, and shrink both pills to compact
+     icon-only circles so they stop crowding a phone screen. */
+  .floating-tools { bottom: calc(76px + env(safe-area-inset-bottom)) !important; }
+  .a11y-fab > button,
+  .feedback-fab {
+    width: 48px; height: 48px;
+    padding: 0 !important;
+    border-radius: 50% !important;
+    justify-content: center;
+  }
+  .floating-tools .fab-label { display: none !important; }
   .brand { font-size: 1.2rem !important; }
   .brand-mark { width: 28px !important; height: 28px !important; }
+  /* Collapse the language pill to a single "EN ▾" toggle; the three options
+     drop into a popover when tapped. Reclaims ~100px from the topbar row on
+     phones — the main remaining cause of the horizontal scrollbar. */
+  .lang-pill { position: relative; }
+  .lang-toggle {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 6px 10px; min-height: 28px;
+    border: none; background: transparent; cursor: pointer;
+    color: var(--ink-soft); font: inherit; border-radius: 999px;
+  }
+  .lang-caret { font-size: 0.7em; line-height: 1; transition: transform 150ms; }
+  .lang-pill[data-open] .lang-caret { transform: rotate(180deg); }
+  .lang-options { display: none; }
+  .lang-pill[data-open] .lang-options {
+    display: flex; flex-direction: column; gap: 2px;
+    position: absolute; top: calc(100% + 8px); right: 0;
+    min-width: 60px; padding: 4px;
+    background: var(--cream); border: 1px solid var(--line);
+    border-radius: 12px; box-shadow: var(--shadow-soft); z-index: 200;
+  }
+  /* In the popover the cream-on-cream active state disappears — give the
+     current language a filled forest-deep chip so the selection reads clearly. */
+  .lang-pill[data-open] .lang-options a.active {
+    background: var(--forest-deep);
+    color: var(--cream);
+    box-shadow: none;
+  }
+  /* Cart dropdown: anchored right-of a small button, its 280–360px popover
+     ran past the screen edge (and got clipped by overflow-x:clip) on phones.
+     Pin it to a centred box, capped at 360px, sitting just below the topbar. */
+  .cart-dropdown {
+    position: fixed !important;
+    top: 64px !important;
+    left: 12px !important;
+    right: 12px !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: 360px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+  /* Adopt tier cards stack full-width on phones — give them a touch more room
+     and a larger, better-spaced heading (icon, tier name, price). */
+  .tier-card__head { padding: 26px 24px 28px !important; }
+  .tier-card__icon {
+    width: 52px !important; height: 52px !important;
+    border-radius: 16px !important; margin-bottom: 18px !important;
+  }
+  .tier-card__icon svg { width: 28px !important; height: 28px !important; }
+  .tier-card__name { font-size: 2.2rem !important; margin-top: 6px !important; }
+  .tier-card__price { font-size: 3.2rem !important; }
   [style*='grid-template-columns'] { grid-template-columns: 1fr !important; gap: 16px !important; }
   [data-grid-mobile='2'] { grid-template-columns: 1fr 1fr !important; }
   .btn { min-height: 44px; padding: 12px 16px !important; }
   .btn-lg { padding: 14px 20px !important; font-size: 0.933rem !important; }
   .veining { background-image: none !important; }
   .ask-shell { grid-template-columns: 1fr !important; }
+  /* Let the grid's children shrink below their content's intrinsic width, so a
+     long word / URL in a reply can't push the single column past the viewport
+     (grid/flex items default to min-width:auto). */
+  .ask-shell > * { min-width: 0; }
 
   /* Adopt wizard sticky stepper — on desktop it shows
      "← back | ① Choose tier — ② Pick plant — ③ Person — ④ Pay | spacer"
@@ -390,6 +495,16 @@ body.bloom-high-contrast .card { border: 1.5px solid #000 !important; }
   .pay-page__amount strong { font-size: 36px !important; }
   .pay-page__qr { padding: 20px !important; }
   .pay-page__qr .qr { width: 180px !important; height: 180px !important; }
+}
+
+/* Phones (≤480px): in the 361–767px gap the ≤360 rules don't cover, the
+   topbar's account chip + sign-out + lang pill overflow the row and trip a
+   horizontal scrollbar. Drop the account first-name (the avatar still links to
+   My Garden, also reachable from the tab bar) and tighten the chip to an
+   avatar-sized button so the row clears the viewport. */
+@media (max-width: 480px) {
+  .account-name { display: none; }
+  .account-pill { padding: 6px !important; gap: 0 !important; }
 }
 
 /* ── Very-narrow mobile (≤360px: iPhone SE 1st gen, old Galaxy, etc.) ─────
@@ -448,7 +563,7 @@ body.bloom-high-contrast .card { border: 1.5px solid #000 !important; }
 }
 
 @media print {
-  .topbar, .a11y-panel, .skip-link, footer, .cookie-banner { display: none !important; }
+  .topbar, .floating-tools, .skip-link, footer, .cookie-banner { display: none !important; }
   main { max-width: none; }
 }
 

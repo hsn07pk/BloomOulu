@@ -32,7 +32,6 @@ interface Plant {
   primaryImage?: { url: string; altEn: string; altFi: string; altSv: string; attribution?: string } | null;
   images?: Array<{ id: string; url: string; altEn: string; altFi: string; altSv: string; attribution?: string }>;
   taxon?: { latinName: string; family: string } | null;
-  narrations?: Array<{ locale: string; audioUrl: string; durationMs: number; transcript: string }>;
   citations?: Array<{ citation: { displayTitle: string; authors?: string | null; year?: number | null; url?: string | null } }>;
 }
 

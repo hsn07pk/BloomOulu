@@ -233,7 +233,7 @@ export function A11yPanel() {
   };
 
   return (
-    <div className="a11y-fab" style={{ position: 'fixed', bottom: 16, left: 16, zIndex: 100 }}>
+    <div className="a11y-fab" style={{ position: 'relative' }}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -246,7 +246,7 @@ export function A11yPanel() {
         <span aria-hidden="true" style={{ fontSize: 16, lineHeight: 1 }}>
           ♿
         </span>
-        {open ? t('close') : t('title')}
+        <span className="fab-label">{open ? t('close') : t('title')}</span>
       </button>
       {open && (
         <div
