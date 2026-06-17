@@ -18,9 +18,11 @@ after engineering handover.
 4. Upload an image under **Catalogue → Plant images → New** (attach to the plant).
 5. Save. New plants start `hidden`; flip to `active` when ready.
 
-### Edit a price
-**Pricing → Tiers → click the tier → Edit**. Save. The change is live within
-60 seconds and applies to all *new* adoptions; existing donors are unaffected.
+### Edit donation amounts
+**Settings → Donations**. Edit the suggested amount chips, the default
+amount, whether a custom amount is allowed, and the dedication length
+limit. Save. The change is live within 60 seconds and applies to all
+*new* donations.
 
 ### Refund a payment
 **Finance → Payments → click the payment → Actions → Refund**. The receipt

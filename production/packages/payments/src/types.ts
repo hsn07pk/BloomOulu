@@ -24,24 +24,14 @@ export type CurrencyCode = 'EUR'; // expand when we add USD donations
 // callers that already import from @bloomoulu/payments/types don't have to
 // chase the move. The constants package is the one place to edit.
 import {
-  AdoptionIntentEnum,
-  BillingIntervalEnum,
   LocaleEnum,
   PaymentProviderEnum,
-  type AdoptionIntent as SharedAdoptionIntent,
-  type BillingInterval as SharedBillingInterval,
   type Locale as SharedLocale,
   type PaymentProvider as SharedPaymentProvider,
 } from '@bloomoulu/constants';
 
 export const ProviderId = PaymentProviderEnum;
 export type ProviderId = SharedPaymentProvider;
-
-export const AdoptionIntent = AdoptionIntentEnum;
-export type AdoptionIntent = SharedAdoptionIntent;
-
-export const BillingInterval = BillingIntervalEnum;
-export type BillingInterval = SharedBillingInterval;
 
 export const Locale = LocaleEnum;
 export type Locale = SharedLocale;
@@ -73,7 +63,6 @@ export const CreateCheckoutInput = z.object({
   successUrl: z.string().url(),
   cancelUrl: z.string().url(),
   metadata: z.record(z.string()).default({}),
-  intent: AdoptionIntent,
 });
 export type CreateCheckoutInput = z.infer<typeof CreateCheckoutInput>;
 

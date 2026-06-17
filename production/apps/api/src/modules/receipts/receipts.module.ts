@@ -1,5 +1,5 @@
 /**
- * Receipts — Finnish VAT-compliant PDF receipts + annual TVL §57 tax certs.
+ * Receipts — Finnish VAT-compliant PDF receipts for one-time donations.
  *
  * Access:
  *   - The donor whose Payment generated the Receipt
@@ -16,10 +16,9 @@
  *   - Locale of donor (FI/SV/EN content)
  *
  * Tax certificate (annual, December 31):
- *   - Sums all eligible donations from a donor in the tax year
- *   - For corporate donors ≥ €850 → TVL §57 wording
- *   - For individual donors → wording for the new 2026 individual scheme
- *     (when finalised; until then, certificate states "informational only")
+ *   - Sums all of a donor's settled donations in the tax year
+ *   - Issued as a single generic informational donation summary (no
+ *     tier-based / corporate scheme branching)
  */
 import {
   Module,

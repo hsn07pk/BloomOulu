@@ -4,14 +4,14 @@ import { useTranslations } from 'next-intl';
 
 /**
  * Community-engagement tile for the plant detail page. Sits above the
- * adoption card in the sticky right column so donors see "X people care
+ * donation card in the sticky right column so donors see "X people care
  * about this plant" right before the donation CTA — social-proof framing.
  *
  * Stats wired:
  *   - viewCount     Plain page views (web + kiosk URL hits)
  *   - scanCount     QR scans on the physical garden label (subset of views)
  *   - saveCount     Users who bookmarked the plant
- *   - lastAdoptedAt Most recent active adoption (relative time)
+ *   - lastDonatedAt Most recent completed donation (relative time)
  *   - askCount      RAG answers whose retrieved chunks linked to this plant
  *
  * All four feed off DB columns / aggregates that the /v1/plants/:slug
@@ -30,8 +30,8 @@ export interface PlantStatsProps {
   scanCount: number;
   saveCount: number;
   askCount: number;
-  /** ISO string from the controller; null if no active adoptions yet. */
-  lastAdoptedAt: string | null;
+  /** ISO string from the controller; null if no completed donations yet. */
+  lastDonatedAt: string | null;
   locale: string;
 }
 
@@ -75,14 +75,14 @@ export function PlantStats({
   scanCount,
   saveCount,
   askCount,
-  lastAdoptedAt,
+  lastDonatedAt,
   locale,
 }: PlantStatsProps) {
   const t = useTranslations('Plant');
   const fmt = new Intl.NumberFormat(numberLocale(locale));
-  const adoptedRelative = useRelativeTime(lastAdoptedAt, locale);
+  const lastDonatedRelative = useRelativeTime(lastDonatedAt, locale);
 
-  // 5 tiles in a 2-col grid: the "Last adopted" relative-time string is
+  // 5 tiles in a 2-col grid: the "Last donated" relative-time string is
   // usually longer than a number, so it spans both columns on the bottom
   // row to absorb the asymmetry from an odd tile count.
   const tiles: Array<{ icon: string; value: string; label: string; muted?: boolean; wide?: boolean }> = [
@@ -92,9 +92,9 @@ export function PlantStats({
     { icon: '🤖', value: fmt.format(askCount), label: t('statsQuestions') },
     {
       icon: '🌱',
-      value: adoptedRelative ?? t('statsLastAdoptedNever'),
+      value: lastDonatedRelative ?? t('statsLastAdoptedNever'),
       label: t('statsLastAdopted'),
-      muted: !adoptedRelative,
+      muted: !lastDonatedRelative,
       wide: true,
     },
   ];

@@ -29,7 +29,7 @@ import { colors, font, fontSize, radius, space } from './shared/tokens';
 interface DashStats {
   plants: number;
   donors: number;
-  adoptionsActive: number;
+  donationsCompleted: number;
   donationsMtdCents: number;
   ragDocs: number;
   webCacheDocs: number;
@@ -123,7 +123,7 @@ const Dashboard: React.FC = () => {
         the matching list. Use the quick links lower down for tasks you run weekly.
       </HelpBanner>
 
-      {/* ── Donor & adoption metrics ───────────────────────────────── */}
+      {/* ── Donor & donation metrics ───────────────────────────────── */}
       <Card
         kicker="Donor activity"
         title="This month in donations"
@@ -133,16 +133,16 @@ const Dashboard: React.FC = () => {
           <StatTile
             label="Donors (lifetime)"
             value={stats?.donors ?? <Skeleton width={64} height={28} />}
-            hint="Unique email addresses on the User table with at least one adoption attached."
+            hint="Unique email addresses on the User table with at least one donation attached."
             accent={colors.moss}
             href="/admin/resources/User"
           />
           <StatTile
-            label="Active adoptions"
-            value={stats?.adoptionsActive ?? <Skeleton width={64} height={28} />}
-            hint="Adoptions in status `active`. Excludes pending, paused, cancelled, ended."
+            label="Completed donations"
+            value={stats?.donationsCompleted ?? <Skeleton width={64} height={28} />}
+            hint="Donations in status `completed`. Excludes pending, failed, refunded."
             accent={colors.olive}
-            href="/admin/resources/Adoption?filters.status=active"
+            href="/admin/resources/Donation?filters.status=completed"
           />
           <StatTile
             label="MTD donations"
@@ -312,9 +312,9 @@ const Dashboard: React.FC = () => {
             Plants
             <small>Catalogue + Red List</small>
           </QuickLink>
-          <QuickLink href="/admin/resources/Adoption" icon="♥">
-            Adoptions
-            <small>Donor list + cancellations</small>
+          <QuickLink href="/admin/resources/Donation" icon="♥">
+            Donations
+            <small>Donor gift list + refunds</small>
           </QuickLink>
           <QuickLink href="/admin/resources/AskAnswer?filters.reaction=escalated" icon="✎">
             Curator queue
@@ -323,10 +323,6 @@ const Dashboard: React.FC = () => {
           <QuickLink href="/admin/resources/RagDocument" icon="◉">
             RAG documents
             <small>Knowledge corpus</small>
-          </QuickLink>
-          <QuickLink href="/admin/resources/Tier" icon="¥">
-            Tier prices
-            <small>Pricing ladder</small>
           </QuickLink>
           <QuickLink href="/admin/pages/configure#identity" icon="⚙">
             Configure

@@ -21,7 +21,7 @@ const TILES: Tile[] = [
   { key: 'Catalogue', href: '/admin/resources/Plant', rolesAllowed: ['curator', 'admin'] },
   { key: 'Rag', href: '/admin/resources/RagDocument', rolesAllowed: ['curator', 'admin'] },
   { key: 'Finance', href: '/admin/resources/Payment', rolesAllowed: ['finance', 'admin'] },
-  { key: 'Adoptions', href: '/admin/resources/Adoption', rolesAllowed: ['finance', 'admin'] },
+  { key: 'Adoptions', href: '/admin/resources/Donation', rolesAllowed: ['finance', 'admin'] },
   { key: 'Users', href: '/admin/resources/User', rolesAllowed: ['admin'] },
   { key: 'Settings', href: '/admin/resources/SystemSetting', rolesAllowed: ['admin'] },
   { key: 'Audit', href: '/admin/resources/AuditLog', rolesAllowed: ['finance', 'admin'] },

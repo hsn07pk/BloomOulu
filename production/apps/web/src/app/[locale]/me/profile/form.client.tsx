@@ -30,9 +30,27 @@ const REGIONS = [
   'OTHER',
 ] as const;
 
+// Locale-aware labels for the optional home-region selector. Kept inline
+// (rather than in the i18n catalogs) since the home-region field is a minor
+// profile preference now that I@H plant-pairing has been retired.
+const REGION_LABELS: Record<string, { en: string; fi: string; sv: string }> = {
+  '': { en: 'Not specified', fi: 'Ei määritelty', sv: 'Ej angivet' },
+  'FI-LL': { en: 'Finland · Lapland', fi: 'Suomi · Lappi', sv: 'Finland · Lappland' },
+  'FI-HA': { en: 'Finland · Häme', fi: 'Suomi · Häme', sv: 'Finland · Tavastland' },
+  'FI-PP': { en: 'Finland · Bothnian coast', fi: 'Suomi · Pohjanmaan rannikko', sv: 'Finland · Österbottens kust' },
+  SE: { en: 'Sweden', fi: 'Ruotsi', sv: 'Sverige' },
+  NO: { en: 'Norway', fi: 'Norja', sv: 'Norge' },
+  EE: { en: 'Estonia', fi: 'Viro', sv: 'Estland' },
+  RU: { en: 'Russia', fi: 'Venäjä', sv: 'Ryssland' },
+  'GB-SCT': { en: 'UK · Scotland', fi: 'Iso-Britannia · Skotlanti', sv: 'Storbritannien · Skottland' },
+  DE: { en: 'Germany', fi: 'Saksa', sv: 'Tyskland' },
+  NORDIC: { en: 'Other Nordic', fi: 'Muu Pohjoismaa', sv: 'Övriga Norden' },
+  EUR: { en: 'Other European', fi: 'Muu Eurooppa', sv: 'Övriga Europa' },
+  OTHER: { en: 'Other', fi: 'Muu', sv: 'Annat' },
+};
+
 export function ProfileForm({ locale, profile }: { locale: 'en' | 'fi' | 'sv'; profile: Profile }) {
   const t = useTranslations('MeProfile');
-  const tAdopt = useTranslations('Adopt');
   const [saved, setSaved] = useState(false);
   const [errorKey, setErrorKey] = useState<string | null>(null);
   const [exportRequested, setExportRequested] = useState(false);
@@ -103,7 +121,7 @@ export function ProfileForm({ locale, profile }: { locale: 'en' | 'fi' | 'sv'; p
           <select name="homeRegion" defaultValue={profile.homeRegion ?? ''} style={fieldStyle}>
             {REGIONS.map((r) => (
               <option key={r || 'skip'} value={r}>
-                {r === '' ? tAdopt('regionSkip') : tAdopt(`region${r}` as 'regionSkip')}
+                {REGION_LABELS[r]?.[locale] ?? r}
               </option>
             ))}
           </select>

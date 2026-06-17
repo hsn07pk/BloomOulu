@@ -1,9 +1,10 @@
 /**
  * Annual tax certificate sweep — integration test.
  *
- * Builds a donor with succeeded payments crossing the TVL §57 threshold,
- * runs the processor, asserts that a TaxCertificate row is created with the
- * right scheme + total. Validates idempotency by re-running.
+ * Builds a donor with succeeded payments in a tax year, runs the processor,
+ * asserts a TaxCertificate row is created with the (single, informational)
+ * scheme + correct total, that sub-threshold donors are skipped, and that
+ * re-running is idempotent.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import { PrismaClient } from '@prisma/client';
@@ -24,7 +25,6 @@ vi.mock('../src/modules/jobs/enqueue.js', () => ({
   enqueueEmail: vi.fn(async (data: any) => {
     emails.push(data);
   }),
-  enqueuePaymentRetry: vi.fn(async () => {}),
   enqueueReceipt: vi.fn(async () => {}),
 }));
 
@@ -38,7 +38,7 @@ beforeAll(async () => {
   const donor = await prisma.user.create({
     data: {
       email: `taxcert-${uuidv7()}@bloomoulu.test`,
-      name: 'Corporate Donor Oy',
+      name: 'Generous Donor',
       locale: 'fi',
       postalAddress: { line1: 'Tehtaankatu 12', postalCode: '00120', city: 'Helsinki', country: 'FI' },
     },
@@ -53,7 +53,7 @@ afterAll(async () => {
   await prisma.taxCertificate.deleteMany({ where: { donorId } });
   await prisma.payment.deleteMany({ where: { donorId } });
   await prisma.receipt.deleteMany({ where: { donorId } });
-  await prisma.adoption.deleteMany({ where: { donorId } });
+  await prisma.donation.deleteMany({ where: { donorId } });
   await prisma.user.deleteMany({ where: { id: donorId } });
   await prisma.$disconnect();
 });
@@ -64,28 +64,19 @@ beforeEach(async () => {
   await prisma.taxCertificate.deleteMany({ where: { donorId } });
   await prisma.payment.deleteMany({ where: { donorId } });
   await prisma.receipt.deleteMany({ where: { donorId } });
-  await prisma.adoption.deleteMany({ where: { donorId } });
+  await prisma.donation.deleteMany({ where: { donorId } });
 });
 
-async function makeCorporateAdoption(amountCents: number, paidAt: Date) {
-  const adoption = await prisma.adoption.create({
-    data: {
-      donorId,
-      plantId,
-      tierId: 'corporate',
-      status: 'active',
-      intent: 'corporate',
-      recurring: false,
-      billingInterval: 'one_time',
-      amountCents,
-      startedAt: paidAt,
-    },
+/** A settled one-time gift: Donation (completed) + Payment (succeeded) + Receipt. */
+async function makeGift(amountCents: number, paidAt: Date) {
+  const donation = await prisma.donation.create({
+    data: { donorId, plantId, status: 'completed', amountCents, startedAt: paidAt },
   });
   const payment = await prisma.payment.create({
     data: {
       orderId: uuidv7(),
       donorId,
-      adoptionId: adoption.id,
+      donationId: donation.id,
       provider: 'paytrail',
       amountCents,
       netCents: amountCents,
@@ -107,13 +98,13 @@ async function makeCorporateAdoption(amountCents: number, paidAt: Date) {
       issuedAt: paidAt,
     },
   });
-  return adoption;
+  return donation;
 }
 
 describe('annual tax certificate sweep', () => {
-  it('issues a TVL §57 certificate for a corporate donor over €850 / year', async () => {
-    await makeCorporateAdoption(60_000, new Date(Date.UTC(TAX_YEAR, 5, 1)));   // €600
-    await makeCorporateAdoption(40_000, new Date(Date.UTC(TAX_YEAR, 9, 1)));   // €400, total €1000
+  it('issues an informational donation summary for a donor over the threshold', async () => {
+    await makeGift(60_000, new Date(Date.UTC(TAX_YEAR, 5, 1))); // €600
+    await makeGift(40_000, new Date(Date.UTC(TAX_YEAR, 9, 1))); // €400, total €1000
 
     const { processTaxCertAnnual } = await import(
       '../src/modules/jobs/processors/tax-cert-annual.processor.js'
@@ -127,14 +118,14 @@ describe('annual tax certificate sweep', () => {
       where: { donorId_taxYear: { donorId, taxYear: TAX_YEAR } },
     });
     expect(cert?.totalCents).toBe(100_000);
-    expect(cert?.scheme).toBe('TVL §57 corporate');
+    expect(cert?.scheme).toBe('informational');
     expect(cert?.pdfUrl).toMatch(/^s3:\/\/bloomoulu-assets\/tax-certs\//);
     expect(uploads[0]!.size).toBeGreaterThan(1000); // a real PDF, not empty
     expect(emails[0]).toMatchObject({ template: 'annual-tax-cert' });
   });
 
-  it('issues an informational certificate when corporate donor < €850', async () => {
-    await makeCorporateAdoption(50_000, new Date(Date.UTC(TAX_YEAR, 6, 15))); // €500 only
+  it('skips a donor below the threshold', async () => {
+    await makeGift(40_000, new Date(Date.UTC(TAX_YEAR, 6, 15))); // €400 < €500 floor
 
     const { processTaxCertAnnual } = await import(
       '../src/modules/jobs/processors/tax-cert-annual.processor.js'
@@ -143,16 +134,16 @@ describe('annual tax certificate sweep', () => {
       data: { taxYear: TAX_YEAR, donorId },
     } as any);
 
-    expect(result.issued).toBe(1);
+    expect(result.issued).toBe(0);
+    expect(result.skipped).toBe(1);
     const cert = await prisma.taxCertificate.findUnique({
       where: { donorId_taxYear: { donorId, taxYear: TAX_YEAR } },
     });
-    expect(cert?.scheme).toBe('individual 2026'); // dominantIntent → corporate is true, but €500 < €850 → individual path
-    expect(cert?.totalCents).toBe(50_000);
+    expect(cert).toBeNull();
   });
 
   it('is idempotent on re-run', async () => {
-    await makeCorporateAdoption(120_000, new Date(Date.UTC(TAX_YEAR, 2, 1)));
+    await makeGift(120_000, new Date(Date.UTC(TAX_YEAR, 2, 1)));
 
     const { processTaxCertAnnual } = await import(
       '../src/modules/jobs/processors/tax-cert-annual.processor.js'

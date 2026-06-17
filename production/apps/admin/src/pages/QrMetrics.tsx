@@ -2,7 +2,7 @@
  * Admin · QR scan metrics page.
  *
  * Three sections, sourced from /v1/admin/metrics:
- *   1. Funnel    — scans / unique visitors / scanned plants / adoptions
+ *   1. Funnel    — scans / unique visitors / scanned plants / donations
  *                  / conversion %
  *   2. Top scanned plants — leaderboard with lifetime vs. window counts
  *   3. Timeline  — daily scans for the window with hover-able bars
@@ -32,7 +32,7 @@ interface FunnelStats {
   totalScans: number;
   uniqueVisitors: number;
   uniqueScannedPlants: number;
-  adoptionsAfterScan: number;
+  donationsAfterScan: number;
   conversionRate: number;
 }
 
@@ -46,7 +46,7 @@ interface LeaderboardItem {
   redListStatus: string;
   scansInWindow: number;
   scanCountLifetime: number;
-  adopterCount: number;
+  donorCount: number;
   primaryImageUrl: string | null;
 }
 
@@ -157,7 +157,7 @@ const QrMetrics: React.FC = () => {
       <PageHeader
         kicker="Analytics"
         title="QR scan metrics"
-        lede="Every printed QR encodes the plant URL with `?qr=1`, so visits from physical labels can be split from organic web traffic. Use this page to spot which plants get the most attention and how that converts to adoptions."
+        lede="Every printed QR encodes the plant URL with `?qr=1`, so visits from physical labels can be split from organic web traffic. Use this page to spot which plants get the most attention and how that converts to donations."
         actions={
           <>
             <select
@@ -199,13 +199,13 @@ const QrMetrics: React.FC = () => {
       <HelpBanner id="qr-metrics-intro" title="Reading the funnel">
         <strong>Total scans</strong> counts every QR hit, including repeat visits and the same
         visitor scanning multiple plants. <strong>Unique visitors</strong> is per browser session
-        cookie. <strong>Conversion</strong> divides post-scan adoptions by unique visitors, so a
+        cookie. <strong>Conversion</strong> divides post-scan donations by unique visitors, so a
         rate near 1% is healthy for a botanical-garden audience.
       </HelpBanner>
 
       <Card
         kicker={`Funnel · ${WINDOWS.find((w) => w.value === days)?.label.toLowerCase()}`}
-        title="Scan → adoption funnel"
+        title="Scan → donation funnel"
       >
         {loading && !funnel ? (
           <StatGrid min={180}>
@@ -234,15 +234,15 @@ const QrMetrics: React.FC = () => {
               accent={colors.olive}
             />
             <StatTile
-              label="Adoptions after scan"
-              value={funnel.adoptionsAfterScan.toLocaleString()}
-              hint="Adoptions whose donor scanned this plant in the time window before adopting."
+              label="Donations after scan"
+              value={funnel.donationsAfterScan.toLocaleString()}
+              hint="Completed donations whose donor scanned this plant in the time window before donating."
               accent={colors.leaf}
             />
             <StatTile
               label="Conversion"
               value={`${(funnel.conversionRate * 100).toFixed(1)}%`}
-              hint="adoptionsAfterScan / uniqueVisitors. 0.5–2% is healthy for botanical-garden traffic."
+              hint="donationsAfterScan / uniqueVisitors. 0.5–2% is healthy for botanical-garden traffic."
               accent={colors.accent}
               emphasis={funnel.conversionRate > 0 ? 'normal' : 'attention'}
             />
@@ -457,13 +457,13 @@ const QrMetrics: React.FC = () => {
                 ),
               },
               {
-                key: 'adopters',
-                label: 'Adopters',
+                key: 'donors',
+                label: 'Donors',
                 align: 'right',
                 width: 120,
                 render: (p) => (
                   <span style={{ fontFamily: font.mono, color: colors.inkMute }}>
-                    {p.adopterCount.toLocaleString()}
+                    {p.donorCount.toLocaleString()}
                   </span>
                 ),
               },

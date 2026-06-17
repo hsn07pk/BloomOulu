@@ -1,5 +1,9 @@
 /**
- * Tax certificates — annual TVL §57 / individual-scheme PDF documents.
+ * Tax certificates — annual donation-summary PDF documents.
+ *
+ * Each certificate is a single generic "informational donation summary"
+ * (the donor's total settled donations in the tax year). There is no
+ * tier-based / corporate (TVL §57 ≥ €850) scheme branching.
  *
  * The Prisma-level certificate row is created by the
  * `tax-cert-annual.processor` job (cron: Jan 5 04:00 UTC, manually fired

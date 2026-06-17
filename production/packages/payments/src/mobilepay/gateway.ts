@@ -119,7 +119,18 @@ export class MobilePayGateway implements PaymentGateway {
     };
   }
 
-  /** One-off MobilePay payment via ePayment API. */
+  /**
+   * One-off MobilePay payment via the Vipps ePayment API.
+   *
+   * ⚠️ PRE-ENABLEMENT TODO (MobilePay is disabled by default — payments.mobilepay
+   * = false — and requires Vipps merchant KYC to turn on). The ePayment `create`
+   * call below only AUTHORISES (reserves) funds; Vipps ePayment v1 has no
+   * auto-capture, so a separate `POST /epayment/v1/payments/{ref}/capture` must
+   * be issued (and only the `captured` event treated as a completed donation)
+   * before MobilePay is enabled — otherwise an authorised-but-uncaptured gift
+   * would be marked completed and a receipt issued while the reservation later
+   * expires uncaptured. Do NOT flip payments.mobilepay on until capture is wired.
+   */
   async createCheckout(input: CreateCheckoutInput): Promise<CheckoutHandoff> {
     const headers = await this.authedHeaders(input.orderId);
     const totalCents = input.lineItems.reduce((s, li) => s + li.amountCents, 0);

@@ -5,7 +5,7 @@
  *                                 facet filters (redListStatus, bloomSeason,
  *                                 status). Targets the composite
  *                                 (status, redListStatus, bloomSeason) +
- *                                 (status, adopterCount DESC, nameEn) indexes.
+ *                                 (status, donorCount DESC, nameEn) indexes.
  *   GET /v1/plants/search?q=…     Full-text + trigram ranked search. Uses
  *                                 Plant.searchText tsvector for FTS rank +
  *                                 the trigram gin indexes for fuzzy fallback.
@@ -80,11 +80,11 @@ export class PlantsController {
     if (redList) where.redListStatus = redList as any;
     if (bloomSeason) where.bloomSeason = bloomSeason as any;
     if (family) where.taxon = { family };
-    if (hasAdopters === 'true') where.adopterCount = { gt: 0 };
-    else if (hasAdopters === 'false') where.adopterCount = 0;
+    if (hasAdopters === 'true') where.donorCount = { gt: 0 };
+    else if (hasAdopters === 'false') where.donorCount = 0;
 
     const orderBy = [
-      { adopterCount: 'desc' as const },
+      { donorCount: 'desc' as const },
       { nameEn: 'asc' as const },
       { id: 'asc' as const },
     ];
@@ -115,7 +115,7 @@ export class PlantsController {
     }
 
     // Cursor (keyset) mode — unchanged. The cursor encodes the row
-    // position in the sort order so two rows with the same adopterCount +
+    // position in the sort order so two rows with the same donorCount +
     // nameEn still resolve deterministically.
     const rows = await this.prisma.plant.findMany({
       where,
@@ -168,8 +168,8 @@ export class PlantsController {
     if (redList) where.redListStatus = redList as any;
     if (bloomSeason) where.bloomSeason = bloomSeason as any;
     if (family) where.taxon = { family };
-    if (hasAdopters === 'true') where.adopterCount = { gt: 0 };
-    else if (hasAdopters === 'false') where.adopterCount = 0;
+    if (hasAdopters === 'true') where.donorCount = { gt: 0 };
+    else if (hasAdopters === 'false') where.donorCount = 0;
     const total = await this.prisma.plant.count({ where });
     return { total };
   }
@@ -211,8 +211,8 @@ export class PlantsController {
       params.push(family);
       clauses.push(`AND EXISTS (SELECT 1 FROM "Taxon" t WHERE t.id = p."taxonId" AND t.family = $${params.length})`);
     }
-    if (hasAdopters === 'true') clauses.push(`AND p."adopterCount" > 0`);
-    else if (hasAdopters === 'false') clauses.push(`AND p."adopterCount" = 0`);
+    if (hasAdopters === 'true') clauses.push(`AND p."donorCount" > 0`);
+    else if (hasAdopters === 'false') clauses.push(`AND p."donorCount" = 0`);
 
     const sql = `
       SELECT COUNT(*)::int AS total
@@ -278,8 +278,8 @@ export class PlantsController {
       filterParams.push(family);
       filterClauses.push(`AND EXISTS (SELECT 1 FROM "Taxon" t WHERE t.id = p."taxonId" AND t.family = $${filterParamStart + filterParams.length - 1})`);
     }
-    if (hasAdopters === 'true') filterClauses.push(`AND p."adopterCount" > 0`);
-    else if (hasAdopters === 'false') filterClauses.push(`AND p."adopterCount" = 0`);
+    if (hasAdopters === 'true') filterClauses.push(`AND p."donorCount" > 0`);
+    else if (hasAdopters === 'false') filterClauses.push(`AND p."donorCount" = 0`);
 
     // Offset mode: pull limit + offset, also count separately, both
     // dispatched in parallel.
@@ -417,13 +417,14 @@ export class PlantsController {
     });
     if (!plant) throw new NotFoundException();
 
-    // Latest active adoption — feeds the "Last adopted N days ago" engagement
-    // tile on the plant detail page. Computed on-demand instead of denormalised
-    // because Adoption status can flip in both directions (pending → active,
-    // active → cancelled, etc.) — chasing all those edges to keep a column
-    // accurate is more error-prone than a single indexed query.
-    const lastAdoption = await this.prisma.adoption.findFirst({
-      where: { plantId: plant.id, status: 'active' },
+    // Latest completed donation — feeds the "Last supported N days ago"
+    // engagement tile on the plant detail page. Computed on-demand instead of
+    // denormalised because Donation status can flip in both directions
+    // (pending → completed, completed → refunded, etc.) — chasing all those
+    // edges to keep a column accurate is more error-prone than a single
+    // indexed query.
+    const lastDonation = await this.prisma.donation.findFirst({
+      where: { plantId: plant.id, status: 'completed' },
       orderBy: { createdAt: 'desc' },
       select: { createdAt: true },
     });
@@ -451,14 +452,14 @@ export class PlantsController {
     return {
       ...plant,
       narrations,
-      lastAdoptedAt: lastAdoption?.createdAt ?? null,
+      lastDonatedAt: lastDonation?.createdAt ?? null,
     };
   }
 
   /**
    * Record a physical-label QR scan. Visitors landing on the public
    * plant page with ?qr=1 fire a single fire-and-forget POST here so we
-   * can build "what's popular today" + the scan → adoption funnel in
+   * can build "what's popular today" + the scan → donation funnel in
    * /admin.
    *
    * GDPR posture (data minimisation, Art. 5(1)(c)): neither the raw IP

@@ -49,10 +49,9 @@ export class PaymentsController {
         orderId: true,
         amountCents: true,
         status: true,
-        adoption: {
+        donation: {
           select: {
             id: true,
-            bundleId: true,
             donor: { select: { locale: true } },
           },
         },
@@ -62,7 +61,7 @@ export class PaymentsController {
     if (payment.status !== 'pending') {
       throw new ForbiddenException(`Order already ${payment.status}; cannot re-finalize`);
     }
-    const locale = payment.adoption?.donor.locale ?? 'en';
+    const locale = payment.donation?.donor.locale ?? 'en';
 
     // Compose the canonical checkout-* params Paytrail puts on the return.
     const params: Record<string, string> = {

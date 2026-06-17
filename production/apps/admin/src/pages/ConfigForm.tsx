@@ -1,7 +1,7 @@
 /**
  * ConfigForm — shared building block for the BloomOulu admin's
- * config pages (Garden Identity, Payment Providers, Tier Pricing,
- * Curator, Adoption Knobs).
+ * config pages (Garden Identity, Payment Providers, Donation amounts,
+ * Curator).
  *
  * Each parent page declares a SCHEMA (sections + fields). This
  * component:
@@ -39,6 +39,7 @@ export type FieldType =
   | { kind: 'textarea'; rows?: number; placeholder?: string; maxLength?: number }
   | { kind: 'number'; min?: number; max?: number; step?: number; suffix?: string }
   | { kind: 'cents'; suffix?: string }
+  | { kind: 'centsList'; suffix?: string }
   | { kind: 'boolean'; trueLabel?: string; falseLabel?: string }
   | {
       kind: 'multiselect';
@@ -526,6 +527,9 @@ const FieldInput: React.FC<RowProps> = ({ field, value, onChange }) => {
       </div>
     );
   }
+  if (t.kind === 'centsList') {
+    return <CentsListInput value={value} onChange={onChange} suffix={t.suffix} />;
+  }
   if (t.kind === 'boolean') {
     const on = value === true || value === 'true';
     return (
@@ -680,6 +684,107 @@ const FieldInput: React.FC<RowProps> = ({ field, value, onChange }) => {
     );
   }
   return null;
+};
+
+/**
+ * Editor for a list of money amounts stored as a JSON array of cents
+ * (e.g. donation.suggestedAmountsCents = [500, 1500, 2500, 5000]). The
+ * curator types comma-separated euros ("5, 15, 25, 50"); we parse to a
+ * cents array on every keystroke and push that up so the saved value is
+ * always a real array. A local text buffer keeps typing smooth (a
+ * trailing comma isn't reformatted away mid-edit) while still re-syncing
+ * when the value changes from outside this input (initial load / Revert).
+ */
+const CentsListInput: React.FC<{
+  value: unknown;
+  onChange: (v: unknown) => void;
+  suffix?: string;
+}> = ({ value, onChange, suffix }) => {
+  const toCents = (v: unknown): number[] =>
+    Array.isArray(v)
+      ? (v as unknown[])
+          .map((c) => (typeof c === 'number' ? c : Number(c)))
+          .filter((n) => Number.isFinite(n))
+      : [];
+  const toText = (v: unknown): string =>
+    toCents(v)
+      .map((c) => String(c / 100))
+      .join(', ');
+  const parse = (text: string): number[] =>
+    text
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => s !== '')
+      .map((s) => Math.round(parseFloat(s) * 100))
+      .filter((n) => Number.isFinite(n) && n >= 0);
+
+  const [text, setText] = useState<string>(() => toText(value));
+
+  // Re-sync the visible text when the stored value changes from *outside*
+  // this input (first load, Revert). Skip the resync when the stored array
+  // already equals what the user just typed — otherwise typing "5," would
+  // instantly reformat to "5" and swallow the comma.
+  useEffect(() => {
+    const parsed = parse(text);
+    const cur = toCents(value);
+    const same = parsed.length === cur.length && parsed.every((n, i) => n === cur[i]);
+    if (!same) setText(toText(value));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+
+  const cents = parse(text);
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+      <div
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          borderRadius: radius.sm,
+          border: `1px solid ${colors.line}`,
+          background: colors.cream,
+          overflow: 'hidden',
+        }}
+      >
+        <span
+          style={{
+            padding: '0 10px',
+            fontSize: fontSize.lg,
+            color: colors.forest,
+            background: colors.whisper,
+            borderRight: `1px solid ${colors.line}`,
+            height: 38,
+            display: 'inline-flex',
+            alignItems: 'center',
+            fontFamily: font.display,
+          }}
+        >
+          €
+        </span>
+        <input
+          type="text"
+          inputMode="decimal"
+          value={text}
+          onChange={(e) => {
+            setText(e.target.value);
+            onChange(parse(e.target.value));
+          }}
+          placeholder="5, 15, 25, 50"
+          style={{
+            ...inputBaseStyle,
+            border: 'none',
+            borderRadius: 0,
+            minWidth: 220,
+            background: 'transparent',
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        />
+      </div>
+      {suffix && <span style={{ color: colors.inkMute, fontSize: fontSize.sm }}>{suffix}</span>}
+      <span style={{ color: colors.inkFaint, fontSize: 11, fontFamily: font.mono }}>
+        stored as [{cents.join(', ')}] cents
+      </span>
+    </div>
+  );
 };
 
 export default ConfigForm;

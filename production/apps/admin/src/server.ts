@@ -23,7 +23,7 @@ import AdminJS, { ComponentLoader } from 'adminjs';
 import AdminJSFastify from '@adminjs/fastify';
 import { Database, Resource, getModelByName } from '@adminjs/prisma';
 import { PrismaClient } from '@prisma/client';
-import { cancelAdoption } from '@bloomoulu/db';
+import { completeDonation } from '@bloomoulu/db';
 import { Queue } from 'bullmq';
 import { Redis } from 'ioredis';
 import bcrypt from 'bcryptjs';
@@ -369,6 +369,7 @@ async function reconcileCamt054Inline(xml: string): Promise<{
   matched: number;
   unmatched: number;
   duplicates: number;
+  mismatched: number;
   matches: Array<{
     paymentId: string;
     orderId: string;
@@ -388,8 +389,24 @@ async function reconcileCamt054Inline(xml: string): Promise<{
 
   let matched = 0;
   let duplicates = 0;
+  let mismatched = 0;
   const matches: Array<{ paymentId: string; orderId: string; amountCents: number; endToEndId: string | null }> = [];
   let unmatched = 0;
+  const toReceipt: string[] = [];
+
+  // Pull pending bank-transfer payments once and match RF references in JS the
+  // SAME way the API reconciliation endpoint does — `orderId` is a lowercase
+  // dashed UUID while the RF body is uppercase + dash-stripped, so Prisma's
+  // case-sensitive `contains` can never match. The RF body is the reference
+  // minus the leading "RF" + 2 check digits (4 chars).
+  const pending = await prisma.payment.findMany({
+    where: { status: 'pending', provider: 'bank_transfer' },
+    orderBy: { createdAt: 'desc' },
+    take: 2000,
+    select: { id: true, orderId: true, donationId: true, amountCents: true },
+  });
+  const usedIds = new Set<string>();
+  const normId = (o: string) => o.replace(/-/g, '').toUpperCase();
 
   for (const block of blocks) {
     const cdtDbtInd = tag(block, 'CdtDbtInd');
@@ -414,25 +431,16 @@ async function reconcileCamt054Inline(xml: string): Promise<{
       }
     }
 
-    let payment: { id: string; orderId: string } | null = null;
+    let payment: { id: string; orderId: string; donationId: string | null; amountCents: number } | null = null;
     if (rfReference) {
-      const cleaned = rfReference.replace(/\s/g, '').toUpperCase();
-      payment = await prisma.payment.findFirst({
-        where: {
-          status: 'pending',
-          provider: 'bank_transfer',
-          OR: [{ orderId: { contains: cleaned.slice(4) } }, { providerPaymentRef: cleaned }],
-        },
-        select: { id: true, orderId: true },
-      });
+      const rfBody = rfReference.replace(/\s/g, '').toUpperCase().slice(4);
+      payment = pending.find((p) => !usedIds.has(p.id) && normId(p.orderId).startsWith(rfBody)) ?? null;
     }
     if (!payment && unstructured) {
       const uuid = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i.exec(unstructured);
       if (uuid) {
-        payment = await prisma.payment.findFirst({
-          where: { status: 'pending', provider: 'bank_transfer', orderId: uuid[1]!.toLowerCase() },
-          select: { id: true, orderId: true },
-        });
+        const lc = uuid[1]!.toLowerCase();
+        payment = pending.find((p) => !usedIds.has(p.id) && p.orderId === lc) ?? null;
       }
     }
 
@@ -440,24 +448,62 @@ async function reconcileCamt054Inline(xml: string): Promise<{
       unmatched++;
       continue;
     }
+    // Never auto-complete an under/overpayment — flag it for manual review
+    // (mirrors the API reconciliation amount guard).
+    if (payment.amountCents !== amountCents) {
+      mismatched++;
+      await prisma.auditLog.create({
+        data: {
+          action: 'reconcile.camt054.amountMismatch',
+          resource: `Payment/${payment.id}`,
+          after: { expected: payment.amountCents, got: amountCents, endToEndId, rfReference },
+        },
+      });
+      continue;
+    }
+    usedIds.add(payment.id);
+    const matchedPayment = payment;
+    // Mark the payment succeeded AND complete the donation (which bumps the
+    // plant counters) in one transaction — the previous code only flipped the
+    // Payment, leaving the Donation stuck 'pending' with no receipt.
     await prisma.$transaction(async (tx) => {
       await tx.payment.update({
-        where: { id: payment.id },
+        where: { id: matchedPayment.id },
         data: { status: 'succeeded', receivedAt: bookedAt, providerPaymentRef: endToEndId },
       });
+      if (matchedPayment.donationId) {
+        await completeDonation(tx, matchedPayment.donationId, bookedAt);
+      }
       await tx.auditLog.create({
         data: {
           action: 'reconcile.camt054.matched',
-          resource: `Payment/${payment.id}`,
+          resource: `Payment/${matchedPayment.id}`,
           after: { endToEndId, rfReference, amountCents, bookedAt: bookedAt.toISOString() },
         },
       });
     });
+    toReceipt.push(matchedPayment.id);
     matched++;
-    matches.push({ paymentId: payment.id, orderId: payment.orderId, amountCents, endToEndId });
+    matches.push({ paymentId: matchedPayment.id, orderId: matchedPayment.orderId, amountCents, endToEndId });
   }
 
-  return { totalEntries: blocks.length, matched, unmatched, duplicates, matches };
+  // Enqueue the donor receipt PDF + email for each completed gift (after the
+  // DB commits). Dedup by jobId so a re-upload doesn't double-send.
+  for (const pid of toReceipt) {
+    await receiptQueue.add(
+      'render',
+      { paymentId: pid },
+      {
+        jobId: `receipt-${pid}`,
+        attempts: 5,
+        backoff: { type: 'exponential', delay: 5_000 },
+        removeOnComplete: { age: 86_400, count: 500 },
+        removeOnFail: { age: 30 * 86_400 },
+      },
+    );
+  }
+
+  return { totalEntries: blocks.length, matched, unmatched, duplicates, mismatched, matches };
 }
 
 // Shorthand presets for each ADR-0007 surface.
@@ -749,13 +795,13 @@ const adminConfig = new AdminJS({
         navigation: { name: 'Catalogue', icon: 'Plants' },
         listProperties: [
           'nameEn', 'nameFi', 'redListStatus', 'bloomSeason',
-          'gardenZone', 'status', 'adopterCount', 'fundedCents', 'scanCount',
+          'gardenZone', 'status', 'donorCount', 'voteCount', 'fundedCents', 'scanCount',
         ],
         // Form rendered on /admin/resources/Plant/actions/new and /…/edit.
         // Every column on the public site (web app PlantCard, kiosk plant
         // page) and every field the open-data enrichment writes is listed
         // here so a curator can fill them all without dropping into the
-        // database. Counters (adopterCount, fundedCents, scanCount) are
+        // database. Counters (donorCount, voteCount, fundedCents, scanCount) are
         // intentionally read-only — see showProperties + filterProperties.
         editProperties: [
           'slug', 'taxonId',
@@ -777,7 +823,7 @@ const adminConfig = new AdminJS({
           'story', 'quickFacts',
           'primaryImageId',
           'microLat', 'microLng', 'gardenZone',
-          'targetCents', 'fundedCents', 'adopterCount', 'scanCount',
+          'targetCents', 'fundedCents', 'donorCount', 'voteCount', 'scanCount',
           'status', 'createdAt', 'updatedAt',
         ],
         filterProperties: [
@@ -804,15 +850,16 @@ const adminConfig = new AdminJS({
           microLat: { description: 'Latitude of the plant inside the garden (WGS84 decimal). Used for the kiosk wayfinder. Leave blank if not staked.' },
           microLng: { description: 'Longitude of the plant inside the garden (WGS84 decimal).' },
           gardenZone: { description: 'Internal zone code: "south esker bed", "romeo greenhouse pond", etc. Used by curators and the bulk-label printer, not shown to donors.' },
-          adopterCount: { description: 'Number of active adoptions. Denormalised counter — read-only; updated automatically when adoptions activate or cancel.' },
-          fundedCents: { description: 'Total amount donated (in cents). Read-only counter — sourced from Adoption rows.' },
+          donorCount: { description: 'Number of completed donations directed to this plant. Denormalised counter — read-only; updated automatically as gifts settle or refund.' },
+          voteCount: { description: 'Number of favourites (leaderboard votes) for this plant. Read-only counter.' },
+          fundedCents: { description: 'Total amount donated to this plant (in cents). Read-only counter — sourced from Donation rows.' },
           scanCount: { description: 'Lifetime QR scan count. Read-only counter — bumped per insert via PlantsService.recordScan.' },
           targetCents: { description: 'Funding target for this plant (in cents). e.g. €500 = 50000. Shown on the public card as a progress bar.' },
           status: { description: '"active" shows on the public site; "hidden" keeps it off the catalogue; "retired" archives it but keeps the donor record.' },
           createdAt: { description: 'Row creation timestamp. Read-only.' },
           updatedAt: { description: 'Most-recent update timestamp. Read-only; bumped automatically.' },
         },
-        sort: { sortBy: 'adopterCount', direction: 'desc' as const },
+        sort: { sortBy: 'donorCount', direction: 'desc' as const },
         actions: {
           ...restrictTo(...CURATOR_OR_ADMIN),
           // Fetch story / origin / conservation status / photo from open
@@ -851,129 +898,40 @@ const adminConfig = new AdminJS({
     { resource: { model: getModelByName('PlantImage'), client: prisma }, options: { navigation: { name: 'Catalogue' }, actions: restrictTo(...CURATOR_OR_ADMIN) } },
     { resource: { model: getModelByName('AudioNarration'), client: prisma }, options: { navigation: { name: 'Catalogue' }, actions: restrictTo(...CURATOR_OR_ADMIN) } },
     { resource: { model: getModelByName('Citation'), client: prisma }, options: { navigation: { name: 'Catalogue' }, actions: restrictTo(...CURATOR_OR_ADMIN) } },
-    // ── Tiers + pricing ────────────────────────────────────────────────
+    // ── Donations + donors ─────────────────────────────────────────────
     {
-      resource: { model: getModelByName('Tier'), client: prisma },
-      options: {
-        navigation: { name: 'Pricing', icon: 'Tag' },
-        listProperties: ['id', 'name', 'annualPriceCents', 'monthlyPriceCents', 'tagEn', 'sortOrder'],
-        editProperties: [
-          'id', 'sortOrder',
-          'name', 'nameFi', 'nameSv',
-          'tagEn', 'tagFi', 'tagSv',
-          'blurbEn', 'blurbFi', 'blurbSv',
-          'annualPriceCents', 'monthlyPriceCents',
-          'perks',
-          'color', 'bg',
-        ],
-        properties: {
-          id: { description: 'Stable id — donor-facing URLs and DTOs reference it. Edit only when introducing a new tier.' },
-          sortOrder: { description: 'Order in the donor-facing tier ladder. 1 = leftmost.' },
-          annualPriceCents: { description: 'Annual price in cents. €25 = 2500, €750 = 75000.' },
-          monthlyPriceCents: { description: 'Monthly opt-in price in cents. Leave blank for annual-only tiers (e.g. Corporate).' },
-          name: { description: 'English tier name shown on the card (e.g. "Seedling").' },
-          nameFi: { description: 'Finnish tier name (e.g. "Siemen").' },
-          nameSv: { description: 'Swedish tier name (e.g. "Frö").' },
-          tagEn: { description: 'Small badge in the upper-right of the tier card ("Most popular gift", "Best value", …). Leave blank to hide.' },
-          tagFi: { description: 'Finnish version of the tag badge.' },
-          tagSv: { description: 'Swedish version of the tag badge.' },
-          blurbEn: { description: 'English one-paragraph description below the price. Keep under 240 chars.' },
-          blurbFi: { description: 'Finnish description.' },
-          blurbSv: { description: 'Swedish description.' },
-          perks: {
-            description:
-              'Bulleted perks shown on the tier card. JSON array. Each entry can be:\n' +
-              '  • a string key from the built-in vocabulary (e.g. "nickname_your_plant"); or\n' +
-              '  • an object with inline locale labels: {"labelEn": "Custom perk", "labelFi": "…", "labelSv": "…"}.\n' +
-              'Mix both freely. Reorder by editing the JSON.',
-            type: 'mixed',
-          },
-          color: { description: 'Tier accent colour (hex, e.g. "#A8C060"). Used for selection borders + check icons.' },
-          bg: { description: 'Tier-card background colour (hex, e.g. "#E8EEDE").' },
-        },
-        sort: { sortBy: 'sortOrder', direction: 'asc' as const },
-        // Pricing changes are financially material — admin only. Finance
-        // gets a read-only view via the AuditLog + the Payment resource.
-        actions: restrictTo(...ADMIN_ONLY),
-      },
-    },
-    // ── Adoptions + donors ─────────────────────────────────────────────
-    {
-      resource: { model: getModelByName('Adoption'), client: prisma },
+      resource: { model: getModelByName('Donation'), client: prisma },
       options: {
         navigation: { name: 'Donors', icon: 'Heart' },
-        listProperties: ['createdAt', 'donorId', 'plantId', 'tierId', 'status', 'intent', 'billingInterval', 'amountCents'],
-        // Explicit show order — groups financial data, then personalisation,
-        // then gift / memorial fields. Avoids AdminJS picking a default that
-        // leaves blank labels for nullable relation fields.
+        listProperties: ['createdAt', 'donorId', 'plantId', 'status', 'amountCents'],
         showProperties: [
           'id', 'createdAt', 'updatedAt', 'status',
-          'donorId', 'plantId', 'tierId',
-          'amountCents', 'currency', 'recurring', 'billingInterval',
-          'intent', 'nickname', 'dedication', 'homeRegion',
-          'giftRecipientId', 'giftDeliverOn', 'giftAnonymous', 'giftWrap', 'memorialOf',
-          'coAdopters', 'publicName', 'showOnDonorWall', 'marketingOptIn',
-          'bundleId', 'giftCodeId', 'startedAt', 'endsAt',
+          'donorId', 'plantId',
+          'amountCents', 'currency',
+          'dedication', 'publicName', 'showOnWall', 'anonymous', 'marketingOptIn',
+          'startedAt', 'refundedAt',
         ],
-        filterProperties: ['status', 'intent', 'tierId', 'recurring', 'billingInterval', 'createdAt', 'donorId', 'bundleId'],
+        filterProperties: ['status', 'createdAt', 'donorId', 'plantId'],
         sort: { sortBy: 'createdAt', direction: 'desc' as const },
         properties: {
-          status: { description: 'pending · active · paused · cancelled · ended. Cancel via the "Cancel adoption" record action; never edit by hand.' },
-          intent: { description: 'for_self · gift · memorial · class · corporate. Gift adoptions have a recipient User row; memorial adoptions have a memorialOf string.' },
-          tierId: { description: 'Tier snapshot at the time of the adoption. Price changes don\'t back-rewrite this — the donor keeps the price they agreed to.' },
-          amountCents: { description: 'Per-period amount in cents (€25 = 2500). Stable across price changes for the lifetime of this adoption.' },
-          recurring: { description: 'Whether the adoption auto-renews. one_time intervals have recurring=false.' },
-          billingInterval: { description: 'monthly · annual · one_time. Allowed values controlled by adoption.intervalsEnabled.' },
-          bundleId: { description: 'Set when the donor checked out multiple plants together; siblings share this id and activate as a group.' },
-          giftCodeId: { description: 'Single-use redemption code if the gift hasn\'t been claimed yet.' },
-          memorialOf: { description: 'Name of the person being honoured. Shown on the plant page and the donor wall.' },
-          coAdopters: { description: 'JSON array of {name?, email?} co-adopter entries — the split-the-gift feature.' },
-          marketingOptIn: { description: 'Did the donor agree to seasonal newsletter emails at checkout?' },
-          showOnDonorWall: { description: 'When true, the donor\'s name appears on the plant\'s donor wall. False = anonymous.' },
-          dedication: { description: 'Optional public message (≤240 chars) the donor wrote for this adoption.' },
-          nickname: { description: 'Pet name the donor gave the plant. Shown on the plant page and the digital certificate.' },
-          homeRegion: { description: 'Internationalisation@Home — the donor\'s home region. Drives "plant from your home region" surfacing.' },
-          publicName: { description: 'Override of donor.name on the public donor wall. Honour wishes (e.g. "Mira & family").' },
-          // FK references — AdminJS uses these to render a clickable
-          // chip linking to the related record. Without it those fields
-          // show as blank labels.
-          donorId: { description: 'The donor (User) who paid for this adoption.', reference: 'User' },
-          plantId: { description: 'The Plant being adopted.', reference: 'Plant' },
-          giftRecipientId: { description: 'Recipient User row for gift adoptions. Donor still pays; recipient sees the plant in My Garden.', reference: 'User' },
+          status: { description: 'pending · completed · failed · refunded. Set automatically by the payment webhook; never edit by hand.' },
+          amountCents: { description: 'Gift amount in cents (€25 = 2500).' },
+          dedication: { description: 'Optional public message (≤240 chars) shown on the donor wall.' },
+          showOnWall: { description: 'When true, the donor appears on the public donor wall. False = hidden.' },
+          anonymous: { description: 'When true, the gift is hidden from the donor wall entirely.' },
+          marketingOptIn: { description: 'Did the donor agree to occasional newsletter emails at checkout?' },
+          publicName: { description: 'Override of donor.name on the public donor wall.' },
+          // FK references — AdminJS renders these as clickable chips.
+          donorId: { description: 'The donor (User) who gave.', reference: 'User' },
+          plantId: { description: 'Optional species the gift was directed to (null = a general donation).', reference: 'Plant' },
         },
+        // Donations are immutable from the UI — a settled gift is reversed
+        // via the Payment refund flow, not by editing or deleting the row.
         actions: {
           ...restrictTo(...FINANCE_OR_ADMIN),
-          cancel: {
-            actionType: 'record',
-            label: 'Cancel adoption',
-            icon: 'X',
-            component: false,
-            isAccessible: ({ currentAdmin }: { currentAdmin?: { role?: string } }) =>
-              ['admin', 'finance'].includes(currentAdmin?.role as string),
-            handler: async (_req: any, _res: any, ctx: any) => {
-              const adoptionId = ctx.record!.params['id'];
-              const actorUserId = ctx.currentAdmin?.id ?? null;
-              // One transaction: status flip + counter decrement +
-              // adoption.cancelled audit (via cancelAdoption) PLUS the
-              // admin-specific audit row that records WHO clicked it.
-              await prisma.$transaction(async (tx) => {
-                await cancelAdoption(
-                  tx,
-                  adoptionId,
-                  { reason: 'admin_cancel', cancelledAt: new Date() },
-                  actorUserId ?? undefined,
-                );
-                await tx.auditLog.create({
-                  data: {
-                    actorUserId,
-                    action: 'admin.adoption.cancel',
-                    resource: `Adoption/${adoptionId}`,
-                  },
-                });
-              });
-              return { record: ctx.record!.toJSON(ctx.currentAdmin) };
-            },
-          },
+          new: { isAccessible: false },
+          delete: { isAccessible: false },
+          bulkDelete: { isAccessible: false },
         },
       },
     },
@@ -1004,71 +962,6 @@ const adminConfig = new AdminJS({
         actions: restrictTo(...ADMIN_ONLY),
       },
     },
-    {
-      resource: { model: getModelByName('GiftCode'), client: prisma },
-      options: {
-        navigation: { name: 'Donors', icon: 'Gift' },
-        listProperties: ['code', 'amountCents', 'expiresAt', 'redeemedAt', 'createdAt'],
-        filterProperties: ['code', 'expiresAt', 'redeemedAt', 'createdAt'],
-        sort: { sortBy: 'createdAt', direction: 'desc' as const },
-        properties: {
-          code: { description: 'Short alphanumeric code donors type at checkout. Treat as a secret — never log.' },
-          amountCents: { description: 'Face value of the gift card in cents (€25 = 2500).' },
-          expiresAt: { description: 'After this date the code is rejected at checkout.' },
-          redeemedAt: { description: 'Filled when the code is first applied; subsequent uses are rejected.' },
-        },
-        actions: restrictTo(...FINANCE_OR_ADMIN),
-      },
-    },
-    {
-      resource: { model: getModelByName('Plaque'), client: prisma },
-      options: {
-        navigation: { name: 'Donors', icon: 'Bookmark' },
-        listProperties: ['createdAt', 'adoptionId', 'engravedText', 'status', 'installedAt'],
-        sort: { sortBy: 'createdAt', direction: 'desc' as const },
-        actions: {
-          ...restrictTo('curator', 'admin'),
-          markInstalled: {
-            actionType: 'record',
-            label: 'Mark installed',
-            icon: 'CheckCircle',
-            component: false,
-            isAccessible: ({ currentAdmin }: { currentAdmin?: { role?: string } }) =>
-              ['admin', 'curator'].includes(currentAdmin?.role as string),
-            handler: async (_req: any, _res: any, ctx: any) => {
-              const id = ctx.record!.params['id'];
-              const photoUrl = ctx.request?.payload?.photoUrl ?? null;
-              const plaque = await prisma.plaque.update({
-                where: { id },
-                data: {
-                  status: 'installed',
-                  installedAt: new Date(),
-                  ...(photoUrl ? { photoUrl } : {}),
-                },
-                include: {
-                  adoption: { include: { plant: true, donor: { select: { email: true, name: true, locale: true } } } },
-                },
-              });
-              await emailQueue.add(
-                'send',
-                {
-                  template: 'plaque-ready',
-                  to: plaque.adoption.donor.email,
-                  locale: plaque.adoption.donor.locale,
-                  variables: {
-                    donorName: plaque.adoption.donor.name ?? '',
-                    plantName: plaque.adoption.plant.nameEn,
-                    photoUrl: photoUrl ?? '',
-                  },
-                },
-                { attempts: 5, backoff: { type: 'exponential', delay: 5_000 } },
-              );
-              return { record: ctx.record!.toJSON(ctx.currentAdmin) };
-            },
-          },
-        },
-      },
-    },
     // ── Finance ────────────────────────────────────────────────────────
     {
       resource: { model: getModelByName('Payment'), client: prisma },
@@ -1091,7 +984,7 @@ const adminConfig = new AdminJS({
           'providerPaymentRef',
           'providerCustomerId',
           'donorId',
-          'adoptionId',
+          'donationId',
           'amountCents',
           'netCents',
           'vatCents',
@@ -1116,7 +1009,7 @@ const adminConfig = new AdminJS({
           amountCents: { description: 'Gross amount in cents (€25 = 2500).' },
           netCents: { description: 'Net amount after VAT split (donation portion) in cents. Equals amountCents for pure donations.' },
           vatCents: { description: 'VAT amount in cents. Zero for pure donations under the Finnish yleishyödyllinen yhteisö rules.' },
-          vatRateBp: { description: 'VAT rate in basis points (2400 = 24%). Zero for donations; non-zero only for the benefits portion of a Seedling-tier adoption.' },
+          vatRateBp: { description: 'VAT rate in basis points (2400 = 24%). Zero for donations to a Finnish non-profit.' },
           feeCents: { description: 'Provider fee in cents (set from the provider webhook payload on succeeded).' },
           refundedCents: { description: 'Total amount refunded in cents. Non-zero only after a refund action.' },
           receivedAt: { description: 'Webhook arrival timestamp. Empty while the payment is still pending.' },
@@ -1127,7 +1020,7 @@ const adminConfig = new AdminJS({
           // FK UUID as a clickable chip pointing at the related record's
           // show page, instead of leaving the field blank.
           donorId: { description: 'Donor (the User who paid). Click to open the donor record.', reference: 'User' },
-          adoptionId: { description: 'Adoption this payment funded (null for one-off donations).', reference: 'Adoption' },
+          donationId: { description: 'Donation this payment settled (null if unlinked).', reference: 'Donation' },
         },
         // Financial rows MUST be immutable from the UI: deletes break
         // reconciliation + audit trail. Refunds use the dedicated
@@ -1748,162 +1641,6 @@ const adminConfig = new AdminJS({
                     resource: `DataErasureRequest/${id}`,
                   },
                 });
-              });
-              return { record: ctx.record!.toJSON(ctx.currentAdmin) };
-            },
-          },
-        },
-      },
-    },
-    // ── Tier-benefit fulfilment ─────────────────────────────────────────
-    // The unified to-do list for staff: every benefit owed across every
-    // active adoption, grouped by status + category. Auto-fulfil benefits
-    // (digital certificate, story page, donor wall) come pre-marked done
-    // by `activateAdoption`. Everything else starts in 'pending'.
-    {
-      resource: { model: getModelByName('AdoptionBenefit'), client: prisma },
-      options: {
-        navigation: { name: 'Donors', icon: 'CheckSquare' },
-        listProperties: [
-          'status', 'category', 'labelSnapshot', 'adoptionId',
-          'shippedAt', 'eventDate', 'nextDueAt', 'createdAt',
-        ],
-        showProperties: [
-          'id', 'adoptionId', 'benefitKey', 'category', 'labelSnapshot', 'donorLabelSnapshot',
-          'status', 'notes',
-          'shippingAddress', 'trackingNumber', 'shippedAt', 'deliveredAt',
-          'eventName', 'eventDate', 'rsvpStatus', 'rsvpAt',
-          'lastSentAt', 'nextDueAt',
-          'fulfilledByUserId', 'fulfilledAt', 'createdAt', 'updatedAt',
-        ],
-        filterProperties: ['status', 'category', 'adoptionId', 'benefitKey', 'createdAt'],
-        sort: { sortBy: 'createdAt', direction: 'desc' as const },
-        properties: {
-          status: { description: 'pending → in_progress → fulfilled. cancelled / not_applicable are terminal.' },
-          category: { description: 'digital · physical · event · recurring. Drives the staff to-do grouping.' },
-          benefitKey: { description: 'Machine id from packages/constants/src/benefits.ts — never edit directly.' },
-          labelSnapshot: { description: 'Ops-facing label captured at activation time. Surveys what to actually do.' },
-          donorLabelSnapshot: { description: 'Donor-facing label shown on My Garden.' },
-          shippingAddress: { description: 'Snapshot of the donor postal address at dispatch (so future address changes don\'t rewrite history).' },
-          trackingNumber: { description: 'Carrier tracking number (Posti, DHL, etc.) — surfaced to donor if set.' },
-          eventName: { description: 'Event name for event-category rows (e.g. "Adopters\' Open Day 2026").' },
-          eventDate: { description: 'When the event happens. Used to gate RSVP transitions.' },
-          rsvpStatus: { description: 'invited · accepted · declined · attended.' },
-          lastSentAt: { description: 'Most recent send timestamp for recurring items (quarterly notes etc.).' },
-          nextDueAt: { description: 'When the next recurring send is due. Worker cron sweeps this.' },
-          notes: { description: 'Free-form staff notes (e.g. "Engraver booked for week 23, plaque ready 2026-06-10").' },
-          adoptionId: { description: 'The Adoption row this benefit attaches to.', reference: 'Adoption' },
-          fulfilledByUserId: { description: 'Staff user who marked it done.', reference: 'User' },
-        },
-        actions: {
-          ...restrictTo(...FINANCE_OR_ADMIN, 'curator'),
-          new: { isAccessible: false },
-          delete: { isAccessible: false },
-          bulkDelete: { isAccessible: false },
-          // ── Status transitions ──────────────────────────────────────
-          markInProgress: {
-            actionType: 'record',
-            label: 'Mark in progress',
-            icon: 'PlayCircle',
-            component: false,
-            isAccessible: ({
-              currentAdmin,
-              record,
-            }: {
-              currentAdmin?: { role?: string };
-              record?: { params?: Record<string, unknown> };
-            }) => {
-              const role = (currentAdmin?.role as string) ?? '';
-              if (!['admin', 'finance', 'curator'].includes(role)) return false;
-              return record?.params?.['status'] === 'pending';
-            },
-            handler: async (_req: any, _res: any, ctx: any) => {
-              const id = ctx.record!.params['id'];
-              await prisma.adoptionBenefit.update({
-                where: { id },
-                data: { status: 'in_progress' },
-              });
-              await prisma.auditLog.create({
-                data: {
-                  actorUserId: ctx.currentAdmin?.id ?? null,
-                  action: 'admin.benefit.in_progress',
-                  resource: `AdoptionBenefit/${id}`,
-                },
-              });
-              return { record: ctx.record!.toJSON(ctx.currentAdmin) };
-            },
-          },
-          markFulfilled: {
-            actionType: 'record',
-            label: 'Mark fulfilled',
-            icon: 'CheckCircle',
-            component: false,
-            isAccessible: ({
-              currentAdmin,
-              record,
-            }: {
-              currentAdmin?: { role?: string };
-              record?: { params?: Record<string, unknown> };
-            }) => {
-              const role = (currentAdmin?.role as string) ?? '';
-              if (!['admin', 'finance', 'curator'].includes(role)) return false;
-              const s = record?.params?.['status'];
-              return s === 'pending' || s === 'in_progress';
-            },
-            handler: async (_req: any, _res: any, ctx: any) => {
-              const id = ctx.record!.params['id'];
-              const actorUserId = ctx.currentAdmin?.id ?? null;
-              await prisma.adoptionBenefit.update({
-                where: { id },
-                data: {
-                  status: 'fulfilled',
-                  fulfilledAt: new Date(),
-                  fulfilledByUserId: actorUserId,
-                  // For recurring items, fulfilment also stamps lastSentAt
-                  // and bumps nextDueAt by the cadence — see the worker
-                  // for the long-term re-enqueue logic.
-                  lastSentAt: new Date(),
-                },
-              });
-              await prisma.auditLog.create({
-                data: {
-                  actorUserId,
-                  action: 'admin.benefit.fulfilled',
-                  resource: `AdoptionBenefit/${id}`,
-                },
-              });
-              return { record: ctx.record!.toJSON(ctx.currentAdmin) };
-            },
-          },
-          markCancelled: {
-            actionType: 'record',
-            label: 'Mark cancelled',
-            icon: 'XCircle',
-            component: false,
-            isAccessible: ({
-              currentAdmin,
-              record,
-            }: {
-              currentAdmin?: { role?: string };
-              record?: { params?: Record<string, unknown> };
-            }) => {
-              const role = (currentAdmin?.role as string) ?? '';
-              if (!['admin', 'finance', 'curator'].includes(role)) return false;
-              const s = record?.params?.['status'];
-              return s === 'pending' || s === 'in_progress';
-            },
-            handler: async (_req: any, _res: any, ctx: any) => {
-              const id = ctx.record!.params['id'];
-              await prisma.adoptionBenefit.update({
-                where: { id },
-                data: { status: 'cancelled' },
-              });
-              await prisma.auditLog.create({
-                data: {
-                  actorUserId: ctx.currentAdmin?.id ?? null,
-                  action: 'admin.benefit.cancelled',
-                  resource: `AdoptionBenefit/${id}`,
-                },
               });
               return { record: ctx.record!.toJSON(ctx.currentAdmin) };
             },
@@ -2540,7 +2277,7 @@ async function bootstrap() {
                   payment: {
                     include: {
                       donor: { select: { email: true, name: true } },
-                      adoption: { include: { plant: { select: { nameEn: true, slug: true } } } },
+                      donation: { include: { plant: { select: { nameEn: true, slug: true } } } },
                     },
                   },
                 },
@@ -2583,8 +2320,8 @@ async function bootstrap() {
                   csvField(p.provider),
                   csvField(p.donor.email),
                   csvField(p.donor.name ?? ''),
-                  csvField(p.adoption?.plant.slug ?? ''),
-                  csvField(p.adoption?.plant.nameEn ?? ''),
+                  csvField(p.donation?.plant?.slug ?? ''),
+                  csvField(p.donation?.plant?.nameEn ?? ''),
                   csvField(p.receivedAt?.toISOString() ?? ''),
                   (e.amountCents / 100).toFixed(2),
                   (e.feeCents / 100).toFixed(2),
@@ -2635,7 +2372,7 @@ async function bootstrap() {
                 amountCents: e.amountCents,
                 feeCents: e.feeCents,
                 netCents: e.netCents,
-                plantName: e.payment.adoption?.plant?.nameEn ?? null,
+                plantName: e.payment.donation?.plant?.nameEn ?? null,
               })),
           });
           reply
@@ -2734,10 +2471,10 @@ async function bootstrap() {
         const items = await prisma.plant.findMany({
           where,
           take: limit,
-          orderBy: [{ adopterCount: 'desc' }, { nameEn: 'asc' }],
+          orderBy: [{ donorCount: 'desc' }, { nameEn: 'asc' }],
           select: {
             id: true, slug: true, nameEn: true, nameFi: true, nameSv: true,
-            redListStatus: true, gardenZone: true, adopterCount: true,
+            redListStatus: true, gardenZone: true, donorCount: true,
             taxon: { select: { latinName: true } },
           },
         });
@@ -3457,32 +3194,29 @@ async function bootstrap() {
         const [
           systemSettings,
           translations,
-          tiers,
           plants,
-          adoptions,
+          donations,
           payments,
           plantScans,
         ] = await Promise.all([
           prisma.systemSetting.findMany(),
           prisma.translation.findMany(),
-          prisma.tier.findMany(),
           prisma.plant.findMany({
             select: {
               id: true, slug: true, nameEn: true, nameFi: true, nameSv: true,
-              redListStatus: true, status: true, adopterCount: true,
+              redListStatus: true, status: true, donorCount: true, voteCount: true,
               fundedCents: true, scanCount: true,
             },
           }),
-          prisma.adoption.findMany({
+          prisma.donation.findMany({
             select: {
-              id: true, plantId: true, donorId: true, tierId: true, intent: true,
-              status: true, amountCents: true, billingInterval: true, createdAt: true,
-              bundleId: true,
+              id: true, plantId: true, donorId: true,
+              status: true, amountCents: true, createdAt: true,
             },
           }),
           prisma.payment.findMany({
             select: {
-              id: true, adoptionId: true, provider: true, status: true,
+              id: true, donationId: true, provider: true, status: true,
               amountCents: true, currency: true, createdAt: true,
             },
           }),
@@ -3497,18 +3231,16 @@ async function bootstrap() {
           tables: {
             SystemSetting: systemSettings.length,
             Translation: translations.length,
-            Tier: tiers.length,
             Plant: plants.length,
-            Adoption: adoptions.length,
+            Donation: donations.length,
             Payment: payments.length,
             PlantScan: plantScans.length,
           },
           data: {
             SystemSetting: systemSettings,
             Translation: translations,
-            Tier: tiers,
             Plant: plants,
-            Adoption: adoptions,
+            Donation: donations,
             Payment: payments,
             PlantScan: plantScans,
           },
@@ -3564,13 +3296,13 @@ async function bootstrap() {
         startOfMonth.setUTCHours(0, 0, 0, 0);
         const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
         const [
-          plants, donors, adoptionsActive, donationsMtd,
+          plants, donors, donationsCompleted, donationsMtd,
           ragDocs, webCacheDocs, curatorEscalationsOpen, askMessages7d,
           recentEscalations,
         ] = await Promise.all([
           prisma.plant.count({ where: { status: 'active' } }),
           prisma.user.count({ where: { role: 'donor' } }),
-          prisma.adoption.count({ where: { status: 'active' } }),
+          prisma.donation.count({ where: { status: 'completed' } }),
           prisma.payment.aggregate({
             _sum: { amountCents: true },
             where: { status: 'succeeded', createdAt: { gte: startOfMonth } },
@@ -3591,7 +3323,7 @@ async function bootstrap() {
         ]);
         reply.header('content-type', 'application/json').send({
           stats: {
-            plants, donors, adoptionsActive,
+            plants, donors, donationsCompleted,
             donationsMtdCents: donationsMtd._sum.amountCents ?? 0,
             ragDocs, webCacheDocs, curatorEscalationsOpen, askMessages7d,
           },
@@ -3698,7 +3430,7 @@ async function bootstrap() {
       const [
         plants,
         donors,
-        adoptionsActive,
+        donationsCompleted,
         donationsMtd,
         ragDocs,
         webCacheDocs,
@@ -3708,7 +3440,7 @@ async function bootstrap() {
       ] = await Promise.all([
         prisma.plant.count({ where: { status: 'active' } }),
         prisma.user.count({ where: { role: 'donor' } }),
-        prisma.adoption.count({ where: { status: 'active' } }),
+        prisma.donation.count({ where: { status: 'completed' } }),
         prisma.payment.aggregate({
           _sum: { amountCents: true },
           where: { status: 'succeeded', createdAt: { gte: startOfMonth } },
@@ -3734,7 +3466,7 @@ async function bootstrap() {
         stats: {
           plants,
           donors,
-          adoptionsActive,
+          donationsCompleted,
           donationsMtdCents: donationsMtd._sum.amountCents ?? 0,
           ragDocs,
           webCacheDocs,

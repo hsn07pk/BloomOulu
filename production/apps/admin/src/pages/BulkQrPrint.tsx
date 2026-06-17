@@ -40,7 +40,7 @@ interface Plant {
   nameSv: string;
   redListStatus: string;
   gardenZone?: string | null;
-  adopterCount?: number;
+  donorCount?: number;
   taxon?: { latinName?: string | null } | null;
 }
 

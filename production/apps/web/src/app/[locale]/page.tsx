@@ -28,13 +28,13 @@ async function fetchInitialPlants(): Promise<{ items: Plant[] }> {
 
 interface HomepageStats {
   plantCount: number;
-  adoptionCount: number;
+  donationCount: number;
   raisedCents: number;
 }
 
 /**
  * Live homepage hero stats — single round-trip pulling plant count,
- * adoption count, and total raised in one shot. Falls back to null on
+ * donation count, and total raised in one shot. Falls back to null on
  * error so the hero tile can degrade to sensible static placeholders
  * without breaking SSR.
  *
@@ -52,14 +52,14 @@ async function fetchHomepageStats(): Promise<HomepageStats | null> {
     const data = await res.json();
     if (
       typeof data.plantCount !== 'number' ||
-      typeof data.adoptionCount !== 'number' ||
+      typeof data.donationCount !== 'number' ||
       typeof data.raisedCents !== 'number'
     ) {
       return null;
     }
     return {
       plantCount: data.plantCount,
-      adoptionCount: data.adoptionCount,
+      donationCount: data.donationCount,
       raisedCents: data.raisedCents,
     };
   } catch {
@@ -105,8 +105,8 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
   // static numbers. See docs/handover-files/stats-roadmap.md.
   const heroPlantCount =
     stats !== null ? formatCount(stats.plantCount, locale) : '—';
-  const heroAdoptionCount =
-    stats !== null ? formatCount(stats.adoptionCount, locale) : '—';
+  const heroDonationCount =
+    stats !== null ? formatCount(stats.donationCount, locale) : '—';
   const heroRaised =
     stats !== null ? formatEur(stats.raisedCents, locale) : '—';
 
@@ -168,8 +168,8 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
                   flexWrap: 'wrap',
                 }}
               >
-                <Link href={`/${locale}/adopt`} className="btn btn-lg btn-rust">
-                  🌱 {t('heroCta')}
+                <Link href={`/${locale}/donate`} className="btn btn-lg btn-rust">
+                  🌿 {t('heroCta')}
                 </Link>
                 <Link
                   href={`/${locale}/ask`}
@@ -204,12 +204,12 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
                         : 'plant species in the Oulu collection',
                   ],
                   [
-                    heroAdoptionCount,
+                    heroDonationCount,
                     locale === 'fi'
-                      ? 'aktiivista adoptiota'
+                      ? 'lahjoitusta puutarhalle'
                       : locale === 'sv'
-                        ? 'aktiva adoptioner'
-                        : 'active adoptions',
+                        ? 'donationer till trädgården'
+                        : 'gifts to the Garden',
                   ],
                   [
                     heroRaised,
@@ -402,7 +402,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
           {t('howItWorks')}
         </div>
         <h2 style={{ fontSize: 48, marginTop: 12, marginBottom: 40 }}>
-          {locale === 'fi' ? 'Skannaa · Kysy · Adoptoi · Palaa' : 'Scan · Ask · Adopt · Return'}
+          {locale === 'fi' ? 'Skannaa · Kysy · Lahjoita · Palaa' : 'Scan · Ask · Donate · Return'}
         </h2>
         <div
           data-grid-mobile="2"
@@ -412,8 +412,8 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
             [
               ['01', '📱', locale === 'fi' ? 'Skannaa kasvi' : 'Scan a plant', locale === 'fi' ? 'Jokaisessa kyltissä on QR-koodi — avaa kasvin sivu suomeksi, ruotsiksi tai englanniksi.' : 'Every label has a QR code — open its page in FI / SV / EN.'],
               ['02', '🤖', locale === 'fi' ? 'Kysy puutarhalta' : 'Ask the Garden', locale === 'fi' ? 'Tekoälymme nojaa puutarhan tietokantaan. Jokainen vastaus on lähteistetty.' : "Our AI is grounded in the Garden's accession database. Every answer cites its source."],
-              ['03', '🌱', locale === 'fi' ? 'Adoptoi' : 'Adopt', locale === 'fi' ? '25 € siemenestä 1 250 € yritystasoon. Lahja-, muisto- ja luokka-adoptiot mahdollisia.' : '€25 Seedling to €1,250 Corporate. Gift, memorial, and class adoptions supported.'],
-              ['04', '🔔', locale === 'fi' ? 'Palaa' : 'Return', locale === 'fi' ? 'Saat sähköpostin, kun kasvisi kukkii. Adoptoijien avoimet ovet kesäkuussa.' : 'When your plant flowers, we email you. Adopters\' Open Day in June.'],
+              ['03', '🌿', locale === 'fi' ? 'Lahjoita' : 'Donate', locale === 'fi' ? 'Anna haluamasi summa puutarhan suojelutyölle — yleisesti tai valitsemallesi lajille.' : 'Give any amount to the Garden’s conservation work — generally, or directed to a species you choose.'],
+              ['04', '🔔', locale === 'fi' ? 'Palaa' : 'Return', locale === 'fi' ? 'Äänestä suosikkikasvejasi ja seuraa puutarhan kuulumisia. Tukijoiden avoimet ovet kesäkuussa.' : 'Vote for your favourite plants and follow the Garden’s news. Supporters’ Open Day in June.'],
             ] as const
           ).map(([num, icon, title, body]) => (
             <div key={num} className="card card-pad">

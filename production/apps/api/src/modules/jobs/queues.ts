@@ -14,13 +14,6 @@ export const QUEUE_RAG_INGEST = 'rag-ingest';
 export const QUEUE_GDPR_EXPORT = 'gdpr-export';
 export const QUEUE_GDPR_ERASE = 'gdpr-erase';
 export const QUEUE_KIOSK_WATCHDOG = 'kiosk-watchdog';
-export const QUEUE_PAYMENT_RETRY = 'payment-retry';
-export const QUEUE_RENEWAL = 'renewal';
-/// One-off "charge this specific recurring agreement right now". Fires
-/// after `agreement.activated` for Paytrail (which does not auto-charge
-/// on card-add). Same processor as the scheduled renewal sweep — just
-/// targeted at a single adoption.
-export const QUEUE_AGREEMENT_FIRST_CHARGE = 'agreement-first-charge';
 /// Monthly disbursement draft creation — fires on the 1st of each month
 /// and bundles every settled Payment from the prior month into a fresh
 /// draft Disbursement for the Garden's finance team to review.
@@ -32,13 +25,6 @@ export const QUEUE_PLANT_ENRICH = 'plant-enrich';
 /// 24/7 enrichment scheduler — cron tick scans EnrichmentSchedule for
 /// `nextDueAt <= now()` and seeds the plant-enrich queue with a small batch.
 export const QUEUE_ENRICHMENT_SWEEP = 'enrichment-sweep';
-/// Daily sweep of AdoptionBenefit rows where category=recurring AND
-/// nextDueAt <= now. Each due row triggers a templated email + bumps the
-/// next-due timestamp by `cadenceMonths`.
-export const QUEUE_RECURRING_BENEFITS = 'recurring-benefits';
-/// Monthly CSR quarterly impact report — fires for every active
-/// Corporate-tier adoption. Generates a PDF, emails the donor.
-export const QUEUE_CSR_QUARTERLY = 'csr-quarterly';
 /// Daily GDPR retention sweep — prunes/pseudonymises data past its
 /// retention window (AskMessage, AuditLog, Session, VerificationToken,
 /// PlantScan, KioskEvent, ObservabilityEvent) and pseudonymises long-

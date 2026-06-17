@@ -167,7 +167,7 @@ export function PlantCard({ plant: p, locale, adoptersLabel }: PlantCardProps) {
         >
           <div>
             <div className="tiny">{adoptersLabel}</div>
-            <div style={{ fontSize: 15, fontWeight: 600, marginTop: 2 }}>{p.adopterCount ?? 0}</div>
+            <div style={{ fontSize: 15, fontWeight: 600, marginTop: 2 }}>{p.donorCount ?? 0}</div>
           </div>
           <span className="pill" style={{ fontSize: 11 }}>
             {plantBloomLabel(p, locale)}

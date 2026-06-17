@@ -4,7 +4,7 @@
  * parsing, then delegates to PaymentsService.handleEvent for idempotent
  * persistence.
  */
-import { Body, Controller, Get, Headers, HttpCode, Logger, Post, Query, Req } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Headers, HttpCode, Logger, Post, Query, Req } from '@nestjs/common';
 import type { FastifyRequest } from 'fastify';
 import { Throttle } from '@nestjs/throttler';
 import { PaymentsService } from '../payments/payments.service.js';
@@ -114,8 +114,11 @@ export class WebhooksController {
     } catch (err) {
       if (err instanceof WebhookSignatureError) {
         this.logger.warn(`Webhook signature mismatch from ${provider}: ${err.message}`);
-        // Return 400 — provider will retry, but bad signature → tampered
-        return { ok: false, error: 'signature' };
+        // A failed signature means a tampered or misconfigured request — reject
+        // with 400 (overrides the @HttpCode(200)) rather than silently 200-ing
+        // and swallowing the event. The donor-facing /donate/complete page maps
+        // a non-200 to its "couldn't verify" state.
+        throw new BadRequestException({ ok: false, error: 'signature' });
       }
       this.logger.error(`Webhook handler crash from ${provider}`, err as any);
       // Throw → 500 → provider retries with backoff

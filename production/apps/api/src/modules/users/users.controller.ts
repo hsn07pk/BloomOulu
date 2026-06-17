@@ -13,8 +13,8 @@ export class UsersController {
   @Get(':id/garden')
   async myGarden(@CurrentUser() actor: AuthenticatedUser, @Param('id') id: string) {
     // ADR-0003: donor sees own data only; finance/curator/admin can read any
-    // donor's garden (finance for refund context, curator for plaque
-    // installation, admin for ops). Anything else → 403.
+    // donor's garden (finance for refund context, curator for conservation
+    // follow-up, admin for ops). Anything else → 403.
     if (actor.sub !== id && !STAFF_ROLES.has(actor.role)) {
       throw new ForbiddenException();
     }
@@ -38,40 +38,11 @@ export class UsersController {
         name: true,
         locale: true,
         createdAt: true,
-        adoptions: {
+        donations: {
           orderBy: { createdAt: 'desc' },
           include: {
             plant: { include: { primaryImage: true, taxon: true } },
-            tier: true,
-            plaque: true,
             payments: { orderBy: { createdAt: 'desc' }, take: 1 },
-            // Gift recipient join — needed by the "Gifts you've sent"
-            // card on MyGarden. Select only the recipient's display
-            // fields, never their PII (no address / phone / preferences).
-            // Returns null for non-gift adoptions; donor sees their own
-            // recipient list only via the gates enforced at line 18.
-            giftRecipient: { select: { id: true, name: true, email: true } },
-            // Per-adoption benefit fulfilment rows. Donor sees what
-            // they've received vs. what's still being worked on.
-            benefits: {
-              orderBy: [
-                { category: 'asc' },
-                { status: 'asc' },
-              ],
-              select: {
-                id: true,
-                benefitKey: true,
-                category: true,
-                donorLabelSnapshot: true,
-                labelSnapshot: true,
-                status: true,
-                shippedAt: true,
-                eventDate: true,
-                nextDueAt: true,
-                fulfilledAt: true,
-                trackingNumber: true,
-              },
-            },
           },
         },
         receipts: { orderBy: { issuedAt: 'desc' }, take: 50 },

@@ -12,11 +12,11 @@ Related docs:
 
 ## Providers
 
-| Provider       | When picked (router) | Fees       | Recurring |
-|----------------|----------------------|------------|-----------|
-| Paytrail       | Donor explicitly chose Card; non-FI donors; fallback when others off | ~1.5% + €0.35 | yes (token)
-| MobilePay/Vipps| Donor chose MobilePay; FI/NO donors with recurring intent | ~1.4% | yes (agreement)
-| Bank transfer  | Donor chose Bank; FI donor with no preference (zero-fee default) | €0 | no (reminder-driven)
+| Provider       | When picked (router) | Fees       |
+|----------------|----------------------|------------|
+| Paytrail       | Donor explicitly chose Card; non-FI donors; fallback when others off | ~1.5% + €0.35 |
+| MobilePay/Vipps| Donor chose MobilePay | ~1.4% |
+| Bank transfer  | Donor chose Bank; FI donor with no preference (zero-fee default) | €0 |
 
 Router rules: `packages/payments/src/router.ts`. Admin can flip a
 provider on/off in `/admin → SystemSetting → payments.{paytrail,mobilepay,bank_transfer}` without a deploy.
@@ -52,8 +52,8 @@ sandbox, so localhost can't reach it. We solve this with a
   verification + activation pipeline that fires in production.
 
 Only the "pick your bank" UI step is mocked; everything else (signing,
-verification, idempotency, audit logging, bundle activation, plaque
-creation) runs exactly as in production.
+verification, idempotency, audit logging, donation completion, receipt
+enqueue) runs exactly as in production.
 
 ### Going to production
 
@@ -91,8 +91,8 @@ MOBILEPAY_CALLBACK_URL=https://api.bloomoulu.fi/webhooks/mobilepay
 ```
 
 Then flip `payments.mobilepay=true` in `/admin → SystemSetting`. The
-cart's payment-method picker enables the MobilePay tile automatically
-based on the same flag.
+donate form's payment-method picker enables the MobilePay tile
+automatically based on the same flag.
 
 ## Bank transfer
 
@@ -124,48 +124,34 @@ BANK_TRANSFER_WEBHOOK_SECRET=<32+ char random>   # required if you wire the cron
 The webhook fails closed: if `BANK_TRANSFER_WEBHOOK_SECRET` is unset,
 the route still accepts requests but refuses any that include an
 `Authorization` header (so a forgotten secret in prod returns 400
-rather than silently activating adoptions).
+rather than silently completing donations).
 
-## Recurring billing
+## One-time checkout
 
-Three paths, all production-wired:
+Every donation is a single payment — there are no recurring agreements,
+tokenised cards, renewal cron, or dunning ladder. The adopt-a-plant tier
+model that required them was removed.
 
-- **MobilePay/Vipps**: native agreements. `createAgreement` returns a
-  Vipps confirmation URL; on `recurring.agreement-activated.v1` the
-  agreement id is stored in `Payment.providerCustomerId`. The
-  `renewal` cron (daily 04:00 UTC) charges `chargeAgreement` for any
-  adoption with `endsAt < now + 7d`. Failed charges write a failed
-  `Payment` row and surface to dunning.
-- **Paytrail tokenisation**: `createAgreement` POSTs
-  `/tokenization/addcard-form` (per the Paytrail OpenAPI spec). The
-  donor adds their card on Paytrail's hosted form; the return URL
-  carries `checkout-tokenization-id` which `parseWebhook` exchanges
-  via `POST /tokenization/{id}` for the long-lived `token`. The
-  orchestrator stores the token in `Payment.providerCustomerId` and
-  immediately enqueues the first charge. Renewals (and the first
-  charge) call `POST /payments/token/mit/charge` against the token.
-  Refund callbacks land on the same `/webhooks/paytrail` endpoint via
-  `PAYTRAIL_CALLBACK_URL`.
-- **Bank transfer**: reminder-based. The renewal cron creates a
-  pending Payment row with a fresh RF reference and emails the donor;
-  the accountant's CSV upload reconciles the inbound SCT.
+- **Paytrail / MobilePay**: the donor approves one payment on the
+  provider's hosted page or app; the signed callback marks the
+  `Payment` succeeded and the `Donation` completed, then enqueues the
+  receipt. Refund callbacks land on the same `/webhooks/paytrail`
+  endpoint via `PAYTRAIL_CALLBACK_URL`.
+- **Bank transfer**: the donor makes the SEPA Credit Transfer once; the
+  accountant's CSV upload reconciles the inbound payment by its RF
+  reference. No reminder ladder.
 
-Dunning state machine (`apps/api/src/modules/jobs/processors/payment-retry.processor.ts`):
-3d → 7d → 14d → 21d grace → cancel. Each escalation is a `chargeAgreement`
-attempt for card / MobilePay rails; bank-transfer rails get a reminder
-email per step until the accountant reconciles.
+A failed or abandoned payment simply leaves the `Donation` in
+`pending` / `failed`; the donor can retry from `/donate`.
 
 ## Code that's already production-grade
 
 - HMAC signature verification on every callback (Paytrail + MobilePay).
 - Idempotent webhook handling via `(provider, providerEventId)` unique
   index on `ProcessedEvent`.
-- One `prisma.$transaction` per webhook = payment update + adoption
-  activation + audit log + plaque create all atomic.
-- Bundle activation: every sibling `Adoption` sharing a `bundleId` flips
-  to `active` on one event.
+- One `prisma.$transaction` per webhook = payment update + donation
+  completion + audit log all atomic.
 - Throttling on webhook routes (5000/min/IP).
-- Recurring failure → adoption paused + `payment-retry` job enqueued.
 - Receipts: enqueued after webhook commit; PDF + email handled by the
   worker.
 - No PCI scope: Paytrail's hosted checkout owns card data; the api

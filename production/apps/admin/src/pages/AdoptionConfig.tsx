@@ -1,123 +1,124 @@
 /**
- * Adoption Knobs — gift-wrap price, max co-adopters, plaque-eligible
- * tiers, which billing intervals donors see, dedication length limit.
+ * Donation knobs — the quick-pick amounts donors see, the pre-selected
+ * default, whether a custom amount is allowed, the min/max accepted, the
+ * dedication-line length limit, and the "where your money goes" link.
+ *
+ * Edits the donation.* SystemSetting keys consumed by the public donate
+ * flow. Replaces the old tier / gift-wrap / plaque / billing-interval
+ * adoption knobs, which no longer exist after the donation rewrite.
+ *
+ * NOTE: the file name and exported names are kept as-is on purpose —
+ * server.ts registers this component by path/name.
  */
 import React from 'react';
 import ConfigForm, { type ConfigSchema } from './ConfigForm';
 
+const euro = (cents: number): string => `€${(cents / 100).toFixed(cents % 100 === 0 ? 0 : 2)}`;
+
 const Preview: React.FC<{ values: Record<string, unknown> }> = ({ values }) => {
-  const intervals = Array.isArray(values['adoption.intervalsEnabled'])
-    ? (values['adoption.intervalsEnabled'] as string[])
-    : typeof values['adoption.intervalsEnabled'] === 'string'
-      ? (values['adoption.intervalsEnabled'] as string).split(',').map((s) => s.trim())
-      : ['monthly', 'one_time'];
-  const giftWrap = (values['adoption.giftWrapCents'] as number) ?? 400;
+  const amounts = Array.isArray(values['donation.suggestedAmountsCents'])
+    ? (values['donation.suggestedAmountsCents'] as unknown[])
+        .map((c) => (typeof c === 'number' ? c : Number(c)))
+        .filter((n) => Number.isFinite(n))
+    : [];
+  const def = (values['donation.defaultAmountCents'] as number) ?? 0;
+  const allowCustom =
+    values['donation.allowCustomAmount'] === true || values['donation.allowCustomAmount'] === 'true';
   return (
     <div style={{ fontFamily: 'system-ui, sans-serif', fontSize: 13, color: '#1F3C2D', lineHeight: 1.6 }}>
-      Donors see {intervals.length} billing interval{intervals.length === 1 ? '' : 's'}:{' '}
-      <strong>{intervals.join(' / ')}</strong>. Gift-wrap upgrade adds{' '}
-      <strong>€{(giftWrap / 100).toFixed(2)}</strong>.
+      Donors see {amounts.length} quick-pick amount{amounts.length === 1 ? '' : 's'}:{' '}
+      <strong>{amounts.length ? amounts.map(euro).join(' / ') : '—'}</strong>
+      {def ? (
+        <>
+          {' '}
+          · default <strong>{euro(def)}</strong>
+        </>
+      ) : null}
+      . {allowCustom ? 'A custom-amount field is shown too.' : 'Custom amounts are turned off.'}
     </div>
   );
 };
 
 export const schema: ConfigSchema = {
-  title: 'Adoption Knobs',
-  kicker: 'Donor adopt flow',
+  title: 'Donation amounts',
+  kicker: 'Donor donate flow',
   intro:
-    'Tune what donors see in the adopt flow. All changes are live immediately for new sessions — open a fresh /cart/checkout tab to verify.',
-  helpBannerId: 'adoption-config-intro',
-  helpBannerTitle: 'New billing intervals affect new adoptions only',
+    'Tune what donors see in the donate flow. All changes are live immediately for new sessions — open a fresh /donate tab to verify.',
+  helpBannerId: 'donation-config-intro',
+  helpBannerTitle: 'These knobs drive the public donate page',
   helpBanner: (
     <>
-      Donors with an active subscription keep the interval they signed up with — disabling Monthly
-      here doesn’t cancel anyone, it just hides the option from the next visitor. To migrate
-      existing monthly donors, send them a personal note from the Donors page first.
+      The quick-pick buttons, the pre-selected default, and the min/max guard-rails all read from
+      the values below. Amounts are stored in cents but shown here in euros. Leave “allow custom
+      amount” on so donors can give any sum between the minimum and maximum.
     </>
   ),
   Preview,
   sections: [
     {
-      title: 'Billing intervals donors see',
-      description:
-        'The production default is monthly + one-time. Enable annual when you’re ready to offer it as a marketing tier.',
+      title: 'Suggested amounts',
+      description: 'The quick-pick buttons on the donate page, and which one is pre-selected.',
       fields: [
         {
-          key: 'adoption.intervalsEnabled',
-          label: 'Enabled intervals',
-          help: 'The wizard, plant detail page, and cart-checkout all read this list. Disabled intervals never appear in the picker, and the API refuses adoptions that try to use them.',
-          type: {
-            kind: 'multiselect',
-            options: [
-              { value: 'monthly', label: 'Monthly', description: 'Auto-renews every month' },
-              { value: 'annual', label: 'Annual', description: 'Auto-renews yearly' },
-              { value: 'one_time', label: 'One-time', description: 'Single charge, no renewal' },
-            ],
-            stored: 'array',
-          },
-          default: ['monthly', 'one_time'],
+          key: 'donation.suggestedAmountsCents',
+          label: 'Quick-pick amounts',
+          help: 'Comma-separated euros — e.g. "5, 15, 25, 50". Shown as one-tap buttons on the donate page, in this order. Stored as a list of cents.',
+          type: { kind: 'centsList' },
+          default: [500, 1500, 2500, 5000],
+          example: '5, 15, 25, 50',
+        },
+        {
+          key: 'donation.defaultAmountCents',
+          label: 'Default amount',
+          help: 'The quick-pick that is pre-selected when the donate page opens. Set it to one of the amounts above.',
+          type: { kind: 'cents', suffix: 'pre-selected' },
+          default: 1500,
         },
       ],
     },
     {
-      title: 'Add-ons',
+      title: 'Custom amount',
+      description: 'Whether donors can type their own amount, and the limits we accept.',
       fields: [
         {
-          key: 'adoption.giftWrapCents',
-          label: 'Gift-wrap upgrade',
-          help: 'Linen-card certificate mailed to the recipient. Shown on Step 3 of the gift flow.',
-          type: { kind: 'cents', suffix: 'per gift' },
-          default: 400,
+          key: 'donation.allowCustomAmount',
+          label: 'Allow a custom amount',
+          help: 'When on, the donate page shows a free-entry field so donors can give any sum between the min and max below.',
+          type: { kind: 'boolean', trueLabel: 'Custom amount allowed', falseLabel: 'Quick-picks only' },
+          default: true,
         },
         {
-          key: 'adoption.dedicationMaxChars',
+          key: 'donation.minCents',
+          label: 'Minimum donation',
+          help: 'Smallest accepted donation. The donate page and the API both reject anything below this.',
+          type: { kind: 'cents', suffix: 'minimum' },
+          default: 200,
+        },
+        {
+          key: 'donation.maxCents',
+          label: 'Maximum donation',
+          help: 'Largest accepted donation in a single gift. Guards against fat-finger entries — raise it for corporate gifts.',
+          type: { kind: 'cents', suffix: 'maximum' },
+          default: 500000,
+        },
+      ],
+    },
+    {
+      title: 'Dedication & transparency',
+      fields: [
+        {
+          key: 'donation.dedicationMaxChars',
           label: 'Dedication max length',
-          help: 'Maximum characters in the donor-facing dedication line ("From me, summer 2026").',
+          help: 'Maximum characters in the donor-facing dedication line ("In memory of …") shown on the donor wall.',
           type: { kind: 'number', min: 40, max: 1000, suffix: 'chars' },
           default: 240,
         },
         {
-          key: 'adoption.coAdopterMax',
-          label: 'Max co-adopters per adoption',
-          help: 'Used by the "Split the gift" feature so several friends share one adoption record.',
-          type: { kind: 'number', min: 1, max: 50, suffix: 'people' },
-          default: 10,
-        },
-      ],
-    },
-    {
-      title: 'Donor recognition',
-      description: 'Which tiers earn an individually engraved plaque next to the plant.',
-      fields: [
-        {
-          key: 'adoption.plaqueEligibleTiers',
-          label: 'Plaque-eligible tiers',
-          help: 'A tiny brass plaque is requested when an adoption in these tiers is paid. Workflow: plaque.status = requested → engraved → installed.',
-          type: {
-            kind: 'multiselect',
-            options: [
-              { value: 'seedling', label: 'Seedling' },
-              { value: 'rooted', label: 'Rooted' },
-              { value: 'vulnerable', label: 'Vulnerable' },
-              { value: 'endangered', label: 'Endangered' },
-              { value: 'corporate', label: 'Corporate' },
-            ],
-            stored: 'array',
-          },
-          default: ['endangered', 'corporate'],
-        },
-      ],
-    },
-    {
-      title: 'Tax disclosure',
-      description: 'Donor-facing tax classification of donations vs. perks on the cart page.',
-      fields: [
-        {
-          key: 'adoption.donationShareBp',
-          label: 'Donation share',
-          help: 'Of every €100, this percentage is treated as a pure donation in the tax-disclosure box. 7200 = 72%. The other 28% is perk value subject to VAT.',
-          type: { kind: 'number', min: 0, max: 10000, suffix: 'bp (0–10000)' },
-          default: 7200,
+          key: 'donation.fundsFlowUrl',
+          label: '“Where your money goes” link',
+          help: 'Full URL (including https://) to the page explaining how donations are used. Linked from the donate page for transparency.',
+          type: { kind: 'url' },
+          example: 'https://bloomoulu.fi/en/about/funds',
         },
       ],
     },

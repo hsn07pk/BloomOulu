@@ -1,12 +1,12 @@
 /**
  * Admin metrics — read-only dashboards built off the PlantScan event table
- * and Adoption rows. Everything served from a single Postgres query so the
+ * and Donation rows. Everything served from a single Postgres query so the
  * AdminJS / future custom dashboard can render the funnel + leaderboard
  * without N+1.
  *
  *   GET /v1/admin/metrics/qr           Top-scanned plants over a window
  *   GET /v1/admin/metrics/qr/timeline  Daily scan totals (last 30 days)
- *   GET /v1/admin/metrics/funnel       Scan → adoption funnel + conversion
+ *   GET /v1/admin/metrics/funnel       Scan → donation funnel + conversion
  *
  * The PlantScan row already keeps GDPR-safe data only (no raw IP / UA);
  * these aggregates are safe to surface to operators.
@@ -73,7 +73,8 @@ export class AdminMetricsController {
         nameSv: true,
         redListStatus: true,
         scanCount: true,
-        adopterCount: true,
+        donorCount: true,
+        voteCount: true,
         primaryImage: { select: { url: true } },
         taxon: { select: { latinName: true } },
       },
@@ -93,7 +94,8 @@ export class AdminMetricsController {
           redListStatus: p.redListStatus,
           scansInWindow: r._count._all,
           scanCountLifetime: p.scanCount,
-          adopterCount: p.adopterCount,
+          donorCount: p.donorCount,
+          voteCount: p.voteCount,
           primaryImageUrl: p.primaryImage?.url ?? null,
         };
       })
@@ -121,12 +123,13 @@ export class AdminMetricsController {
   }
 
   /**
-   * Scan → adoption funnel for the window:
+   * Scan → donation funnel for the window:
    *   - totalScans              every PlantScan in the window
    *   - uniqueVisitors          DISTINCT visitorHash (excluding empty)
    *   - uniqueScannedPlants     DISTINCT plantId
-   *   - adoptionsAfterScan      Adoptions whose plant was scanned in the
-   *                             same window (proxy for funnel conversion)
+   *   - donationsAfterScan      completed Donations whose plant was scanned
+   *                             in the same window (proxy for funnel
+   *                             conversion)
    */
   @Get('funnel')
   async funnel(@Query('days') days?: string) {
@@ -148,35 +151,35 @@ export class AdminMetricsController {
         })
         .then((r) => r.length),
     ]);
-    // Adoptions genuinely attributable to a scan: an ACTIVE adoption (a
+    // Donations genuinely attributable to a scan: a COMPLETED donation (a
     // started-but-unpaid `pending` checkout is not a conversion, nor are
-    // cancelled/expired) of a plant that was scanned BEFORE that adoption was
-    // created, within the window. The previous query counted *every*
-    // adoption of any scanned plant in the window regardless of status or
-    // timing — so pre-existing and pending adoptions inflated it (e.g. 8
-    // adoptions vs 1 scan → an impossible 800% conversion). Without a
-    // visitor→donor link this is a correlation proxy, not causal attribution,
-    // but the status + temporal gate keeps it honest and bounded.
-    const adoptionsAfterScanRows = await this.prisma.$queryRaw<Array<{ n: number }>>`
+    // failed/refunded) of a plant that was scanned BEFORE that donation was
+    // created, within the window. Counting *every* donation of any scanned
+    // plant in the window regardless of status or timing would let pre-
+    // existing and pending donations inflate it (e.g. 8 donations vs 1 scan
+    // → an impossible 800% conversion). Without a visitor→donor link this is
+    // a correlation proxy, not causal attribution, but the status + temporal
+    // gate keeps it honest and bounded.
+    const donationsAfterScanRows = await this.prisma.$queryRaw<Array<{ n: number }>>`
       SELECT count(*)::int AS n
-      FROM "Adoption" a
-      WHERE a.status = 'active'::"AdoptionStatus"
-        AND a."createdAt" >= ${from}
+      FROM "Donation" d
+      WHERE d.status = 'completed'::"DonationStatus"
+        AND d."createdAt" >= ${from}
         AND EXISTS (
           SELECT 1 FROM "PlantScan" ps
-          WHERE ps."plantId" = a."plantId"
+          WHERE ps."plantId" = d."plantId"
             AND ps."scannedAt" >= ${from}
-            AND ps."scannedAt" <= a."createdAt"
+            AND ps."scannedAt" <= d."createdAt"
         )`;
-    const adoptionsAfterScan = Number(adoptionsAfterScanRows[0]?.n ?? 0);
-    // Per the dashboard copy: post-scan adoptions ÷ unique scanning visitors.
-    const conversionRate = uniqueVisitors > 0 ? adoptionsAfterScan / uniqueVisitors : 0;
+    const donationsAfterScan = Number(donationsAfterScanRows[0]?.n ?? 0);
+    // Per the dashboard copy: post-scan donations ÷ unique scanning visitors.
+    const conversionRate = uniqueVisitors > 0 ? donationsAfterScan / uniqueVisitors : 0;
     return {
       windowStart: from.toISOString(),
       totalScans,
       uniqueVisitors,
       uniqueScannedPlants,
-      adoptionsAfterScan,
+      donationsAfterScan,
       conversionRate,
     };
   }

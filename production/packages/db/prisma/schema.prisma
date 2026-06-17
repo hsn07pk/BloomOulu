@@ -66,8 +66,7 @@ model User {
 
   accounts      Account[]
   sessions      Session[]
-  adoptions     Adoption[]
-  giftsReceived Adoption[]    @relation("giftRecipient")
+  donations     Donation[]
   payments      Payment[]
   receipts      Receipt[]
   taxCertificates TaxCertificate[]
@@ -191,10 +190,12 @@ model Plant {
   microLng        Decimal?      @db.Decimal(10, 7)
   gardenZone      String?       // "south esker bed", "romeo greenhouse pond", ...
 
-  // Funding state (denormalised counters; source of truth is Adoption rows)
-  adopterCount    Int           @default(0)
+  // Funding state (denormalised counters; source of truth is Donation rows)
+  donorCount      Int           @default(0)
   fundedCents     Int           @default(0)
   targetCents     Int           @default(0)
+  // Favourites-leaderboard counter; source of truth is PlantVote rows.
+  voteCount       Int           @default(0)
   status          String        @default("active") // active | retired | hidden
 
   // Denormalised counter for plant-scan events. Authoritative source is
@@ -220,7 +221,8 @@ model Plant {
 
   // Relations
   accessions      Accession[]
-  adoptions       Adoption[]
+  donations       Donation[]
+  votes           PlantVote[]
   narrations      AudioNarration[]
   citations       PlantCitation[]
   ragChunks       RagChunk[]
@@ -237,13 +239,15 @@ model Plant {
   // * status, redListStatus, bloomSeason: low-cardinality filter facets.
   //   Composite indexes match the homepage's "active + red-list + season"
   //   query so a single scan answers it.
-  // * adopterCount DESC + nameEn ASC: matches the default sort in
+  // * donorCount DESC + nameEn ASC: matches the default sort in
   //   PlantsController.list — Postgres uses it instead of a sort+scan.
+  // * voteCount DESC + nameEn ASC: the favourites leaderboard sort.
   // * Trigram + full-text indexes on the localised names live in the
   //   migration (Prisma can't model gin(... gin_trgm_ops) yet); the
   //   PlantsController.list query uses them for the `q` parameter.
   @@index([status, redListStatus, bloomSeason])
-  @@index([status, adopterCount(sort: Desc), nameEn])
+  @@index([status, donorCount(sort: Desc), nameEn])
+  @@index([status, voteCount(sort: Desc), nameEn])
   @@index([status, createdAt(sort: Desc)])
   @@index([taxonId])
 }
@@ -354,242 +358,83 @@ model AudioNarration {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Adoption + tiers
+// Donations + favourites
 // ────────────────────────────────────────────────────────────────────────────
+//
+// The Garden runs a one-time *donation* model (no adoption tiers, no perks,
+// no recurring billing). A visitor gives a freely-chosen amount — optionally
+// directed to a species they care about — and can favourite ("vote for")
+// plants to build a public leaderboard that surfaces which species the
+// public most wants to see protected. See docs/PAYMENTS.md.
 
-enum TierId {
-  seedling
-  rooted
-  vulnerable
-  endangered
-  corporate
+enum DonationStatus {
+  pending     // checkout started, awaiting payment confirmation
+  completed   // payment settled
+  failed      // payment failed / abandoned
+  refunded
 }
 
-enum BillingInterval {
-  one_time
-  annual
-  monthly
-}
-
-enum AdoptionIntent {
-  for_self
-  gift
-  memorial
-  class
-  corporate
-}
-
-enum AdoptionStatus {
-  pending       // checkout started, awaiting first payment confirmation
-  active
-  paused        // dunning failed payment
-  cancelled
-  expired
-}
-
-model Tier {
-  id              TierId  @id
-  name            String  // canonical English
-  nameFi          String
-  nameSv          String
-  annualPriceCents Int
-  monthlyPriceCents Int?
-  blurbEn         String
-  blurbFi         String
-  blurbSv         String
-  perks           Json    // [{labelKey: "i_at_h_postcard", localeFallbacks: {...}}]
-  // Marketing flair shown above the tier name (e.g. "Most popular gift",
-  // "Best value", "Donor-wall listing"). Per-locale variants for fi/sv —
-  // null means no tag shown.
-  tagEn           String?
-  tagFi           String?
-  tagSv           String?
-  // Visual
-  color           String
-  bg              String
-  sortOrder       Int     @default(0)
-
-  adoptions       Adoption[]
-}
-
-model Adoption {
+model Donation {
   id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
 
   donorId         String   @db.Uuid
   donor           User     @relation(fields: [donorId], references: [id])
 
-  plantId         String   @db.Uuid
-  plant           Plant    @relation(fields: [plantId], references: [id])
+  // Optional species designation. NULL = a general donation to the Garden's
+  // conservation programme; set = the donor chose to direct it to a species
+  // (still a general donation legally — the species is a dedication, not a
+  // ring-fenced fund). Matches the Garden's "give to a favourite" concept.
+  plantId         String?  @db.Uuid
+  plant           Plant?   @relation(fields: [plantId], references: [id])
 
-  tierId          TierId
-  tier            Tier     @relation(fields: [tierId], references: [id])
+  status          DonationStatus @default(pending)
+  amountCents     Int            // freely chosen / suggested amount, in cents
+  currency        String   @default("EUR")
 
-  status          AdoptionStatus  @default(pending)
-  intent          AdoptionIntent  @default(for_self)
+  // Optional public dedication — a short tribute or message ("In memory of …")
+  // shown on the donor wall when showOnWall is true.
+  dedication      String?
+  showOnWall      Boolean  @default(true)
+  publicName      String?  // override of donor.name on the donor wall
+  anonymous       Boolean  @default(false) // hide from the donor wall entirely
+  marketingOptIn  Boolean  @default(false) // snapshot of consent at gift time
 
-  // I@H — Internationalisation@Home (the donor's home region; we surface a plant
-  // from that region as the suggested adoption).
-  homeRegion      String?
-
-  // Personalisation
-  nickname        String?
-  dedication      String?   // up to 240 chars
-  showOnDonorWall Boolean   @default(true)
-  publicName      String?   // override of donor.name on donor wall
-
-  // Gift / memorial fields
-  giftRecipientId String?   @db.Uuid
-  giftRecipient   User?     @relation("giftRecipient", fields: [giftRecipientId], references: [id])
-  giftCodeId      String?   @unique @db.Uuid
-  giftCode        GiftCode? @relation(fields: [giftCodeId], references: [id])
-  giftDeliverOn   DateTime? @db.Date   // when to email the recipient
-  giftAnonymous   Boolean   @default(false) // "Send anonymously? Yes/No"
-  giftWrap        Boolean   @default(false) // +€4 linen-card mailed cert
-  memorialOf      String?
-  memorialFamilyEmail String?           // bloom-anniversary mailings
-  // Free-form co-adopters (split-the-gift feature) — stored as
-  // [{ name?, email? }, ...]. We deliberately don't model these as
-  // first-class Users so they don't need to verify email to be named.
-  coAdopters      Json?
-  // Donor consents (also mirrored to User.preferences but cached on the
-  // Adoption row so the receipt + admin export reflect the exact moment
-  // the donor opted in).
-  marketingOptIn  Boolean   @default(false)
-
-  // Billing
-  recurring       Boolean   @default(true)
-  billingInterval BillingInterval @default(annual)
-  amountCents     Int                       // captured at creation time (tier price snapshot)
-  currency        String    @default("EUR")
-  startedAt       DateTime?
-  endsAt          DateTime?
-  cancelledAt     DateTime?
-  cancellationReason String?
-
-  // Plaque (Endangered tier and up)
-  plaque          Plaque?
+  startedAt       DateTime?   // when the payment settled (status → completed)
+  refundedAt      DateTime?
 
   payments        Payment[]
 
-  // Bundle-checkout grouping: when a donor adopts multiple plants at
-  // once from the cart, every Adoption in the cart shares the same
-  // bundleId. The webhook activates all siblings on a single payment.
-  bundleId        String?  @db.Uuid
-
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  // Composite hot-path indexes for thousands-of-adopters scale.
-  // * (donorId, status, createdAt DESC) — My Garden fetches "my adoptions,
-  //   newest first" in one index lookup.
-  // * (plantId, status) — kiosk + plant pages count active adopters.
-  // * (status, recurring, endsAt) — the daily renewal cron scans this
-  //   without touching the rest of the table.
-  // * (status, showOnDonorWall, startedAt DESC) — adopter wall feed.
+  // Hot-path indexes:
+  // * (donorId, status, createdAt DESC) — My Garden "my gifts, newest first".
+  // * (plantId, status) — per-plant donor count + funded total.
+  // * (status, showOnWall, startedAt DESC) — public donor-wall feed.
   @@index([donorId, status, createdAt(sort: Desc)])
   @@index([plantId, status])
-  @@index([status, recurring, endsAt])
-  @@index([status, showOnDonorWall, startedAt(sort: Desc)])
-  @@index([tierId])
-  @@index([bundleId])
-
-  // Backref to per-benefit fulfilment rows. Seeded on activation; the
-  // admin Benefit-fulfilment dashboard groups by status across all
-  // adoptions.
-  benefits        AdoptionBenefit[]
+  @@index([status, showOnWall, startedAt(sort: Desc)])
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Per-adoption tier benefit fulfilment
-// ────────────────────────────────────────────────────────────────────────────
-//
-// One row per (Adoption, benefitKey). Seeded automatically when an
-// Adoption activates — every entry in the tier's catalog
-// (packages/constants/src/benefits.ts) becomes a row, starting in either
-// 'pending' (manual workflow) or 'fulfilled' (auto: digital cert, story
-// page, donor wall, home-region pairing).
-//
-// The admin "Benefits" resource groups by status + category so finance /
-// curator staff have a unified to-do list across all adoptions.
+/// Favourites leaderboard vote. One row per (plant, visitor): re-voting is
+/// idempotent — a visitor "favourites" a plant once. Anonymous by design:
+/// we store only a SHA-256 hash of IP+UA (same privacy model as PlantScan),
+/// never raw PII. The denormalised Plant.voteCount is the leaderboard sort key.
+model PlantVote {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  plantId     String   @db.Uuid
+  plant       Plant    @relation(fields: [plantId], references: [id], onDelete: Cascade)
+  /// SHA-256 of `${ip}|${userAgent}` — a per-visitor bucket, not a tracking key.
+  visitorHash String
+  /// UI locale at vote time, for "which signage drives favourites" analysis.
+  locale      String   @default("fi")
+  /// Optional kiosk / label code printed on the QR sticker.
+  kioskId     String?
+  votedAt     DateTime @default(now())
 
-enum BenefitCategory {
-  digital
-  physical
-  event
-  recurring
-}
-
-enum BenefitStatus {
-  pending
-  in_progress
-  fulfilled
-  cancelled
-  not_applicable
-}
-
-model AdoptionBenefit {
-  id                  String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  adoptionId          String           @db.Uuid
-  adoption            Adoption         @relation(fields: [adoptionId], references: [id], onDelete: Cascade)
-
-  benefitKey          String
-  category            BenefitCategory
-  labelSnapshot       String
-  donorLabelSnapshot  String?
-
-  status              BenefitStatus    @default(pending)
-
-  shippingAddress     Json?
-  trackingNumber      String?
-  shippedAt           DateTime?
-  deliveredAt         DateTime?
-
-  eventName           String?
-  eventDate           DateTime?
-  rsvpStatus          String?
-  rsvpAt              DateTime?
-
-  lastSentAt          DateTime?
-  nextDueAt           DateTime?
-
-  notes               String?
-
-  fulfilledByUserId   String?          @db.Uuid
-  fulfilledAt         DateTime?
-
-  createdAt           DateTime         @default(now())
-  updatedAt           DateTime         @updatedAt
-
-  @@unique([adoptionId, benefitKey])
-  @@index([adoptionId])
-  @@index([status])
-  @@index([category, status])
-  @@index([nextDueAt])
-}
-
-model GiftCode {
-  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  code            String   @unique // short human-friendly e.g. "ROOTED-7Q3K-AB42"
-  redeemedAt      DateTime?
-  expiresAt       DateTime
-  adoption        Adoption?
-
-  createdAt       DateTime @default(now())
-}
-
-model Plaque {
-  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  adoptionId      String   @unique @db.Uuid
-  adoption        Adoption @relation(fields: [adoptionId], references: [id], onDelete: Cascade)
-  engravedText    String
-  status          String   @default("requested") // requested | engraving | installed
-  installedAt     DateTime?
-  installedByUserId String? @db.Uuid
-  photoUrl        String?
-  notes           String?
-
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  @@unique([plantId, visitorHash])
+  @@index([plantId])
+  @@index([votedAt(sort: Desc)])
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -618,16 +463,16 @@ model Payment {
   // provider as their idempotency key. Survives retries and reconciliation.
   orderId         String   @unique
 
-  adoptionId      String?  @db.Uuid
-  adoption        Adoption? @relation(fields: [adoptionId], references: [id])
+  donationId      String?  @db.Uuid
+  donation        Donation? @relation(fields: [donationId], references: [id])
 
   donorId         String   @db.Uuid
   donor           User     @relation(fields: [donorId], references: [id])
 
   provider        PaymentProvider
-  providerCustomerId String? // stripe customer id / mobilepay agreement id
-  providerPaymentRef String?  // stripe payment_intent / mobilepay charge id
-  providerSessionId String?   // stripe checkout session id / mobilepay redirect id
+  providerCustomerId String? // reserved (token / agreement id) — unused for one-time gifts
+  providerPaymentRef String?  // paytrail transactionId / mobilepay charge id / bank RF ref
+  providerSessionId String?   // paytrail transactionId / mobilepay redirect id
 
   amountCents     Int
   currency        String   @default("EUR")
@@ -658,7 +503,7 @@ model Payment {
   //   scan.
   // * (provider, providerPaymentRef) — webhook lookups (already there).
   @@index([donorId, status, receivedAt(sort: Desc)])
-  @@index([adoptionId])
+  @@index([donationId])
   @@index([provider, providerPaymentRef])
   @@index([status, receivedAt])
 }

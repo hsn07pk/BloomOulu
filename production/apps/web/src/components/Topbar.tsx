@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 import { getSession } from '../lib/session';
-import CartBadge from './CartBadge.client';
 import PrimaryNav from './PrimaryNav.client';
 import { LangSwitcher } from './LangSwitcher.client';
 
@@ -35,7 +34,6 @@ export async function Topbar({ locale }: { locale: string }) {
         </Link>
         <PrimaryNav />
         <div className="topbar-right">
-          <CartBadge locale={locale} />
           <LangSwitcher locale={locale} />
           {session.user ? (
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginLeft: 8 }}>

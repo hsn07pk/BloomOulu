@@ -13,7 +13,8 @@ export interface PlantIndexItem {
   redListStatus: string;
   bloomSeason: string;
   bloomWindow?: string | null;
-  adopterCount?: number;
+  donorCount?: number;
+  voteCount?: number;
   primaryImage?: { url: string; altEn: string; altFi: string; altSv: string } | null;
   taxon?: { latinName: string; family?: string } | null;
 }

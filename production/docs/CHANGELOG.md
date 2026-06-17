@@ -7,6 +7,7 @@ write-up that landed alongside the PR.
 
 | PR | Merged | Commit | Title | Handover doc |
 |---|---|---|---|---|
+| [#7](https://github.com/hsn07pk/BloomOulu/pull/7) | 2026-06-17 | _pending_ | donations: replace adopt-a-plant (tiers, perks, plaques, recurring billing, gift codes, dunning) with one-time donations + a favourites/votes leaderboard; payment rails kept, now one-time only | — |
 | [#6](https://github.com/hsn07pk/BloomOulu/pull/6) | 2026-05-24 | _pending_ | plant detail: per-plant engagement stats | _shipped alongside [stats-roadmap.md](handover-files/stats-roadmap.md)_ |
 | [#5](https://github.com/hsn07pk/BloomOulu/pull/5) | 2026-05-24 | `703ebda` | homepage: live engagement stats + public stats roadmap doc | [stats-roadmap.md](handover-files/stats-roadmap.md) |
 | [#4](https://github.com/hsn07pk/BloomOulu/pull/4) | 2026-05-24 | `28e0c5e` | plants page: red-list fixes + bloom/adopted/family filters + page-number pagination + accurate counter + image error fallback | — |

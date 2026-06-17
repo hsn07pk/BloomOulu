@@ -22,8 +22,7 @@ class PublicStatsController {
    * site renders alongside the LIFE+ESCAPE conservation context tile:
    *
    *   plantCount     — active plants in the public catalogue
-   *   adoptionCount  — currently-active adoptions (donor-facing, excludes
-   *                    pending checkouts and cancelled rows)
+   *   donationCount  — settled (completed) donations
    *   raisedCents    — lifetime sum of settled donor payments, minor units
    *   asOf           — ISO timestamp so the client can show "as of …"
    *
@@ -33,9 +32,9 @@ class PublicStatsController {
    */
   @Get('homepage')
   async homepage() {
-    const [plantCount, adoptionCount, raisedAgg] = await Promise.all([
+    const [plantCount, donationCount, raisedAgg] = await Promise.all([
       this.prisma.plant.count({ where: { status: 'active' } }),
-      this.prisma.adoption.count({ where: { status: 'active' } }),
+      this.prisma.donation.count({ where: { status: 'completed' } }),
       this.prisma.payment.aggregate({
         _sum: { amountCents: true },
         where: { status: 'succeeded' },
@@ -43,58 +42,44 @@ class PublicStatsController {
     ]);
     return {
       plantCount,
-      adoptionCount,
+      donationCount,
       raisedCents: raisedAgg._sum.amountCents ?? 0,
       asOf: new Date().toISOString(),
     };
   }
 
   /**
-   * Donor wall — paginated list of adopters who opted in (showOnDonorWall=true)
-   * and whose adoption is active. Vulnerable+ tiers get prominent
-   * placement. Returns only display-safe fields: name (publicName takes
-   * precedence over donor.name to honour wishes), plant name, tier,
-   * dedication. No emails, no addresses, no payment info.
+   * Donor wall — list of donors who opted in (showOnWall=true, not anonymous)
+   * and whose donation has settled. Newest first. Returns only display-safe
+   * fields: name (publicName takes precedence over donor.name), the optional
+   * directed species, dedication, and the gift amount. No emails, no
+   * addresses, no payment info.
    */
   @Get('donor-wall')
   async donorWall() {
-    const adoptions = await this.prisma.adoption.findMany({
+    const donations = await this.prisma.donation.findMany({
       where: {
-        status: 'active',
-        showOnDonorWall: true,
-        // Anonymous gifts don't appear on the wall.
-        giftAnonymous: false,
+        status: 'completed',
+        showOnWall: true,
+        anonymous: false,
       },
-      orderBy: [
-        { tierId: 'asc' },
-        { startedAt: 'desc' },
-      ],
+      orderBy: [{ startedAt: 'desc' }],
       take: 500,
       include: {
         donor: { select: { name: true } },
         plant: { select: { slug: true, nameEn: true, nameFi: true, nameSv: true } },
-        tier: { select: { id: true, name: true, nameFi: true, nameSv: true, annualPriceCents: true } },
       },
     });
     return {
-      adoptions: adoptions.map((a) => ({
-        id: a.id,
-        displayName: a.publicName ?? a.donor.name ?? 'A friend of the Garden',
-        nickname: a.nickname,
-        dedication: a.dedication,
-        intent: a.intent,
-        memorialOf: a.memorialOf,
-        startedAt: a.startedAt?.toISOString() ?? null,
-        plant: a.plant,
-        tier: {
-          id: a.tier.id,
-          name: a.tier.name,
-          nameFi: a.tier.nameFi,
-          nameSv: a.tier.nameSv,
-          priceCents: a.tier.annualPriceCents,
-        },
+      donations: donations.map((d) => ({
+        id: d.id,
+        displayName: d.publicName ?? d.donor.name ?? 'A friend of the Garden',
+        dedication: d.dedication,
+        amountCents: d.amountCents,
+        startedAt: d.startedAt?.toISOString() ?? null,
+        plant: d.plant,
       })),
-      count: adoptions.length,
+      count: donations.length,
       asOf: new Date().toISOString(),
     };
   }

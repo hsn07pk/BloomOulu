@@ -52,14 +52,23 @@ function FlowerIcon(props: IconProps): JSX.Element {
   );
 }
 
-// Adopt — a sprout/seedling (matches the demo).
-function SproutIcon(props: IconProps): JSX.Element {
+// Donate — an open hand cradling a heart (a gift to the Garden).
+function HandHeartIcon(props: IconProps): JSX.Element {
   return (
     <Glyph {...props}>
-      <path d="M7 20h10" />
-      <path d="M10 20c5.5-2.5.8-6.4 3-10" />
-      <path d="M9.5 9.4c1.1.8 1.8 2.2 2.3 3.7-2 .4-3.5.4-4.8-.3-1.2-.6-2.3-1.9-3-4.2 2.8-.5 4.4 0 5.5.8Z" />
-      <path d="M14.1 6a7 7 0 0 0-1.1 4c1.9-.1 3.3-.6 4.3-1.4 1-1 1.6-2.3 1.7-4.6-2.7.1-4 1-4.9 2Z" />
+      <path d="M11 14h2a2 2 0 0 0 0-4h-3c-.6 0-1.1.2-1.5.6L3 16" />
+      <path d="m7 20 1.6-1.4c.4-.4.9-.6 1.5-.6h4c1.1 0 2.1-.4 2.9-1.2l4.3-4.1a2 2 0 0 0-2.75-2.91l-3.9 3.6" />
+      <path d="M2 15v6" />
+      <path d="M19.5 5.5a2.1 2.1 0 0 0-3-3l-.5.5-.5-.5a2.1 2.1 0 0 0-3 3L16 9Z" />
+    </Glyph>
+  );
+}
+
+// Favourites — a heart (the votes leaderboard).
+function HeartIcon(props: IconProps): JSX.Element {
+  return (
+    <Glyph {...props}>
+      <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7Z" />
     </Glyph>
   );
 }
@@ -88,7 +97,7 @@ function UserIcon(props: IconProps): JSX.Element {
   );
 }
 
-export type NavKey = 'home' | 'plants' | 'adopt' | 'ask' | 'garden';
+export type NavKey = 'home' | 'plants' | 'donate' | 'favourites' | 'ask' | 'garden';
 
 export interface NavItem {
   key: NavKey;
@@ -97,6 +106,9 @@ export interface NavItem {
   Icon: (props: IconProps) => JSX.Element;
   /** Shown in the desktop topbar? (Plants is mobile-only.) */
   inTopbar: boolean;
+  /** Shown in the mobile bottom tab bar? Defaults to true; Favourites is
+   *  desktop-only so the phone bar stays at five comfortable targets. */
+  inMobile?: boolean;
   /** Shorter label key (Nav namespace) for the cramped mobile tab bar; the
    *  full `key` label stays the accessible name via aria-label. */
   shortKey?: 'askShort';
@@ -105,7 +117,8 @@ export interface NavItem {
 export const NAV_ITEMS: readonly NavItem[] = [
   { key: 'home', seg: '', Icon: LeafIcon, inTopbar: true },
   { key: 'plants', seg: '/plants', Icon: FlowerIcon, inTopbar: false },
-  { key: 'adopt', seg: '/adopt', Icon: SproutIcon, inTopbar: true },
+  { key: 'donate', seg: '/donate', Icon: HandHeartIcon, inTopbar: true },
+  { key: 'favourites', seg: '/favourites', Icon: HeartIcon, inTopbar: true, inMobile: false },
   { key: 'ask', seg: '/ask', Icon: BotIcon, inTopbar: true, shortKey: 'askShort' },
   { key: 'garden', seg: '/garden', Icon: UserIcon, inTopbar: true },
 ];

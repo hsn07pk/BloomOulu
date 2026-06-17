@@ -16,6 +16,10 @@ production is the credentials in `.env`.
 - `scripts/register-vipps-webhook.sh` — once you have Vipps test
   credentials, fetches an access token + POSTs the webhook
   registration + writes the returned secret back into the overlay.
+- Automated suites: `donate-flow.e2e.test.ts` (donate → payment →
+  receipt) and the rewritten `tax-cert.test.ts` (annual donation
+  summary). The old `adopt-flow`, `dunning`, and `plaque` suites and
+  the Playwright `adopt` spec were removed with the tier model.
 
 Run `bash scripts/payment-test-up.sh` and the stack is live in ~60
 seconds. Re-run it any time — the overlay file is regenerated.
@@ -39,14 +43,14 @@ seconds. Re-run it any time — the overlay file is regenerated.
 
 1. `bash scripts/payment-test-up.sh` — prints the web tunnel URL
 2. Open the web URL → `/en/plants`
-3. Pick a plant → Adopt → **Card / Paytrail**
+3. Pick a plant → Donate → **Card / Paytrail**
 4. Real Paytrail hosted checkout opens
 5. Use card `4153 0139 9970 0321`, exp `11/26`, CVC `321` (happy path)
 6. 3DS auto-completes; Paytrail redirects to `/donate/complete`
 7. `/webhooks/paytrail` fires; HMAC verified; Payment marked
-   succeeded; Adoption activated; receipt queued
+   succeeded; Donation completed; receipt queued
 8. Check the result:
-   - Adoption: `/admin/resources/Adoption`
+   - Donation: `/admin/resources/Donation`
    - Receipt PDF + email: <http://localhost:8025> (MailHog)
    - Audit trail: `/admin/resources/AuditLog`
 
@@ -63,17 +67,17 @@ credentials into `.env.test-payments`, run
 
 1. Restart so the api picks up the credentials:
    `bash scripts/payment-test-down.sh && bash scripts/payment-test-up.sh`
-2. Open the web URL → Adopt → **MobilePay**
+2. Open the web URL → Donate → **MobilePay**
 3. MT app on your phone pops up; approve with PIN `1236`
-4. Browser redirects; webhook fires; adoption activates
+4. Browser redirects; webhook fires; donation completes
 
 ### Bank transfer
 
-1. Open the web URL → Adopt → **Bank transfer**
+1. Open the web URL → Donate → **Bank transfer**
 2. You land on `/donate/pay` with IBAN, BIC, RF reference, EPC069-12 QR
 3. As an admin, go to <http://localhost:4100/admin> → Reconciliation
 4. Upload a CSV row matching the RF reference + amount
-5. Payment flips to succeeded; adoption activates
+5. Payment flips to succeeded; donation completes
 
 ## Going from test to production
 
@@ -100,9 +104,8 @@ values. Zero code changes.
 + BANK_TRANSFER_WEBHOOK_SECRET=$(openssl rand -base64 32)
 ```
 
-The HMAC verifiers, tokenisation flow, MIT charge, refund handling,
-dunning ladder, renewal cron, disbursement bundling, and
-reconciliation paths are the same in test and production.
+The HMAC verifiers, refund handling, disbursements, and reconciliation
+paths are the same in test and production.
 
 ## Outstanding human-only items (carry these forward)
 

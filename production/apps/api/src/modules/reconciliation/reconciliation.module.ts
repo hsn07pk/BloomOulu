@@ -49,7 +49,11 @@ class ReconciliationController {
    */
   @Post('entries')
   async submitEntries(@CurrentUser() actor: AuthenticatedUser, @Body() rawBody: unknown) {
-    const body = EntriesSchema.parse(rawBody);
+    const parsed = EntriesSchema.safeParse(rawBody);
+    if (!parsed.success) {
+      throw new BadRequestException(parsed.error.flatten());
+    }
+    const body = parsed.data;
     const results: Array<{
       reference: string;
       matched: boolean;

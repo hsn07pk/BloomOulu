@@ -25,16 +25,10 @@ export async function processReceipt(job: Job<ReceiptJob>): Promise<void> {
     where: { id: paymentId },
     include: {
       donor: { select: { id: true, email: true, name: true, locale: true, postalAddress: true } },
-      // Pull every Adoption field the receipt renderer might surface:
-      // intent, billing cadence, nickname, dedication, gift / memorial
-      // context, co-adopters, home region. Receipt PDF only renders the
-      // ones with content, so this fans out cheaply.
-      adoption: {
-        include: {
-          plant: true,
-          tier: true,
-          giftRecipient: { select: { name: true, email: true } },
-        },
+      // The optional directed species + the donor's public dedication are
+      // the only personalisation a one-time donation receipt surfaces.
+      donation: {
+        include: { plant: true },
       },
     },
   });
@@ -54,12 +48,14 @@ export async function processReceipt(job: Job<ReceiptJob>): Promise<void> {
     if (blob) return; // happy path: receipt + blob both present, nothing to do.
   }
 
-  const number = existing?.number ?? (await nextReceiptNumber());
+  // Allocate the gapless number AND reserve the Receipt row in ONE
+  // advisory-locked transaction. Holding the lock across the COUNT + the
+  // unique INSERT (to commit) means two concurrent receipt workers — the
+  // queue runs concurrency 4 — can never allocate the same number. The PDF
+  // is rendered after the number is reserved, then attached.
+  const number = await reserveReceiptNumber(payment);
 
-  const adoption = payment.adoption;
-  const coAdoptersRaw = (adoption?.coAdopters ?? null) as
-    | Array<{ name?: string | null; email?: string | null }>
-    | null;
+  const donation = payment.donation;
   const pdfBuffer = await renderReceiptPdf({
     number,
     locale: payment.donor.locale,
@@ -71,40 +67,18 @@ export async function processReceipt(job: Job<ReceiptJob>): Promise<void> {
     vatCents: payment.vatCents,
     netCents: payment.netCents,
     paidAt: payment.receivedAt ?? new Date(),
-    plantName: adoption?.plant?.nameEn ?? null,
-    tierName: adoption?.tier?.name ?? null,
+    plantName: donation?.plant?.nameEn ?? null,
     orderId: payment.orderId,
-    // ── Personalisation passthrough ──────────────────────────────────
-    intent: adoption?.intent ?? undefined,
-    billingInterval: adoption?.billingInterval ?? undefined,
-    recurring: adoption?.recurring ?? undefined,
-    nickname: adoption?.nickname ?? null,
-    dedication: adoption?.dedication ?? null,
-    homeRegion: adoption?.homeRegion ?? null,
-    giftRecipientName: adoption?.giftRecipient?.name ?? null,
-    giftRecipientEmail: adoption?.giftRecipient?.email ?? null,
-    memorialOf: adoption?.memorialOf ?? null,
-    coAdopters: Array.isArray(coAdoptersRaw) ? coAdoptersRaw : null,
+    dedication: donation?.dedication ?? null,
   });
 
   const key = `receipts/${number}.pdf`;
   const pdfUrl = await uploadToS3({ key, body: pdfBuffer, contentType: 'application/pdf' });
   const pdfSha256 = createHash('sha256').update(pdfBuffer).digest('hex');
 
-  await prisma.receipt.upsert({
+  await prisma.receipt.update({
     where: { paymentId },
-    create: {
-      number,
-      kind: 'donation',
-      donorId: payment.donorId,
-      paymentId,
-      amountCents: payment.amountCents,
-      currency: payment.currency,
-      vatLineJson: [{ key: 'donation', amount: payment.amountCents, vat: 0 }] as any,
-      pdfUrl,
-      pdfSha256,
-    },
-    update: { pdfUrl, pdfSha256 },
+    data: { pdfUrl, pdfSha256 },
   });
 
   await enqueueEmail({
@@ -114,7 +88,7 @@ export async function processReceipt(job: Job<ReceiptJob>): Promise<void> {
     variables: {
       donorName: payment.donor.name ?? 'Friend',
       amount: (payment.amountCents / 100).toFixed(2),
-      plantName: payment.adoption?.plant?.nameEn ?? '',
+      plantName: payment.donation?.plant?.nameEn ?? '',
       receiptNumber: number,
       receiptUrl: pdfUrl,
     },
@@ -123,20 +97,46 @@ export async function processReceipt(job: Job<ReceiptJob>): Promise<void> {
 }
 
 /**
- * Gapless, year-prefixed sequence. Uses a DB advisory lock so two workers
- * never allocate the same number.
+ * Allocate a gapless, year-prefixed receipt number and reserve the Receipt
+ * row in a single advisory-locked transaction. The lock is held across the
+ * COUNT and the unique INSERT (until commit), so concurrent workers serialise
+ * and can never mint the same number. Idempotent: if a row already exists for
+ * this payment (retry / resend / earlier PDF-render failure), its number is
+ * reused and no new row is created.
  */
-async function nextReceiptNumber(): Promise<string> {
+async function reserveReceiptNumber(payment: {
+  id: string;
+  donorId: string;
+  amountCents: number;
+  currency: string;
+}): Promise<string> {
   const year = new Date().getFullYear();
   const prefix = (await getSetting('receipts.prefix', '"BLO"')).replace(/"/g, '');
   return await prisma.$transaction(async (tx) => {
     await tx.$executeRawUnsafe(`SELECT pg_advisory_xact_lock(91824)`);
-    const rows = await tx.$queryRawUnsafe<Array<{ count: bigint }>>(
+    const row = await tx.receipt.findUnique({
+      where: { paymentId: payment.id },
+      select: { number: true },
+    });
+    if (row) return row.number;
+    const counted = await tx.$queryRawUnsafe<Array<{ count: bigint }>>(
       `SELECT COUNT(*) AS count FROM "Receipt" WHERE number LIKE $1`,
       `${prefix}-${year}-%`,
     );
-    const n = Number(rows[0]?.count ?? 0n) + 1;
-    return `${prefix}-${year}-${String(n).padStart(6, '0')}`;
+    const n = Number(counted[0]?.count ?? 0n) + 1;
+    const number = `${prefix}-${year}-${String(n).padStart(6, '0')}`;
+    await tx.receipt.create({
+      data: {
+        number,
+        kind: 'donation',
+        donorId: payment.donorId,
+        paymentId: payment.id,
+        amountCents: payment.amountCents,
+        currency: payment.currency,
+        vatLineJson: [{ key: 'donation', amount: payment.amountCents, vat: 0 }] as any,
+      },
+    });
+    return number;
   });
 }
 

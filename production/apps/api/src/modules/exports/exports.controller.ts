@@ -100,7 +100,7 @@ export class ExportsController {
       'microLat',
       'microLng',
       'gardenZone',
-      'adopterCount',
+      'donorCount',
     ];
     const lines = [headers.join(',')];
     for (const p of rows) {
@@ -121,7 +121,7 @@ export class ExportsController {
           p.microLat?.toString() ?? '',
           p.microLng?.toString() ?? '',
           p.gardenZone ?? '',
-          String(p.adopterCount),
+          String(p.donorCount),
         ]
           .map(csvCell)
           .join(','),

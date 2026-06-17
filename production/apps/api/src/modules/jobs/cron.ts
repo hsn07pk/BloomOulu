@@ -15,7 +15,6 @@
 import { Queue } from 'bullmq';
 import {
   QUEUE_RECONCILIATION,
-  QUEUE_RENEWAL,
   QUEUE_KIOSK_WATCHDOG,
   QUEUE_RAG_INGEST,
   QUEUE_TAX_CERT_ANNUAL,
@@ -23,8 +22,6 @@ import {
   QUEUE_AUDIT_GAP,
   QUEUE_ENRICHMENT_SWEEP,
   QUEUE_DISBURSEMENT_MONTHLY,
-  QUEUE_RECURRING_BENEFITS,
-  QUEUE_CSR_QUARTERLY,
   QUEUE_RETENTION,
   defaultJobOpts,
 } from './queues.js';
@@ -36,13 +33,6 @@ export async function registerCronJobs() {
   await recon.upsertJobScheduler('daily-3am', { pattern: '0 3 * * *' }, {
     name: 'daily',
     data: { windowHours: 24 * 30 },
-    opts: defaultJobOpts,
-  });
-
-  const renew = new Queue(QUEUE_RENEWAL, { connection });
-  await renew.upsertJobScheduler('daily-4am', { pattern: '0 4 * * *' }, {
-    name: 'daily',
-    data: {},
     opts: defaultJobOpts,
   });
 
@@ -119,25 +109,6 @@ export async function registerCronJobs() {
       opts: defaultJobOpts,
     });
   }
-
-  // Daily 06:00 UTC — sweep AdoptionBenefit rows where category=recurring
-  // and nextDueAt <= now. Sends the per-benefitKey email + bumps cadence.
-  const recurring = new Queue(QUEUE_RECURRING_BENEFITS, { connection });
-  await recurring.upsertJobScheduler('daily-0600', { pattern: '0 6 * * *' }, {
-    name: 'sweep',
-    data: {},
-    opts: defaultJobOpts,
-  });
-
-  // 1st of each month, 07:00 UTC — fire the CSR quarterly impact report
-  // sweep. Processor itself decides which Corporate adoptions are due
-  // (every 3 months from startedAt).
-  const csr = new Queue(QUEUE_CSR_QUARTERLY, { connection });
-  await csr.upsertJobScheduler('monthly-1st-0700', { pattern: '0 7 1 * *' }, {
-    name: 'sweep',
-    data: {},
-    opts: defaultJobOpts,
-  });
 
   // Daily 03:45 UTC — GDPR retention sweep (storage limitation, Art.
   // 5(1)(e)). Pseudonymises AskMessage past 12 months, prunes non-financial

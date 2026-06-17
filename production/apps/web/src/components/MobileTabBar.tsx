@@ -23,7 +23,7 @@ export function MobileTabBar(): JSX.Element {
 
   return (
     <nav className="mobile-tabs" aria-label="primary">
-      {NAV_ITEMS.map(({ key, seg, Icon, shortKey }) => (
+      {NAV_ITEMS.filter((item) => item.inMobile !== false).map(({ key, seg, Icon, shortKey }) => (
         <Link
           key={key}
           href={`/${locale}${seg}`}

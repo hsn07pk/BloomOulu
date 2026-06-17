@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import type { TierId } from './tiers.js';
 
 /**
  * IUCN Red List status codes — full set as stored in Plant.redListStatus.
@@ -28,13 +27,20 @@ export const PUBLIC_RED_LIST_FILTER: readonly RedListStatus[] = [
   'LC',
 ] as const;
 
-/**
- * Suggest the adoption tier that best matches a plant's Red List status.
- * Rarer plants get the higher tier, so a donor browsing an Endangered
- * plant is gently nudged toward the matching donation level.
- */
-export function suggestedTierId(status: string | null | undefined): TierId {
-  if (status === 'CR' || status === 'EN') return 'endangered';
-  if (status === 'VU') return 'vulnerable';
-  return 'rooted';
+/** Rarer plants sort first on the donate / favourites surfaces. */
+const RED_LIST_PRIORITY: Record<string, number> = {
+  CR: 0,
+  EN: 1,
+  VU: 2,
+  NT: 3,
+  LC: 4,
+  DD: 5,
+  NA: 6,
+  EX: 7,
+};
+
+/** Lower number = rarer / higher conservation priority. Unknown → last. */
+export function redListPriority(status: string | null | undefined): number {
+  if (!status) return 99;
+  return RED_LIST_PRIORITY[status] ?? 99;
 }

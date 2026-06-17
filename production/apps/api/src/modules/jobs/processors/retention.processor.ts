@@ -109,8 +109,8 @@ export async function processRetention(_job: Job) {
       updatedAt: { lt: inactiveCutoff },
       // No successful payment inside the retention window.
       payments: { none: { status: 'succeeded', createdAt: { gte: inactiveCutoff } } },
-      // No still-active / paused adoption (those are live relationships).
-      adoptions: { none: { status: { in: ['active', 'paused', 'pending'] } } },
+      // No in-flight donation checkout (a live relationship).
+      donations: { none: { status: 'pending' } },
     },
     select: { id: true },
     take: 200,

@@ -15,7 +15,6 @@
  * Server component — runs entirely on the server so the signature
  * verification never leaks the merchant secret to the browser.
  */
-import { getTranslations } from 'next-intl/server';
 import { getInternalApiUrl } from '@bloomoulu/constants';
 import { curatorEmail } from '../../../../lib/contact';
 
@@ -33,43 +32,43 @@ type Outcome =
 
 const COPY = {
   en: {
-    okTitle: 'Thank you — your adoption is live!',
-    okLead: 'Payment confirmed. Every plant in your cart has been activated; you can revisit them any time from My Garden.',
+    okTitle: 'Thank you — your gift is in!',
+    okLead: 'Payment confirmed. Your donation supports the Garden’s conservation work; you can see it any time in My Garden.',
     okCta: 'Go to My Garden →',
     okSecondary: 'Back to the collection',
     pendingTitle: 'Confirming your payment…',
-    pendingLead: 'Paytrail is still confirming your transfer. Refresh this page in a moment — once it’s through we’ll activate your adoptions automatically.',
+    pendingLead: 'Paytrail is still confirming your transfer. Refresh this page in a moment — once it’s through we’ll record your donation automatically.',
     failTitle: 'Payment didn’t complete',
-    failLead: 'No charge was made. Your cart is still there if you’d like to try a different method.',
-    failCta: 'Back to my cart',
+    failLead: 'No charge was made. You can try again with a different method whenever you like.',
+    failCta: 'Back to donate',
     invalidTitle: 'Hmm — that link doesn’t look quite right.',
     invalidLead: 'We couldn’t verify the payment confirmation. If you completed a payment, please email {email} with the time and amount and we’ll sort it.',
     invalidCta: 'Back to home',
   },
   fi: {
-    okTitle: 'Kiitos — adoptiosi on aktiivinen!',
-    okLead: 'Maksu vahvistettu. Jokainen korissasi ollut kasvi on aktivoitu, ja näet ne aina Omasta puutarhastani.',
+    okTitle: 'Kiitos — lahjoituksesi on perillä!',
+    okLead: 'Maksu vahvistettu. Lahjoituksesi tukee puutarhan suojelutyötä, ja näet sen aina Omasta puutarhastani.',
     okCta: 'Siirry Omaan puutarhaani →',
     okSecondary: 'Takaisin kokoelmaan',
     pendingTitle: 'Vahvistamme maksuasi…',
-    pendingLead: 'Paytrail vahvistaa siirtoasi vielä. Päivitä sivu hetken kuluttua — heti kun se on käsitelty, aktivoimme adoptiosi automaattisesti.',
+    pendingLead: 'Paytrail vahvistaa siirtoasi vielä. Päivitä sivu hetken kuluttua — heti kun se on käsitelty, kirjaamme lahjoituksesi automaattisesti.',
     failTitle: 'Maksu ei mennyt läpi',
-    failLead: 'Veloitusta ei tehty. Korisi on yhä tallessa, voit halutessasi yrittää eri tavalla.',
-    failCta: 'Takaisin koriin',
+    failLead: 'Veloitusta ei tehty. Voit halutessasi yrittää uudelleen eri maksutavalla.',
+    failCta: 'Takaisin lahjoittamaan',
     invalidTitle: 'Hmm — tämä linkki näyttää oudolta.',
     invalidLead: 'Emme voineet vahvistaa maksun kuittausta. Jos teit maksun, lähetä sähköpostia {email} ja kerro aika ja summa, niin selvitämme.',
     invalidCta: 'Takaisin etusivulle',
   },
   sv: {
-    okTitle: 'Tack — din adoption är aktiv!',
-    okLead: 'Betalningen bekräftad. Varje växt i din korg har aktiverats; du hittar dem alltid i Min trädgård.',
+    okTitle: 'Tack — din gåva är mottagen!',
+    okLead: 'Betalningen bekräftad. Din donation stöder trädgårdens bevarandearbete; du ser den alltid i Min trädgård.',
     okCta: 'Gå till Min trädgård →',
     okSecondary: 'Tillbaka till samlingen',
     pendingTitle: 'Vi bekräftar din betalning…',
-    pendingLead: 'Paytrail bekräftar fortfarande din överföring. Uppdatera sidan om en stund — så snart den är klar aktiverar vi dina adoptioner automatiskt.',
+    pendingLead: 'Paytrail bekräftar fortfarande din överföring. Uppdatera sidan om en stund — så snart den är klar registrerar vi din donation automatiskt.',
     failTitle: 'Betalningen genomfördes inte',
-    failLead: 'Inget belopp drogs. Din korg finns kvar om du vill prova en annan metod.',
-    failCta: 'Tillbaka till min korg',
+    failLead: 'Inget belopp drogs. Du kan prova igen med en annan metod när du vill.',
+    failCta: 'Tillbaka till att donera',
     invalidTitle: 'Hmm — den länken ser inte rätt ut.',
     invalidLead: 'Vi kunde inte verifiera betalningens bekräftelse. Om du genomförde en betalning, mejla {email} med tid och belopp så hjälper vi dig.',
     invalidCta: 'Tillbaka till startsidan',
@@ -85,7 +84,6 @@ export default async function DonateCompletePage({
 }) {
   const { locale } = await params;
   const sp = await searchParams;
-  await getTranslations({ locale, namespace: 'Adopt' });
   const t = COPY[(locale as keyof typeof COPY) in COPY ? (locale as keyof typeof COPY) : 'en'];
 
   const status = typeof sp['checkout-status'] === 'string' ? sp['checkout-status'] : null;
@@ -210,7 +208,7 @@ export default async function DonateCompletePage({
             {t.failLead}
           </p>
           <p style={{ marginTop: 32 }}>
-            <a href={`/${locale}/cart`} className="btn btn-primary">
+            <a href={`/${locale}/donate`} className="btn btn-primary">
               {t.failCta}
             </a>
           </p>

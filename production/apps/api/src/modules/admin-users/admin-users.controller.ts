@@ -63,7 +63,7 @@ export class AdminUsersController {
         emailVerified: true,
         createdAt: true,
         ouluUid: true,
-        _count: { select: { adoptions: true, payments: true, savedPlants: true } },
+        _count: { select: { donations: true, payments: true, savedPlants: true } },
       },
     });
     const hasMore = rows.length > limit;

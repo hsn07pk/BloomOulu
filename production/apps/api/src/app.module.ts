@@ -12,8 +12,9 @@ import { PrismaModule } from './modules/prisma/prisma.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { UsersModule } from './modules/users/users.module.js';
 import { PlantsModule } from './modules/plants/plants.module.js';
-import { AdoptionsModule } from './modules/adoptions/adoptions.module.js';
-import { AdoptionLifecycleModule } from './modules/adoptions/adoption-lifecycle.module.js';
+import { DonationsModule } from './modules/donations/donations.module.js';
+import { DonationLifecycleModule } from './modules/donations/donation-lifecycle.module.js';
+import { VotesModule } from './modules/votes/votes.module.js';
 import { PaymentsModule } from './modules/payments/payments.module.js';
 import { WebhooksModule } from './modules/webhooks/webhooks.module.js';
 import { ReceiptsModule } from './modules/receipts/receipts.module.js';
@@ -26,7 +27,6 @@ import { SettingsModule } from './modules/settings/settings.module.js';
 import { ReconciliationModule } from './modules/reconciliation/reconciliation.module.js';
 import { DisbursementsModule } from './modules/disbursements/disbursements.module.js';
 import { ContentModule } from './modules/content/content.module.js';
-import { TiersModule } from './modules/tiers/tiers.module.js';
 import { NarrationModule } from './modules/narration/narration.module.js';
 import { MeModule } from './modules/me/me.module.js';
 import { QuizModule } from './modules/quiz/quiz.module.js';
@@ -94,8 +94,9 @@ const isProd = process.env.NODE_ENV === 'production';
     AuthModule,
     UsersModule,
     PlantsModule,
-    AdoptionLifecycleModule,
-    AdoptionsModule,
+    DonationLifecycleModule,
+    DonationsModule,
+    VotesModule,
     PaymentsModule,
     WebhooksModule,
     ReceiptsModule,
@@ -106,7 +107,6 @@ const isProd = process.env.NODE_ENV === 'production';
     ReconciliationModule,
     DisbursementsModule,
     ContentModule,
-    TiersModule,
     NarrationModule,
     MeModule,
     QuizModule,

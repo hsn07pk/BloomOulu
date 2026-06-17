@@ -2,7 +2,7 @@
  * Configure — single hub page for every system-setting panel.
  *
  * Replaces the old eight individual sidebar entries (Garden identity,
- * Payment providers, Adoption, Curator & Ask, Enrichment worker, QR
+ * Payment providers, Donations, Curator & Ask, Enrichment worker, QR
  * labels, Translations, All settings) with one page + a horizontal tab
  * bar. Same panels, friendlier navigation: a non-technical curator sees
  * a single "Configure" link in the sidebar and tabs across the top.
@@ -14,7 +14,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import ConfigForm from './ConfigForm';
 import { schema as identitySchema } from './GardenIdentity';
 import { schema as paymentsSchema } from './PaymentProviders';
-import { schema as adoptionSchema } from './AdoptionConfig';
+import { schema as donationSchema } from './AdoptionConfig';
 import { schema as curatorSchema } from './CuratorConfig';
 import { schema as enrichmentSchema } from './EnrichmentConfig';
 import { schema as qrLabelSchema } from './QrLabelConfig';
@@ -25,7 +25,7 @@ import { Page, PageHeader, Tabs } from './shared/ui';
 type TabId =
   | 'identity'
   | 'payments'
-  | 'adoption'
+  | 'donation'
   | 'curator'
   | 'enrichment'
   | 'qr'
@@ -35,7 +35,7 @@ type TabId =
 const TAB_DEFS: Array<{ value: TabId; label: string; hint: string }> = [
   { value: 'identity', label: 'Garden identity', hint: 'Name, IBAN, BIC, VAT id, address — everything that signs off as the Garden.' },
   { value: 'payments', label: 'Payments', hint: 'Toggle Paytrail / MobilePay / bank-transfer and paste merchant credentials.' },
-  { value: 'adoption', label: 'Adoption flow', hint: 'Billing intervals, gift-wrap pricing, dedication limits, plaque tiers.' },
+  { value: 'donation', label: 'Donations', hint: 'Suggested amounts, default, custom-amount toggle, min/max, dedication limit.' },
   { value: 'curator', label: 'AskTheGarden', hint: 'Curator inbox + confidence floor for the donor Q&A.' },
   { value: 'enrichment', label: 'Enrichment worker', hint: '24/7 open-data backfill cadence + per-field auto-apply policy.' },
   { value: 'qr', label: 'QR label print', hint: 'Print dimensions, fields next to the QR, kiosk tracking embed.' },
@@ -72,8 +72,8 @@ const ConfigurePage: React.FC = () => {
         return <ConfigForm schema={identitySchema} />;
       case 'payments':
         return <ConfigForm schema={paymentsSchema} />;
-      case 'adoption':
-        return <ConfigForm schema={adoptionSchema} />;
+      case 'donation':
+        return <ConfigForm schema={donationSchema} />;
       case 'curator':
         return <ConfigForm schema={curatorSchema} />;
       case 'enrichment':

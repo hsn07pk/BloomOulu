@@ -3,7 +3,7 @@
  * Browser-side real-time sync. Opens a single SSE connection to the API
  * `/v1/events` channel and triggers `router.refresh()` whenever the
  * admin panel publishes a change. The result: any open tab (home,
- * adopt, plant detail, AskTheGarden, My Garden, kiosk) re-renders its
+ * donate, plant detail, AskTheGarden, My Garden, kiosk) re-renders its
  * Server Components against fresh data within ~100 ms of an admin
  * clicking Save — no hard refresh required.
  *
@@ -57,7 +57,6 @@ export default function LiveSync({ apiUrl }: Props) {
       es.addEventListener('admin.changed', onChange);
       es.addEventListener('settings.updated', onChange);
       es.addEventListener('plants.updated', onChange);
-      es.addEventListener('tiers.updated', onChange);
       es.addEventListener('corpus.updated', onChange);
       es.addEventListener('error', () => {
         es?.close();

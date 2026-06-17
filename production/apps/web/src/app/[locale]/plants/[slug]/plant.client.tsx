@@ -4,7 +4,7 @@
  * Plant detail — ported from demo-design/screens-plant.jsx.
  *
  * Captures the full visitor flow: QR scan → mode switch (adult/kid/school) →
- * tabbed deep-dives → adopt
+ * tabbed deep-dives → donate
  * CTAs → similar plants. Map + quiz are stubbed as follow-ups (DB doesn't
  * yet seed microLat/microLng for every plant).
  */
@@ -18,93 +18,11 @@ import { useTranslations } from 'next-intl';
 import qrcode from 'qrcode-generator';
 import {
   getBrowserApiUrl,
-  pickInitialInterval,
-  suggestedTierId as sharedSuggestedTierId,
-  type BillingInterval,
   type Locale as SharedLocale,
-  type TierId,
 } from '@bloomoulu/constants';
-import { useCart } from '../../../../lib/cart.client';
 import { isAdoptable, nonAdoptableReason } from '../../../../lib/adoption';
 import { PlantStats } from '../../../../components/PlantStats';
-
-/** Secondary "Add to cart" CTA so visitors can queue multiple plants
- *  before checkout. The primary adopt path on this page routes the donor
- *  directly into the /adopt wizard (single canonical adoption flow).
- *  Toggles between "Add to cart" and "✓ In cart" with a "View cart" link
- *  so the visitor can keep browsing without losing the selection. */
-function AddToCartButton({
-  slug,
-  tierId,
-  locale,
-}: {
-  slug: string;
-  tierId: TierId;
-  locale: string;
-}) {
-  const { add, has, hydrated } = useCart();
-  const baseStyle: React.CSSProperties = {
-    marginTop: 12,
-    background: 'transparent',
-    border: '1px solid var(--line)',
-    color: 'var(--forest-deep)',
-  };
-  if (!hydrated) {
-    return (
-      <button
-        type="button"
-        disabled
-        className="btn btn-block"
-        style={{ ...baseStyle, opacity: 0.6 }}
-      >
-        🌱 …
-      </button>
-    );
-  }
-  const inCart = has(slug);
-  if (inCart) {
-    return (
-      <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-        <button
-          type="button"
-          disabled
-          className="btn btn-block"
-          style={{
-            flex: 1,
-            background: 'var(--sage-pale)',
-            color: 'var(--forest-deep)',
-            border: '1px solid var(--forest-mid)',
-            cursor: 'default',
-          }}
-        >
-          ✓ {locale === 'fi' ? 'Lisätty koriin' : locale === 'sv' ? 'I korgen' : 'In your cart'}
-        </button>
-        <Link
-          href={`/${locale}/cart`}
-          className="btn btn-secondary"
-          style={{ whiteSpace: 'nowrap' }}
-        >
-          {locale === 'fi' ? 'Koriin →' : locale === 'sv' ? 'Till korg →' : 'View cart →'}
-        </Link>
-      </div>
-    );
-  }
-  return (
-    <button
-      type="button"
-      onClick={() => add(slug, tierId)}
-      className="btn btn-block"
-      style={baseStyle}
-    >
-      🌱{' '}
-      {locale === 'fi'
-        ? 'Lisää koriin (adoptoi useita)'
-        : locale === 'sv'
-          ? 'Lägg i korg (adoptera flera)'
-          : 'Add to cart (adopt several)'}
-    </button>
-  );
-}
+import { VoteButton } from '../../favourites/vote-button.client';
 
 // Leaflet bundles browser APIs (window) — never SSR. Loaded lazily so the
 // page-chunk stays small if the user never opens the map modal.
@@ -148,17 +66,18 @@ interface Plant {
   microLng?: number | string | null;
   story: Record<string, string>;
   quickFacts?: Array<{ labelKey: string; value: string }> | unknown;
-  adopterCount?: number;
+  donorCount?: number;
+  voteCount?: number;
   fundedCents?: number;
   targetCents?: number;
   // Engagement counters (denormalised on Plant) + on-demand aggregate
-  // for the "Last adopted N days ago" tile. All feed the PlantStats
+  // for the "Last donated N days ago" tile. All feed the PlantStats
   // card in the sticky right column.
   viewCount?: number;
   scanCount?: number;
   saveCount?: number;
   askCount?: number;
-  lastAdoptedAt?: string | null;
+  lastDonatedAt?: string | null;
   primaryImage?: { url: string; altEn: string; altFi: string; altSv: string; attribution?: string } | null;
   images?: Array<{ id: string; url: string; altEn: string; altFi: string; altSv: string; attribution?: string }>;
   taxon?: { latinName: string; family: string } | null;
@@ -172,38 +91,18 @@ interface SimilarPlant {
   nameFi: string;
   nameSv: string;
   redListStatus: string;
-  adopterCount?: number;
+  donorCount?: number;
   primaryImage?: { url: string; altEn: string; altFi: string; altSv: string } | null;
   taxon?: { latinName: string } | null;
-}
-
-interface Tier {
-  id: TierId;
-  name: string;
-  nameFi: string;
-  nameSv: string;
-  annualPriceCents: number;
-  monthlyPriceCents?: number | null;
-  sortOrder?: number;
 }
 
 interface PlantPageClientProps {
   plant: Plant;
   similarPlants: SimilarPlant[];
-  tiers: Tier[];
-  /** Whitelist of billing intervals the donor sees. Set in /admin →
-   *  SystemSetting → adoption.intervalsEnabled. Defaults to
-   *  monthly + one_time; annual hidden until enabled. */
-  intervalsEnabled: readonly BillingInterval[];
   locale: Locale;
   apiUrl: string;
   signedIn?: boolean;
 }
-
-// Red-list → suggested tier mapping lives in @bloomoulu/constants/redlist;
-// alias here so the local code reads naturally without exposing the
-// "shared" naming everywhere.
-const suggestedTierId = sharedSuggestedTierId;
 
 function localisedName(p: { nameEn: string; nameFi: string; nameSv: string }, locale: string): string {
   if (locale === 'fi') return p.nameFi || p.nameEn;
@@ -280,7 +179,7 @@ function makeQrDataUrl(text: string, size = 280): string {
 
 const SAVED_KEY = 'bloom_saved_plants';
 
-export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled, locale, apiUrl: _apiUrl, signedIn = false }: PlantPageClientProps) {
+export function PlantPageClient({ plant, similarPlants, locale, apiUrl: _apiUrl, signedIn = false }: PlantPageClientProps) {
   const t = useTranslations('Plant');
   const tc = useTranslations('Common');
   const searchParams = useSearchParams();
@@ -380,34 +279,6 @@ export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled,
   // origin only when both are real data.
   const cleanLocation = cleanGardenZone ?? cleanOrigin;
   const altText = localisedAlt(plant.primaryImage, locale, name);
-
-  // ── Tier + interval state, driven by the tiers prop (single source
-  //    of truth = /v1/tiers, edited from /admin → Tier). The default
-  //    tier is suggested from the plant's Red-List status; the donor
-  //    can override before adding to cart.
-  const suggestedId = suggestedTierId(plant.redListStatus);
-  const sortedTiers = [...tiers].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
-  const [selectedTierId, setSelectedTierId] = useState<Tier['id']>(suggestedId);
-  // Initial-interval policy lives in @bloomoulu/constants/billing — see
-  // pickInitialInterval. The plant page has no preset, so we pass null.
-  const [billingInterval, setBillingInterval] = useState<BillingInterval>(
-    pickInitialInterval(null, intervalsEnabled),
-  );
-  const selectedTier = sortedTiers.find((t) => t.id === selectedTierId)
-    ?? sortedTiers.find((t) => t.id === suggestedId)
-    ?? sortedTiers[0];
-  const tierName = (t: Tier) => (locale === 'fi' ? t.nameFi : locale === 'sv' ? t.nameSv : t.name);
-  const intervalCents = (t: Tier | undefined): number => {
-    if (!t) return 0;
-    if (billingInterval === 'monthly' && t.monthlyPriceCents) return t.monthlyPriceCents;
-    return t.annualPriceCents;
-  };
-  const intervalSuffix =
-    billingInterval === 'monthly' && selectedTier?.monthlyPriceCents
-      ? (locale === 'fi' ? '/kk' : locale === 'sv' ? '/mån' : '/mo')
-    : billingInterval === 'one_time'
-      ? ''
-    : (locale === 'fi' ? '/vuosi' : locale === 'sv' ? '/år' : '/yr');
 
   // Initial bookmark state from localStorage. If signed in,
   // also sync the localStorage shadow into the user's server-side
@@ -1037,21 +908,21 @@ export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled,
 
         {/* ── RIGHT COLUMN: STICKY CTA + SIMILAR PLANTS ─────────────── */}
         <div style={{ position: 'sticky', top: 100, alignSelf: 'flex-start' }}>
-          {/* Community engagement — visits / saves / last-adopted / asked.
-              Sits above the adoption CTA card as social proof before the
+          {/* Community engagement — visits / saves / last-donated / asked.
+              Sits above the donation CTA card as social proof before the
               donation moment. See PlantStats.tsx + stats-roadmap.md. */}
           <PlantStats
             viewCount={plant.viewCount ?? 0}
             scanCount={plant.scanCount ?? 0}
             saveCount={plant.saveCount ?? 0}
             askCount={plant.askCount ?? 0}
-            lastAdoptedAt={plant.lastAdoptedAt ?? null}
+            lastDonatedAt={plant.lastDonatedAt ?? null}
             locale={locale}
           />
           <div className="card" style={{ overflow: 'hidden', borderRadius: 24 }}>
             <div style={{ padding: 24 }}>
               <div className="tiny">
-                {locale === 'fi' ? 'Adoptiotila' : locale === 'sv' ? 'Adoptionsstatus' : 'Adoption status'}
+                {locale === 'fi' ? 'Tue tätä kasvia' : locale === 'sv' ? 'Stöd denna växt' : 'Support this plant'}
               </div>
               <div
                 style={{
@@ -1064,10 +935,10 @@ export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled,
               >
                 <div>
                   <div className="serif" style={{ fontSize: 36, lineHeight: 1 }}>
-                    {plant.adopterCount ?? 0}
+                    {plant.donorCount ?? 0}
                   </div>
                   <div className="tiny" style={{ marginTop: 4 }}>
-                    {locale === 'fi' ? 'Adoptoijia' : locale === 'sv' ? 'Adoptanter' : 'Adopters'}
+                    {locale === 'fi' ? 'Tukijaa' : locale === 'sv' ? 'Supportrar' : 'Supporters'}
                   </div>
                 </div>
                 <div className="small muted" style={{ textAlign: 'right' }}>
@@ -1098,174 +969,32 @@ export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled,
                 </div>
               ) : null}
 
-              <div
-                style={{
-                  marginTop: 24,
-                  padding: 16,
-                  background: 'var(--paper)',
-                  borderRadius: 12,
-                  border: '1px solid var(--line)',
-                }}
-              >
-                <div className="tiny" style={{ textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--ink-mute)' }}>
-                  {locale === 'fi' ? 'Adoptiotaso' : locale === 'sv' ? 'Adoptionsnivå' : 'Adoption tier'}
-                </div>
-                <div style={{ marginTop: 10, display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                  <div className="serif" style={{ fontSize: 40, lineHeight: 1, color: 'var(--forest-deep)' }}>
-                    €{(intervalCents(selectedTier) / 100).toFixed(0)}
-                    <span style={{ fontSize: 14, color: 'var(--ink-mute)' }}>{intervalSuffix}</span>
-                  </div>
-                  {selectedTier && (
-                    <div className="small muted">{tierName(selectedTier)}</div>
-                  )}
-                </div>
+              {/* Donation path: the primary CTA routes the donor into the
+                  one-time /donate form with this species preselected. The
+                  VoteButton is the secondary "favourite" action and feeds
+                  the /favourites leaderboard.
 
-                {/* Tier picker — every row from /v1/tiers shows up; the
-                    suggested tier is highlighted by Red-List status. */}
-                <div role="radiogroup" style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 14 }}>
-                  {sortedTiers.map((t) => {
-                    const active = t.id === selectedTierId;
-                    const cents = intervalCents(t);
-                    const isSuggested = t.id === suggestedId;
-                    return (
-                      <button
-                        type="button"
-                        key={t.id}
-                        role="radio"
-                        aria-checked={active}
-                        onClick={() => setSelectedTierId(t.id)}
-                        style={{
-                          textAlign: 'left',
-                          padding: '10px 12px',
-                          borderRadius: 10,
-                          border: active ? '2px solid var(--forest)' : '1px solid var(--line)',
-                          background: active ? 'var(--sage-pale)' : 'transparent',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          gap: 8,
-                          fontSize: 14,
-                        }}
-                      >
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span style={{ fontWeight: active ? 600 : 500, color: 'var(--forest-deep)' }}>
-                            {tierName(t)}
-                          </span>
-                          {isSuggested && !active && (
-                            <span
-                              className="tiny"
-                              style={{
-                                padding: '2px 8px',
-                                borderRadius: 999,
-                                background: 'var(--sage-pale)',
-                                color: 'var(--forest)',
-                                border: '1px solid var(--forest-mid)',
-                              }}
-                            >
-                              {locale === 'fi' ? 'Suositus' : locale === 'sv' ? 'Förslag' : 'Suggested'}
-                            </span>
-                          )}
-                        </span>
-                        <span className="small" style={{ color: 'var(--ink-mute)', fontFamily: 'ui-monospace, monospace' }}>
-                          €{(cents / 100).toFixed(0)}{intervalSuffix}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Billing-interval pills (one-time / annual / monthly).
-                    Display order is fixed; admin's intervalsEnabled list
-                    controls which appear. Matches the wizard step 1
-                    layout exactly. */}
-                <div role="radiogroup" style={{ display: 'flex', gap: 6, marginTop: 12 }}>
-                  {(['one_time', 'annual', 'monthly'] as BillingInterval[])
-                    .filter((iv) => (intervalsEnabled as BillingInterval[]).includes(iv))
-                    .map((iv) => {
-                    const active = billingInterval === iv;
-                    const label =
-                      iv === 'monthly' ? (locale === 'fi' ? 'Kuukausi' : locale === 'sv' ? 'Månad' : 'Monthly')
-                      : iv === 'annual' ? (locale === 'fi' ? 'Vuosi' : locale === 'sv' ? 'År' : 'Annual')
-                      : (locale === 'fi' ? 'Kerran' : locale === 'sv' ? 'Engång' : 'One-time');
-                    return (
-                      <button
-                        type="button"
-                        key={iv}
-                        role="radio"
-                        aria-checked={active}
-                        onClick={() => setBillingInterval(iv)}
-                        style={{
-                          flex: 1,
-                          padding: '8px 10px',
-                          borderRadius: 8,
-                          border: active ? '2px solid var(--forest)' : '1px solid var(--line)',
-                          background: active ? 'var(--sage-pale)' : 'transparent',
-                          color: active ? 'var(--forest-deep)' : 'var(--ink)',
-                          fontSize: 13,
-                          fontWeight: active ? 600 : 400,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        {label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Single canonical adoption path: every CTA here routes
-                  into the /adopt wizard with the donor's tier + interval
-                  + plant preselected. Intent (self / gift / memorial /
-                  class) is chosen in the wizard's step 3 — the buttons
-                  below are just shortcuts that pre-fill it. The cart is
-                  kept as a separate "queue several plants" workflow.
-
-                  Extinct (EX) species replace the adopt CTAs entirely
-                  with a small explainer card. See lib/adoption.ts for
-                  the eligibility rule + the user-facing copy. The API
-                  enforces the same rule independently for defence in
-                  depth. */}
+                  Extinct (EX) species replace the donate CTA with a small
+                  explainer card. See lib/adoption.ts for the eligibility
+                  rule + the user-facing copy; the API enforces the same
+                  rule independently for defence in depth. */}
               {isAdoptable(plant.redListStatus) ? (
                 <>
                   <Link
-                    href={`/${locale}/adopt?plant=${plant.slug}&tier=${selectedTierId}&interval=${billingInterval}`}
+                    href={`/${locale}/donate?plant=${plant.slug}`}
                     className="btn btn-primary btn-block btn-lg"
-                    style={{ marginTop: 16 }}
+                    style={{ marginTop: 20 }}
                   >
                     🌱{' '}
                     {locale === 'fi'
-                      ? 'Adoptoi tämä kasvi →'
+                      ? 'Lahjoita tälle kasville →'
                       : locale === 'sv'
-                        ? 'Adoptera denna växt →'
-                        : 'Adopt this plant →'}
+                        ? 'Donera till denna växt →'
+                        : 'Donate to this plant →'}
                   </Link>
-                  <div className="tiny muted" style={{ marginTop: 14, textAlign: 'center' }}>
-                    {locale === 'fi'
-                      ? 'Tai adoptoi:'
-                      : locale === 'sv'
-                        ? 'Eller adoptera som:'
-                        : 'Or adopt as:'}
+                  <div style={{ marginTop: 12, display: 'flex', justifyContent: 'center' }}>
+                    <VoteButton slug={plant.slug} initialCount={plant.voteCount ?? 0} locale={locale} />
                   </div>
-                  <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                    <Link
-                      href={`/${locale}/adopt?plant=${plant.slug}&tier=${selectedTierId}&interval=${billingInterval}&intent=gift`}
-                      className="btn btn-ghost small"
-                      style={{ flex: 1, border: '1px solid var(--line)', textAlign: 'center' }}
-                    >
-                      🎁{' '}
-                      {locale === 'fi' ? 'Lahja' : locale === 'sv' ? 'Gåva' : 'Gift'}
-                    </Link>
-                    <Link
-                      href={`/${locale}/adopt?plant=${plant.slug}&tier=${selectedTierId}&interval=${billingInterval}&intent=memorial`}
-                      className="btn btn-ghost small"
-                      style={{ flex: 1, border: '1px solid var(--line)', textAlign: 'center' }}
-                    >
-                      💗{' '}
-                      {locale === 'fi' ? 'Muistolahja' : locale === 'sv' ? 'Minnesgåva' : 'Memorial'}
-                    </Link>
-                  </div>
-                  <AddToCartButton slug={plant.slug} tierId={selectedTierId} locale={locale} />
                 </>
               ) : (
                 <div
@@ -1288,10 +1017,10 @@ export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled,
                     }}
                   >
                     {locale === 'fi'
-                      ? 'Ei adoptoitavissa'
+                      ? 'Ei kohdistettavissa'
                       : locale === 'sv'
-                        ? 'Kan ej adopteras'
-                        : 'Not available for adoption'}
+                        ? 'Kan ej riktas'
+                        : 'Not available for a directed gift'}
                   </div>
                   <p
                     className="small"
@@ -1371,8 +1100,8 @@ export function PlantPageClient({ plant, similarPlants, tiers, intervalsEnabled,
                         {p.taxon?.latinName ?? p.nameEn}
                       </div>
                       <div className="small muted">
-                        {p.redListStatus} · {p.adopterCount ?? 0}{' '}
-                        {locale === 'fi' ? 'adoptoijaa' : locale === 'sv' ? 'adoptanter' : 'adopters'}
+                        {p.redListStatus} · {p.donorCount ?? 0}{' '}
+                        {locale === 'fi' ? 'tukijaa' : locale === 'sv' ? 'supportrar' : 'supporters'}
                       </div>
                     </div>
                   </Link>

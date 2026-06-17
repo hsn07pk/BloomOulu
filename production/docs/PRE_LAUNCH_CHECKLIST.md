@@ -8,7 +8,7 @@ launch. Every box must be ticked before flipping production DNS.
 - [ ] `pnpm install && pnpm typecheck && pnpm test` clean on `main`.
 - [ ] `pnpm db:migrate:deploy` applied cleanly to the production Postgres.
 - [ ] `pnpm db:seed` ran once; seed defaults present on `SystemSetting`,
-      `Tier`, `EmailTemplate`, `Translation`, `ContentBlock`, `FeatureFlag`.
+      `EmailTemplate`, `Translation`, `ContentBlock`, `FeatureFlag`.
 - [ ] First production backup successful + the **restore drill** has been
       run on a sibling VPS from that backup (RTO measured ≤ 30 min;
       `docs/runbook/restore-from-backup.md`).
@@ -22,7 +22,7 @@ launch. Every box must be ticked before flipping production DNS.
       decorator with appropriate limits.
 - [ ] Caddy CSP shipped; `script-src` does NOT include `'unsafe-inline'`
       unless documented.
-- [ ] OTEL traces visible in Tempo for an end-to-end adopt → reconciliation
+- [ ] OTEL traces visible in Tempo for an end-to-end donate → reconciliation
       → receipt flow.
 
 ## Payments — must be green

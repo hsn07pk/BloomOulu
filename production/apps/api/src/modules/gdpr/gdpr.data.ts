@@ -28,8 +28,7 @@ export async function collectUserExport(prisma: PrismaClient, userId: string) {
   if (!user) return null;
 
   const [
-    adoptions,
-    giftsReceived,
+    donations,
     payments,
     receipts,
     taxCertificates,
@@ -42,24 +41,28 @@ export async function collectUserExport(prisma: PrismaClient, userId: string) {
     dataExportRequests,
     dataErasureRequests,
   ] = await Promise.all([
-    // Adoptions the donor created — pull EVERY personal field the schema
-    // carries: nickname/dedication/publicName, gift + memorial fields,
-    // co-adopters, plus the per-adoption Plaque (engravedText) and
-    // AdoptionBenefit fulfilment rows (shipping address + tracking).
-    prisma.adoption.findMany({
+    // One-time donations the donor made — pull the personal fields the
+    // schema carries (dedication / publicName) plus the optionally directed
+    // species. No tier / plaque / benefit / gift concepts exist any more.
+    prisma.donation.findMany({
       where: { donorId: userId },
-      include: {
+      select: {
+        id: true,
+        plantId: true,
+        status: true,
+        amountCents: true,
+        currency: true,
+        dedication: true,
+        showOnWall: true,
+        publicName: true,
+        anonymous: true,
+        marketingOptIn: true,
+        startedAt: true,
+        refundedAt: true,
+        createdAt: true,
+        updatedAt: true,
         plant: { select: { slug: true, nameEn: true } },
-        tier: { select: { id: true, name: true } },
-        plaque: true,
-        benefits: true,
-        giftRecipient: { select: { id: true, email: true, name: true } },
       },
-    }),
-    // Adoptions where this user is the gift recipient.
-    prisma.adoption.findMany({
-      where: { giftRecipientId: userId },
-      include: { plant: { select: { slug: true, nameEn: true } } },
     }),
     prisma.payment.findMany({ where: { donorId: userId } }),
     prisma.receipt.findMany({ where: { donorId: userId } }),
@@ -111,8 +114,7 @@ export async function collectUserExport(prisma: PrismaClient, userId: string) {
     exportedAt: new Date().toISOString(),
     subjectRights: 'GDPR Articles 15 (access) + 20 (portability)',
     user: safeUser,
-    adoptions,
-    giftsReceived,
+    donations,
     payments,
     receipts,
     taxCertificates,
@@ -174,77 +176,52 @@ export async function eraseUserData(
       },
     });
 
-    // Resolve the donor's adoption ids once. Prisma's updateMany `where`
-    // does NOT support relation filters at runtime (only scalar columns),
-    // so child tables (Plaque, AdoptionBenefit) are scoped by adoptionId.
-    const adoptionIds = (
-      await tx.adoption.findMany({ where: { donorId: userId }, select: { id: true } })
-    ).map((a) => a.id);
-
-    // 2. Adoption personalisation + gift/memorial/co-adopter fields.
-    //    coAdopters is nullable Json → Prisma.JsonNull.
-    await tx.adoption.updateMany({
+    // 2. Donation personalisation — the only free-form / public PII a
+    //    one-time donation carries is the dedication message and the
+    //    public-wall display name. Null them and pull the row off the wall.
+    await tx.donation.updateMany({
       where: { donorId: userId },
       data: {
-        nickname: null,
         dedication: null,
         publicName: null,
-        showOnDonorWall: false,
-        coAdopters: Prisma.JsonNull,
-        memorialOf: null,
-        memorialFamilyEmail: null,
-        giftRecipientId: null,
+        showOnWall: false,
+        anonymous: true,
       },
     });
 
-    if (adoptionIds.length > 0) {
-      // 3. Plaque engraving text — free-form, can name the donor/dedicatee.
-      await tx.plaque.updateMany({
-        where: { adoptionId: { in: adoptionIds } },
-        data: { engravedText: '(erased)' },
-      });
-
-      // 4. AdoptionBenefit shipping address (nullable Json → Prisma.JsonNull)
-      //    + tracking number.
-      await tx.adoptionBenefit.updateMany({
-        where: { adoptionId: { in: adoptionIds } },
-        data: { shippingAddress: Prisma.JsonNull, trackingNumber: null },
-      });
-    }
-
-    // 5. AskTheGarden message text (keep timestamps for retention stats).
+    // 3. AskTheGarden message text (keep timestamps for retention stats).
     await tx.askMessage.updateMany({
       where: { userId },
       data: { text: '(erased)' },
     });
 
-    // 6. QuizAttempt — detach from the user (anonymous analytics remain).
+    // 4. QuizAttempt — detach from the user (anonymous analytics remain).
     await tx.quizAttempt.updateMany({
       where: { userId },
       data: { userId: null },
     });
 
-    // 7. Account rows (OAuth links) + Session rows (live credentials) →
+    // 5. Account rows (OAuth links) + Session rows (live credentials) →
     //    hard delete. These hold secrets and must not survive erasure.
     await tx.account.deleteMany({ where: { userId } });
     await tx.session.deleteMany({ where: { userId } });
 
-    // 8. SavedPlant bookmarks (incl. free-form notes) → delete.
+    // 6. SavedPlant bookmarks (incl. free-form notes) → delete.
     await tx.savedPlant.deleteMany({ where: { userId } });
 
-    // 9. AuditLog — pseudonymise the network identifiers for THIS subject
+    // 7. AuditLog — pseudonymise the network identifiers for THIS subject
     //    but keep action/resource so the security trail stays intact.
     await tx.auditLog.updateMany({
       where: { actorUserId: userId },
       data: { ip: null, userAgent: null },
     });
 
-    // 10. Financial records (Payment / Receipt / TaxCertificate) are
+    // 8. Financial records (Payment / Receipt / TaxCertificate) are
     //     retained for the 6-year window. They reference the (now
     //     pseudonymised) User via donorId; no extra free-form PII copies
     //     live on those rows in this schema, so nothing further to null.
 
-    // 11. Close out the erasure request(s).
+    // 9. Close out the erasure request(s).
     await tx.auditLog.create({
       data: {
         actorUserId: null,

@@ -29,7 +29,7 @@ export async function payWithMockAction(formData: FormData) {
   const status = ((formData.get('status') as string) ?? 'ok') as 'ok' | 'fail';
   const cancel = (formData.get('cancel') as string) || '';
 
-  let nextUrl = cancel || `/${locale}/cart`;
+  let nextUrl = cancel || `/${locale}/donate`;
   try {
     const res = await fetch(`${apiUrl()}/v1/payments/paytrail-mock/finalize`, {
       method: 'POST',
@@ -49,6 +49,6 @@ export async function payWithMockAction(formData: FormData) {
 
 export async function cancelMockAction(formData: FormData) {
   const locale = (formData.get('locale') as string) || 'en';
-  const cancel = (formData.get('cancel') as string) || `/${locale}/cart?cancelled=1`;
+  const cancel = (formData.get('cancel') as string) || `/${locale}/donate?cancelled=1`;
   redirect(cancel as Parameters<typeof redirect>[0]);
 }

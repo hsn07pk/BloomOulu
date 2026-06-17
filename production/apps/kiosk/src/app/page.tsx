@@ -18,10 +18,10 @@
  *     "Tap to ask" link to /{locale}/ask
  *
  * Bottom row (2 / 1.2):
- *   - Adopter wall: all-time totals header + colour-coded chips
- *     (corporate / class / memorial / individual based on Adoption.intent)
- *   - Today's stats: vertical 3-stack — Scans / Questions / Adoptions
- *     (with €raised-today as the sub-line on the Adoptions tile)
+ *   - Donor wall: all-time totals header + a cloud of donor names sized
+ *     by giving frequency (one-time donations; no tiers/intents)
+ *   - Today's stats: vertical 3-stack — Scans / Questions / Gifts
+ *     (with €raised-today as the sub-line on the Gifts tile)
  *
  * Footer: monospace uppercase strip with brand line + version + date.
  *
@@ -64,27 +64,24 @@ interface Plant {
   taxon?: { latinName: string } | null;
 }
 
-type Intent = 'for_self' | 'gift' | 'memorial' | 'class' | 'corporate';
-
-interface RecentAdoption {
+interface RecentDonation {
   id: string;
   publicName: string;
-  plantNameFi: string;
-  plantNameEn: string;
-  tierName: string;
-  intent: Intent;
+  plantNameFi: string | null;
+  plantNameEn: string | null;
+  dedication: string | null;
 }
 
 interface Feed {
   featured: Plant | null;
   blooming: Plant[];
   mostVisited?: Plant[];
-  recentAdoptions: RecentAdoption[];
+  recentDonations: RecentDonation[];
   totals?: { supporters: number; raisedCents: number };
   todayStats?: {
     scans: number;
     questions: number;
-    adoptions: number;
+    donations: number;
     raisedTodayCents: number;
   };
 }
@@ -150,10 +147,10 @@ const STRINGS: Record<Locale, KioskStrings> = {
     mostVisitedHint: 'Plants visitors are reading about right now',
     beginYourVisit: 'Begin your visit',
     exploreHomepage: 'Explore on your phone.',
-    exploreSubtitle: 'Browse every plant and adopt your favourite.',
+    exploreSubtitle: 'Browse every plant and support your favourite.',
     scanWithCamera: 'Scan with your phone camera',
     step1: 'Point your camera at the QR code',
-    step2: 'Browse or adopt — right from your phone',
+    step2: 'Browse or donate — right from your phone',
     askTheGarden: 'Ask the Garden',
     askH3: 'What would you like to know?',
     askSubtitle: "Trained on the Garden's own science. Every answer cites its source.",
@@ -161,17 +158,17 @@ const STRINGS: Record<Locale, KioskStrings> = {
     askQ2: 'Where are the endangered plants?',
     askQ3: 'When does the water lily bloom?',
     tapToAsk: 'Tap to ask',
-    theAdopterWall: 'The adopter wall',
+    theAdopterWall: 'The donor wall',
     supportersRaised: '{n} supporters · {raised} raised · all time',
     liveSinceLaunch: 'Live · since launch',
-    beFirst: 'Be the first to adopt today.',
+    beFirst: 'Be the first to give today.',
     scansToday: 'Scans today',
     questionsAsked: 'Questions asked',
-    adoptionsToday: 'Adoptions today',
+    adoptionsToday: 'Gifts today',
     qrScanned: 'QR codes scanned',
     toAsk: 'to AskTheGarden',
     raisedToday: '{raised} raised',
-    noNewAdoptions: 'No new adoptions yet',
+    noNewAdoptions: 'No new gifts yet',
     footerBrand: 'University of Oulu Botanical Garden · 65.0617° N',
     footerVersion: 'BloomOulu v1.0',
   },
@@ -185,10 +182,10 @@ const STRINGS: Record<Locale, KioskStrings> = {
     mostVisitedHint: 'Kasvit, joista vierailijat ovat juuri nyt kiinnostuneet',
     beginYourVisit: 'Aloita vierailusi',
     exploreHomepage: 'Selaa puhelimellasi.',
-    exploreSubtitle: 'Selaa kaikkia kasveja ja adoptoi suosikkisi.',
+    exploreSubtitle: 'Selaa kaikkia kasveja ja tue suosikkiasi.',
     scanWithCamera: 'Skannaa puhelimesi kameralla',
     step1: 'Osoita kameralla QR-koodia',
-    step2: 'Selaa tai adoptoi suoraan puhelimellasi',
+    step2: 'Selaa tai lahjoita suoraan puhelimellasi',
     askTheGarden: 'Kysy puutarhalta',
     askH3: 'Mitä haluaisit tietää?',
     askSubtitle:
@@ -197,17 +194,17 @@ const STRINGS: Record<Locale, KioskStrings> = {
     askQ2: 'Missä uhanalaiset kasvit kasvavat?',
     askQ3: 'Milloin lumme kukkii?',
     tapToAsk: 'Napauta kysyäksesi',
-    theAdopterWall: 'Adoptoijien seinä',
+    theAdopterWall: 'Lahjoittajien seinä',
     supportersRaised: '{n} tukijaa · {raised} kerätty · kaikkien aikojen',
     liveSinceLaunch: 'Live · alusta asti',
-    beFirst: 'Ole ensimmäinen adoptoija tänään.',
+    beFirst: 'Ole ensimmäinen lahjoittaja tänään.',
     scansToday: 'Skannauksia tänään',
     questionsAsked: 'Kysymyksiä esitetty',
-    adoptionsToday: 'Adoptioita tänään',
+    adoptionsToday: 'Lahjoituksia tänään',
     qrScanned: 'QR-koodia skannattu',
     toAsk: 'Kysy puutarhalta -palvelussa',
     raisedToday: '{raised} kerätty',
-    noNewAdoptions: 'Ei uusia adoptioita vielä',
+    noNewAdoptions: 'Ei uusia lahjoituksia vielä',
     footerBrand: 'Oulun yliopiston kasvitieteellinen puutarha · 65.0617° N',
     footerVersion: 'BloomOulu v1.0',
   },
@@ -221,10 +218,10 @@ const STRINGS: Record<Locale, KioskStrings> = {
     mostVisitedHint: 'Växter som besökare läser om just nu',
     beginYourVisit: 'Börja ditt besök',
     exploreHomepage: 'Utforska med din telefon.',
-    exploreSubtitle: 'Bläddra bland alla växter och adoptera din favorit.',
+    exploreSubtitle: 'Bläddra bland alla växter och stöd din favorit.',
     scanWithCamera: 'Skanna med din telefonkamera',
     step1: 'Rikta kameran mot QR-koden',
-    step2: 'Bläddra eller adoptera — direkt från din telefon',
+    step2: 'Bläddra eller donera — direkt från din telefon',
     askTheGarden: 'Fråga trädgården',
     askH3: 'Vad vill du veta?',
     askSubtitle:
@@ -233,17 +230,17 @@ const STRINGS: Record<Locale, KioskStrings> = {
     askQ2: 'Var finns de hotade växterna?',
     askQ3: 'När blommar näckrosen?',
     tapToAsk: 'Tryck för att fråga',
-    theAdopterWall: 'Adoptörväggen',
+    theAdopterWall: 'Donatorväggen',
     supportersRaised: '{n} stödjare · {raised} insamlat · genom tiderna',
     liveSinceLaunch: 'Live · sedan starten',
-    beFirst: 'Bli den första adoptören idag.',
+    beFirst: 'Bli den första att ge idag.',
     scansToday: 'Skanningar idag',
     questionsAsked: 'Frågor ställda',
-    adoptionsToday: 'Adoptioner idag',
+    adoptionsToday: 'Gåvor idag',
     qrScanned: 'QR-koder skannade',
     toAsk: 'till Fråga trädgården',
     raisedToday: '{raised} insamlat',
-    noNewAdoptions: 'Inga nya adoptioner än',
+    noNewAdoptions: 'Inga nya gåvor än',
     footerBrand: 'Uleåborgs universitets botaniska trädgård · 65.0617° N',
     footerVersion: 'BloomOulu v1.0',
   },
@@ -276,17 +273,9 @@ function weatherFor(code: number, l: Locale): { label: string; icon: string } {
   return { label: d[l], icon: d.icon };
 }
 
-const INTENT_CHIP: Record<Intent, { bg: string; color: string; italic: boolean }> = {
-  // Institutional adoptions sit in the sage tint — visually punctuates the
-  // wall by community-vs-corporate, matching the demo design system.
-  corporate: { bg: 'rgba(168,192,96,0.18)', color: '#C8DC8C', italic: false },
-  class: { bg: 'rgba(168,192,96,0.18)', color: '#C8DC8C', italic: false },
-  // Memorial adoptions in a copper italic that quietly distinguishes them.
-  memorial: { bg: 'rgba(178,92,58,0.18)', color: '#E5A88B', italic: true },
-  // Personal / gift adoptions in cream on subtle paper-tone fill.
-  gift: { bg: 'rgba(250,247,238,0.08)', color: '#FAF7EE', italic: false },
-  for_self: { bg: 'rgba(250,247,238,0.08)', color: '#FAF7EE', italic: false },
-};
+// Donor-wall word colour. One-time donations have no tiers/intents, so the
+// wall reads as a single warm cream voice (sized by giving frequency).
+const WALL_WORD_COLOR = '#FAF7EE';
 
 function interp(template: string, vars: Record<string, string | number>): string {
   return template.replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? ''));
@@ -389,7 +378,6 @@ function hashStr(s: string): number {
 interface CloudAdopter {
   name: string;
   count: number;
-  intent: Intent;
   id: string;
 }
 // Size a unique adopter by how many adoptions they have (frequency), with a
@@ -527,19 +515,19 @@ export default function KioskPage() {
   const stats = feed?.todayStats ?? {
     scans: 0,
     questions: 0,
-    adoptions: 0,
+    donations: 0,
     raisedTodayCents: 0,
   };
-  const adoptions = feed?.recentAdoptions ?? [];
-  // Deduplicate the wall by adopter name; size each unique name by frequency.
+  const donations = feed?.recentDonations ?? [];
+  // Deduplicate the wall by donor name; size each unique name by frequency.
   const cloudAdopters: CloudAdopter[] = (() => {
     const m = new Map<string, CloudAdopter>();
-    for (const a of adoptions) {
+    for (const a of donations) {
       const key = a.publicName.trim().toLowerCase();
       if (!key) continue;
       const ex = m.get(key);
       if (ex) ex.count += 1;
-      else m.set(key, { name: a.publicName, count: 1, intent: a.intent, id: a.id });
+      else m.set(key, { name: a.publicName, count: 1, id: a.id });
     }
     return [...m.values()].sort((x, y) => y.count - x.count);
   })();
@@ -1236,17 +1224,15 @@ export default function KioskPage() {
             >
               {cloudAdopters.slice(0, 18).map((a) => {
                 const w = cloudWord(a.count, maxAdopterCount, hashStr(a.name));
-                const color = (INTENT_CHIP[a.intent] ?? INTENT_CHIP.for_self).color;
                 return (
                   <span
                     key={a.id}
-                    title={a.count > 1 ? `${a.name} · ${a.count} adoptions` : a.name}
+                    title={a.count > 1 ? `${a.name} · ${a.count} gifts` : a.name}
                     style={{
                       fontFamily: "'Fraunces', serif",
                       fontSize: w.size,
                       fontWeight: w.weight,
-                      fontStyle: a.intent === 'memorial' ? 'italic' : 'normal',
-                      color,
+                      color: WALL_WORD_COLOR,
                       opacity: w.opacity,
                       whiteSpace: 'nowrap',
                     }}
@@ -1293,7 +1279,7 @@ export default function KioskPage() {
                 },
                 {
                   label: t.adoptionsToday,
-                  value: numberFi.format(stats.adoptions),
+                  value: numberFi.format(stats.donations),
                   sub:
                     stats.raisedTodayCents > 0
                       ? interp(t.raisedToday, {

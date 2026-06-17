@@ -51,7 +51,7 @@ when Paytrail / MobilePay are enabled.
 
 ## 3. Critical sequences
 
-### 3.1 Donor adopts a plant via bank transfer (zero-fee default rail)
+### 3.1 Donor donates via bank transfer (zero-fee default rail)
 
 ```mermaid
 sequenceDiagram
@@ -64,11 +64,11 @@ sequenceDiagram
   participant Q as BullMQ
   participant Mail as Postal SMTP
 
-  D->>W: GET /fi/adopt?plant=pulsatilla-patens
-  W-->>D: SSR adopt form
-  D->>W: POST adopt (form action)
-  W->>A: POST /v1/adoptions {preferredProvider: bank_transfer}
-  A->>DB: INSERT Adoption(status=pending) + Payment(status=pending, orderId=UUIDv7)
+  D->>W: GET /fi/donate?plant=pulsatilla-patens
+  W-->>D: SSR donate form
+  D->>W: POST donate (form action)
+  W->>A: POST /v1/donations {preferredProvider: bank_transfer}
+  A->>DB: INSERT Donation(status=pending) + Payment(status=pending, orderId=UUIDv7)
   A->>A: generate RF Creditor Reference from orderId
   A-->>W: 303 → /fi/donate/pay?orderId=…&amount=…&ref=RF22+…
   W-->>D: SSR instructions page (IBAN + BIC + RF + EPC069-12 QR)
@@ -82,9 +82,9 @@ sequenceDiagram
   A->>DB: $transaction:
     - INSERT ProcessedEvent (UNIQUE gate)
     - UPDATE Payment status=succeeded
-    - UPDATE Adoption status=active, startedAt
+    - UPDATE Donation status=completed
     - INSERT AuditLog rows
-    - if tier ∈ {endangered, corporate}: INSERT Plaque(status=requested)
+    - if donation.plantId: increment Plant.donorCount
   A->>Q: enqueueReceipt {paymentId}
   Q-->>A: receipt worker:
     - nextReceiptNumber() → BLO-2026-000001
@@ -105,7 +105,7 @@ Recovery rules:
 - Amount mismatch → flagged manually; not auto-succeeded.
 - Worker DLQ retains failed jobs 30 days for admin replay.
 
-### 3.2 Donor adopts via Paytrail (cards, FI banks, Apple/Google Pay)
+### 3.2 Donor donates via Paytrail (cards, FI banks, Apple/Google Pay)
 
 ```mermaid
 sequenceDiagram
@@ -115,12 +115,12 @@ sequenceDiagram
   participant PT as Paytrail
   participant DB as Postgres
 
-  D->>W: POST adopt {preferredProvider: paytrail}
-  W->>A: POST /v1/adoptions
+  D->>W: POST donate {preferredProvider: paytrail}
+  W->>A: POST /v1/donations
   A->>PT: POST /payments (line_items, redirectUrls, callbackUrls,
                          HMAC-SHA256 over canonical checkout-* + body)
   PT-->>A: { transactionId, hostedPaymentUrl, providers[] }
-  A->>DB: INSERT Adoption + Payment(provider=paytrail, status=pending)
+  A->>DB: INSERT Donation + Payment(provider=paytrail, status=pending)
   A-->>W: 303 → Paytrail hosted page
   D->>PT: pick rail (card / Nordea / OP / ...) → 3DS or bank auth
   PT-->>D: success → return_url to bloomoulu.fi
@@ -129,11 +129,11 @@ sequenceDiagram
   A->>DB: $transaction:
     - INSERT ProcessedEvent
     - UPDATE Payment status=succeeded
-    - UPDATE Adoption status=active
+    - UPDATE Donation status=completed
     - enqueueReceipt (post-commit)
 ```
 
-### 3.3 Donor adopts via Vipps MobilePay (recurring annual)
+### 3.3 Donor donates via Vipps MobilePay (one-time)
 
 ```mermaid
 sequenceDiagram
@@ -143,25 +143,21 @@ sequenceDiagram
   participant V as Vipps MobilePay
   participant DB as Postgres
 
-  D->>W: choose MobilePay, tier=Rooted €75/yr
-  W->>A: POST /v1/adoptions {provider=mobilepay, recurring=true}
-  A->>V: POST /recurring/v3/agreements (productName, pricing, redirectUrl)
-  V-->>A: { agreementId, vippsConfirmationUrl }
-  A->>DB: INSERT Adoption(status=pending) + Payment(status=pending)
-  A-->>W: 303 → vippsConfirmationUrl
+  D->>W: choose MobilePay, amount=€25
+  W->>A: POST /v1/donations {provider=mobilepay}
+  A->>V: POST /epayment/v1/payments (amount, paymentMethod, returnUrl)
+  V-->>A: { reference, redirectUrl }
+  A->>DB: INSERT Donation(status=pending) + Payment(status=pending)
+  A-->>W: 303 → redirectUrl
 
   D->>V: approves in MobilePay app (biometric → SCA satisfied)
   V-->>D: success deep-link → BloomOulu return
-  V->>A: POST /webhooks/mobilepay recurring.agreement-activated.v1
-  A->>DB: UPDATE Agreement status=active
-  A->>V: POST /recurring/v3/agreements/{id}/charges (first charge)
   V->>A: POST /webhooks/mobilepay epayment.captured.v1
-  A->>DB: UPDATE Payment status=succeeded → receipt + email flow
+  A->>DB: UPDATE Payment status=succeeded, Donation status=completed → receipt + email flow
 ```
 
-Yearly renewal: the `renewal` cron at 04:00 UTC scans `Adoption.endsAt <
-now + 7d` and issues the next charge via the gateway adapter. Failures
-enter the dunning ladder (ADR-0011 §dunning).
+MobilePay donations are one-time: there is no agreement, renewal cron, or
+dunning ladder. An abandoned approval simply leaves the `Donation` pending.
 
 ### 3.4 AskTheGarden RAG chat (entirely local LLM)
 
@@ -213,6 +209,14 @@ If `lastSeen > now - 5m` the kiosk-watchdog cron fires a P1 ntfy
 notification. Local hardware watchdog reboots into the locked Chromium
 profile after 3 min of healthcheck failure.
 
+### 3.6 Favourite a plant (anonymous vote)
+
+The Favourite button on a plant page calls `POST /v1/plants/:slug/vote`
+(and `DELETE` to un-favourite). Votes are idempotent, keyed on a salted
+hash of the visitor's IP + User-Agent — no account and no PII. The
+denormalised `Plant.voteCount` is updated in the same transaction.
+`GET /v1/votes/leaderboard` powers the public `/favourites` page.
+
 ## 4. Data flow: webhook → receipt
 
 ```
@@ -223,7 +227,7 @@ MobilePay webhook ─ HTTP ─► /webhooks/mobilepay  ─┤
 Bank-transfer entry ──────► /v1/reconciliation/  ─┘     (idempotent, txn-wrapped)
                                                        │
                                                        ▼
-                                  UPDATE Payment + Adoption inside $transaction
+                                  UPDATE Payment + Donation inside $transaction
                                                        │
                                                        ▼
                                   (post-commit) enqueueReceipt
@@ -245,7 +249,7 @@ Bank-transfer entry ──────► /v1/reconciliation/  ─┘     (idemp
 |---|---|---|
 | Paytrail webhook flood | `webhook.received` Prom counter > 10× normal | rate limit per-IP, alert ops; idempotency gate absorbs duplicates |
 | Paytrail outage | health probe failure on the merchant API | display banner "Card payments temporarily unavailable, try MobilePay or bank transfer"; mobilepay + bank_transfer rails unaffected |
-| Vipps outage | health probe failure | new agreements queue; donor sees retry hint |
+| Vipps outage | health probe failure | new payments queue; donor sees retry hint |
 | pgvector latency spike | OTEL p95 > 200ms | warm Redis cache, alert; fall back to keyword search on Plant slug + nameEn |
 | Ollama outage | provider 5xx > 3 in 60s | escalation card "We'll get back to you" + queue question + curator notify |
 | MinIO down | upload error | Receipt PDF job retries via BullMQ DLQ; admin can replay; donor sees the receipt number in the email, PDF link goes live when MinIO returns |
@@ -255,7 +259,7 @@ Bank-transfer entry ──────► /v1/reconciliation/  ─┘     (idemp
 
 ## 6. Capacity (year 1)
 
-Pitch targets: 100 adopters by month 12, ~€9k revenue, 30k web visitors annual, 7 plant-page views per visit.
+Pitch targets: 100 donors by month 12, ~€9k revenue, 30k web visitors annual, 7 plant-page views per visit.
 
 - 30k × 7 = ~210k plant-page views/year ≈ 600/day average, ~10k/day peak on press days.
 - 1.5 RPS average, ~30 RPS peak — comfortable on a 4-core / 8 GB Hetzner CX22.
@@ -272,6 +276,11 @@ Prior versions referenced Vercel + Fly.io + Stripe + Mistral; those choices
 were retired in favour of the FOSS, single-VPS, EU-only constraints set in
 ADR-0001. See ADR-0004 (superseded) → ADR-0011 (current) for the payment
 rail evolution.
+
+Updated 2026-06-17: the adopt-a-plant tier model (tiers, perks, plaques,
+recurring billing, gift codes, dunning) was replaced by one-time donations
++ a favourites/votes leaderboard. The three payment rails are unchanged but
+now process one-time payments only.
 
 ## 8. Open questions (for the University + Garden)
 

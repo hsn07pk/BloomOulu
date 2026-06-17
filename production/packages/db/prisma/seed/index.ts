@@ -1,6 +1,5 @@
 import { PrismaClient } from '@prisma/client';
 import { seedFinnishFlora } from './finnish-flora.js';
-import { seedTiers } from './tiers.js';
 import { seedSettings } from './settings.js';
 import { seedCitations } from './citations.js';
 import { seedEmails } from './emails.js';
@@ -15,7 +14,6 @@ async function main() {
   console.log('Seeding BloomOulu data…');
   await seedSettings(prisma);
   await seedFlags(prisma);
-  await seedTiers(prisma);
   await seedCitations(prisma);
   await seedFinnishFlora(prisma);
   await seedEmails(prisma);

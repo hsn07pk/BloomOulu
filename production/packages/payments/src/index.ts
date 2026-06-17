@@ -1,7 +1,5 @@
 export {
   ProviderId,
-  AdoptionIntent,
-  BillingInterval,
   Locale,
   DonorInput,
   LineItemInput,

@@ -4,38 +4,29 @@ import { pickProvider } from './router.js';
 describe('pickProvider', () => {
   const enabledAll = ['paytrail', 'mobilepay', 'bank_transfer'] as const;
 
-  it('routes Finnish donor preferring MobilePay → MobilePay', () => {
+  it('routes a donor preferring MobilePay → MobilePay', () => {
     expect(
       pickProvider({
         donorCountry: 'FI',
         donorPrefers: 'mobilepay',
-        amountCents: 2500,
-        intent: 'for_self',
-        recurring: false,
         enabledProviders: enabledAll,
       }),
     ).toBe('mobilepay');
   });
 
-  it('routes corporate donors to bank transfer when enabled', () => {
+  it('FI donor with no preference → bank_transfer (zero fees)', () => {
     expect(
       pickProvider({
         donorCountry: 'FI',
-        amountCents: 250_000_00,
-        intent: 'corporate',
-        recurring: false,
         enabledProviders: enabledAll,
       }),
     ).toBe('bank_transfer');
   });
 
-  it('falls back to Paytrail if bank transfer disabled for corporate', () => {
+  it('FI donor → Paytrail when bank transfer disabled', () => {
     expect(
       pickProvider({
         donorCountry: 'FI',
-        amountCents: 250_000_00,
-        intent: 'corporate',
-        recurring: false,
         enabledProviders: ['paytrail', 'mobilepay'],
       }),
     ).toBe('paytrail');
@@ -45,24 +36,9 @@ describe('pickProvider', () => {
     expect(
       pickProvider({
         donorCountry: 'DE',
-        amountCents: 7500,
-        intent: 'for_self',
-        recurring: false,
         enabledProviders: enabledAll,
       }),
     ).toBe('paytrail');
-  });
-
-  it('recurring + MobilePay enabled → MobilePay (native agreement)', () => {
-    expect(
-      pickProvider({
-        donorCountry: 'FI',
-        amountCents: 2500,
-        intent: 'for_self',
-        recurring: true,
-        enabledProviders: enabledAll,
-      }),
-    ).toBe('mobilepay');
   });
 
   it('explicit "card" preference → Paytrail', () => {
@@ -70,9 +46,6 @@ describe('pickProvider', () => {
       pickProvider({
         donorCountry: 'FI',
         donorPrefers: 'card',
-        amountCents: 2500,
-        intent: 'for_self',
-        recurring: false,
         enabledProviders: enabledAll,
       }),
     ).toBe('paytrail');
@@ -82,9 +55,6 @@ describe('pickProvider', () => {
     expect(
       pickProvider({
         donorCountry: 'FI',
-        amountCents: 2500,
-        intent: 'for_self',
-        recurring: true,
         enabledProviders: ['bank_transfer'],
       }),
     ).toBe('bank_transfer');

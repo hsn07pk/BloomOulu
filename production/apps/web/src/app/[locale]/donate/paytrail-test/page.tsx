@@ -87,7 +87,7 @@ export default async function PaytrailMockPage({
   const t = COPY[(locale as keyof typeof COPY) in COPY ? (locale as keyof typeof COPY) : 'en'];
 
   if (!sp.orderId || !sp.amount) {
-    redirect(`/${locale}/cart`);
+    redirect(`/${locale}/donate`);
   }
   const amountCents = parseInt(sp.amount, 10) || 0;
   const description = sp.description ?? '';

@@ -84,10 +84,9 @@ export class DisbursementsService {
             payment: {
               include: {
                 donor: { select: { id: true, name: true, email: true } },
-                adoption: {
+                donation: {
                   select: {
                     id: true,
-                    tierId: true,
                     plant: { select: { nameEn: true, slug: true } },
                   },
                 },
@@ -443,8 +442,8 @@ export class DisbursementsService {
           csvField(p.provider),
           csvField(p.donor.email),
           csvField(p.donor.name ?? ''),
-          csvField(p.adoption?.plant.slug ?? ''),
-          csvField(p.adoption?.plant.nameEn ?? ''),
+          csvField(p.donation?.plant?.slug ?? ''),
+          csvField(p.donation?.plant?.nameEn ?? ''),
           csvField(p.receivedAt?.toISOString() ?? ''),
           (e.amountCents / 100).toFixed(2),
           (e.feeCents / 100).toFixed(2),
@@ -500,7 +499,7 @@ export class DisbursementsService {
           amountCents: e.amountCents,
           feeCents: e.feeCents,
           netCents: e.netCents,
-          plantName: e.payment.adoption?.plant?.nameEn ?? null,
+          plantName: e.payment.donation?.plant?.nameEn ?? null,
         })),
     });
     return { pdf, filename: `${d.reference}.pdf` };

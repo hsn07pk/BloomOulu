@@ -1,11 +1,9 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import {
-  BILLING_INTERVALS,
-  DEFAULT_INTERVALS_ENABLED,
-  DEFAULT_PLAQUE_ELIGIBLE_TIERS,
-  TIER_IDS,
-  type BillingInterval,
-  type TierId,
+  DEFAULT_SUGGESTED_AMOUNTS_CENTS,
+  DEFAULT_DONATION_AMOUNT_CENTS,
+  MIN_DONATION_CENTS,
+  MAX_DONATION_CENTS,
 } from '@bloomoulu/constants';
 import { PrismaService } from '../prisma/prisma.service.js';
 
@@ -73,30 +71,23 @@ export interface BloomOuluSettings {
      *  ObservabilityEvent). Privacy policy promises 90 days. */
     analyticsRetentionDays: number;
   };
-  /** Default donation amount when none is specified (kiosk fallback) */
-  defaultAmountCents: number;
-  /** Adoption flow steps — admins can reorder/disable in /admin */
-  adoptionFlow: string[];
-  /** Adopt-page knobs — surfaced to the wizard via /v1/settings/public.
-   *  Everything in here is editable from /admin/resources/SystemSetting. */
-  adoption: {
-    /** Linen-card gift-wrap upgrade, in cents. €4 = 400. */
-    giftWrapCents: number;
-    /** Share of the gross donation treated as a pure donation (no VAT),
-     *  in basis points. 7200 = 72% donation / 28% benefits — used only
-     *  in the donor-facing tax-disclosure box. Authoritative VAT
-     *  computation still uses vat.donationRateBp / vat.perkRateBp. */
-    donationShareBp: number;
-    /** Tiers that earn an individually engraved plaque. */
-    plaqueEligibleTiers: readonly TierId[];
-    /** Max length of the donor-facing dedication string. */
+  /** Donate-form knobs — surfaced to the public donate page via
+   *  /v1/settings/public. Everything here is editable from
+   *  /admin/resources/SystemSetting without a redeploy. */
+  donation: {
+    /** Quick-pick amounts (cents) shown as chips on the donate form. */
+    suggestedAmountsCents: readonly number[];
+    /** Amount preselected on first paint (donate form + kiosk fallback). */
+    defaultAmountCents: number;
+    /** Whether donors may enter a free custom amount. */
+    allowCustomAmount: boolean;
+    /** Self-serve floor / ceiling in cents. */
+    minCents: number;
+    maxCents: number;
+    /** Max length of the public dedication / tribute string. */
     dedicationMaxChars: number;
-    /** Max co-adopters per adoption. */
-    coAdopterMax: number;
-    /** Which billing intervals the donor sees. Production default is
-     *  ['monthly', 'one_time']; an admin can enable 'annual' later
-     *  without a deploy by editing SystemSetting `adoption.intervalsEnabled`. */
-    intervalsEnabled: readonly BillingInterval[];
+    /** Locale-relative link to the "where your gift goes" policy. */
+    fundsFlowUrl: string;
   };
   /** AskTheGarden knobs surfaced via /v1/settings/public. Admins edit
    *  these in /admin/resources/SystemSetting. */
@@ -253,38 +244,22 @@ export function buildSettingsDefaults(): BloomOuluSettings {
       askMessageRetentionDays: envInt('GDPR_ASK_MESSAGE_RETENTION_DAYS', 365),
       analyticsRetentionDays: envInt('GDPR_ANALYTICS_RETENTION_DAYS', 90),
     },
-    defaultAmountCents: envInt('KIOSK_DEFAULT_AMOUNT_CENTS', 2500),
-    adoptionFlow: [
-      'choose_plant',
-      'choose_tier',
-      'donor_details',
-      'gift_options',
-      'payment_method',
-      'confirm',
-    ],
-    adoption: {
-      giftWrapCents: envInt('ADOPTION_GIFT_WRAP_CENTS', 400),
-      donationShareBp: envInt('ADOPTION_DONATION_SHARE_BP', 7200),
-      plaqueEligibleTiers: (() => {
-        const raw = process.env.ADOPTION_PLAQUE_ELIGIBLE_TIERS;
-        if (!raw) return DEFAULT_PLAQUE_ELIGIBLE_TIERS;
-        return raw
+    donation: {
+      suggestedAmountsCents: (() => {
+        const raw = process.env.DONATION_SUGGESTED_AMOUNTS_CENTS;
+        if (!raw) return DEFAULT_SUGGESTED_AMOUNTS_CENTS;
+        const parsed = raw
           .split(',')
-          .map((s) => s.trim())
-          .filter((s): s is TierId => (TIER_IDS as readonly string[]).includes(s));
+          .map((s) => parseInt(s.trim(), 10))
+          .filter((n) => Number.isFinite(n) && n > 0);
+        return parsed.length > 0 ? parsed : DEFAULT_SUGGESTED_AMOUNTS_CENTS;
       })(),
-      dedicationMaxChars: envInt('ADOPTION_DEDICATION_MAX_CHARS', 240),
-      coAdopterMax: envInt('ADOPTION_CO_ADOPTER_MAX', 10),
-      // Default offering: monthly + one_time. Annual is hidden until an
-      // admin explicitly re-enables it in /admin → SystemSetting.
-      intervalsEnabled: (() => {
-        const raw = process.env.ADOPTION_INTERVALS_ENABLED;
-        if (!raw) return DEFAULT_INTERVALS_ENABLED;
-        return raw
-          .split(',')
-          .map((s) => s.trim())
-          .filter((s): s is BillingInterval => (BILLING_INTERVALS as readonly string[]).includes(s));
-      })(),
+      defaultAmountCents: envInt('DONATION_DEFAULT_AMOUNT_CENTS', DEFAULT_DONATION_AMOUNT_CENTS),
+      allowCustomAmount: envBool('DONATION_ALLOW_CUSTOM_AMOUNT', true),
+      minCents: envInt('DONATION_MIN_CENTS', MIN_DONATION_CENTS),
+      maxCents: envInt('DONATION_MAX_CENTS', MAX_DONATION_CENTS),
+      dedicationMaxChars: envInt('DONATION_DEDICATION_MAX_CHARS', 240),
+      fundsFlowUrl: envStr('DONATION_FUNDS_FLOW_URL', '/about#funds-flow'),
     },
     ask: {
       curatorEmail: envStr('ASK_CURATOR_EMAIL', 'curator@bloomoulu.fi'),

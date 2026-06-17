@@ -2,20 +2,14 @@
  * Annual tax certificate sweep.
  *
  * Cron Jan 5 04:00 UTC (after the final December reconciliations have
- * settled). For each donor with succeeded donations in the previous tax
- * year:
+ * settled). For each donor whose settled donations in the previous tax year
+ * total at least the minimum threshold, issue a single informational
+ * donation summary. The exact Finnish individual-donor deduction scheme is
+ * still being finalised, so the certificate carries an "INFORMATIONAL ONLY"
+ * banner and there is no tier / corporate branching.
  *
- *   - Corporate donor (any adoption with intent='corporate') AND
- *     total ≥ €850 (current 2026 TVL §57 minimum): issue a TVL §57
- *     certificate; deduction capped at €250,000/year.
- *
- *   - Individual donor (intent ∈ {for_self, gift, memorial, class}) AND
- *     total meets the 2026 individual-donor scheme threshold: issue an
- *     informational certificate. Until Vero finalises the exact wording
- *     (deduction caps, minimum threshold), the certificate carries an
- *     "INFORMATIONAL ONLY — final scheme parameters pending" banner.
- *
- *   - Below the threshold: no certificate issued.
+ *   - Below the threshold: no certificate issued (the per-gift receipts
+ *     already cover those donations).
  *
  * Idempotent: TaxCertificate has a UNIQUE (donorId, taxYear) constraint —
  * re-running the sweep is a no-op once certificates exist.
@@ -32,7 +26,6 @@ import { enqueueEmail } from '../enqueue.js';
 
 const logger = new Logger('TaxCertAnnual');
 
-const TVL_57_MIN_CENTS = 850_00; // TVL §57 minimum: €850
 const INDIVIDUAL_MIN_CENTS = 500_00; // placeholder threshold; tune when finalised
 
 export interface TaxCertAnnualJob {
@@ -67,16 +60,11 @@ export async function processTaxCertAnnual(job: Job<TaxCertAnnualJob>) {
   let skipped = 0;
   for (const r of rows) {
     const total = r._sum.amountCents ?? 0;
-    const intent = await dominantIntent(r.donorId, yearStart, yearEnd);
-    const scheme: 'TVL §57 corporate' | 'individual 2026' | 'informational' =
-      intent === 'corporate' && total >= TVL_57_MIN_CENTS
-        ? 'TVL §57 corporate'
-        : total >= INDIVIDUAL_MIN_CENTS
-          ? 'individual 2026'
-          : 'informational';
+    // Single informational donation summary — no tier / corporate branching.
+    const scheme = 'informational' as const;
 
-    if (scheme === 'informational' && total < INDIVIDUAL_MIN_CENTS) {
-      // Below any threshold — skip; previous receipts already cover the donation.
+    if (total < INDIVIDUAL_MIN_CENTS) {
+      // Below the threshold — skip; the per-gift receipts already cover these.
       skipped++;
       continue;
     }
@@ -153,26 +141,4 @@ export async function processTaxCertAnnual(job: Job<TaxCertAnnualJob>) {
   }
 
   return { taxYear, issued, skipped, candidates: rows.length };
-}
-
-/**
- * Determine the donor's "primary" intent for the tax year. If they had any
- * corporate-intent adoption that produced a succeeded payment in the year,
- * we treat the whole year as corporate (TVL §57 is by donor entity, not by
- * donation — once the donor opted in as a company, all their donations sit
- * under the corporate scheme).
- */
-async function dominantIntent(
-  donorId: string,
-  yearStart: Date,
-  yearEnd: Date,
-): Promise<'for_self' | 'gift' | 'memorial' | 'class' | 'corporate'> {
-  const corp = await prisma.adoption.count({
-    where: {
-      donorId,
-      intent: 'corporate',
-      payments: { some: { status: 'succeeded', receivedAt: { gte: yearStart, lt: yearEnd } } },
-    },
-  });
-  return corp > 0 ? 'corporate' : 'for_self';
 }

@@ -3,7 +3,7 @@
 # 🌱 BloomOulu — Production
 
 **One self-hosted, open-source platform for the University of Oulu Botanical Garden:
-adoption · AI-grounded plant guide · immersive QR · live kiosk.**
+donations + favourites · AI-grounded plant guide · immersive QR · live kiosk.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-A8C060.svg)](./LICENSE)
 [![WCAG 2.2 AA](https://img.shields.io/badge/WCAG-2.2%20AA-5FB0A0)](https://www.w3.org/WAI/WCAG22/quickref/)
@@ -21,7 +21,7 @@ prototype in `demo-design/`, this version is:
 - **Self-hosted and free**: every piece runs in Docker on a single VPS (~€5/month). No SaaS subscriptions. Open-source licences only.
 - **Production-grade**: idempotent payment webhooks, audit log on every mutation, full observability (Prometheus + Grafana + Loki + Tempo), automated daily restic backups, GDPR-ready data export + erasure.
 - **Operable by non-developers**: AdminJS-powered control panel where curators add plants, finance refunds donations, admins toggle features and edit translations — Moodle-style.
-- **Finnish-payment-first**: **Paytrail** for cards + all FI banks + Apple/Google Pay + Klarna; **Vipps MobilePay** direct for native subscription agreements; **manual bank transfer with ISO 11649 RF references** for zero-fee donations.
+- **Finnish-payment-first**: **Paytrail** for cards + all FI banks + Apple/Google Pay + Klarna; **Vipps MobilePay** direct for native one-time MobilePay payments; **manual bank transfer with ISO 11649 RF references** for zero-fee donations.
 
 ## Quick start (local dev)
 
@@ -88,7 +88,7 @@ sequence diagrams. In one paragraph:
 > Next.js 15 (web + kiosk) and NestJS 10 (api + admin) talk to a single
 > Postgres 16 + pgvector database. Payments route through three rails: Paytrail
 > (Finnish e-commerce standard, used by 6,500+ FI sites), Vipps MobilePay
-> direct (for true SCA-once recurring agreements), and manual bank transfer
+> direct (native one-time MobilePay payments), and manual bank transfer
 > with ISO 11649 RF references (zero fees, reconciled from camt.054 / CSV
 > uploads by the accountant). The RAG chatbot runs entirely locally on
 > Ollama (`llama3.1:8b` + `nomic-embed-text` + `bge-reranker-v2-m3`). The
@@ -101,14 +101,14 @@ Engineers should not be re-deployed for any of these:
 
 | What | Where in admin |
 |---|---|
-| Tier prices, copy, perks | `/admin/resources/Tier` |
+| Donation amounts (suggested chips, custom, min/max, dedication) | `/admin/pages/settings#donation` |
 | Plant story, names, Red-List, photo, audio | `/admin/resources/Plant` |
 | Every UI string in FI/SV/EN | `/admin/pages/translations` (Moodle-style bulk editor) |
 | Email templates | `/admin/pages/emails` |
 | Homepage hero, callouts | `/admin/resources/ContentBlock` |
-| Adoption flow steps | `/admin/pages/settings#adoptionFlow` |
+| Donor wall — public dedications | `/admin/resources/Donation` |
 | Payment providers (enable Paytrail / MobilePay / bank-transfer) | `/admin/pages/settings#payments` |
-| Feature flags (kiosk, RAG, corporate tier, …) | `/admin/pages/settings#features` |
+| Feature flags (kiosk, RAG, favourites, …) | `/admin/pages/settings#features` |
 | VAT rates per line type | `/admin/pages/settings#vat` |
 | Receipt numbering + branding | `/admin/pages/settings#receipts` |
 | GDPR retention windows | `/admin/pages/settings#gdpr` |
@@ -122,7 +122,7 @@ Engineers should not be re-deployed for any of these:
 
 ### 1. Manual bank transfer (default, zero fees)
 
-The adopt flow generates an [ISO 11649 RF Creditor Reference](https://en.wikipedia.org/wiki/Creditor_Reference) for each order:
+The donate flow generates an [ISO 11649 RF Creditor Reference](https://en.wikipedia.org/wiki/Creditor_Reference) for each donation:
 
 ```
 RF18 5390 0754 7034   ← printable, self-checksummed
@@ -142,7 +142,7 @@ job automatically.
 
 - All Finnish online-banking buttons (Nordea, OP, Danske, S-Pankki, Aktia, Ålandsbanken, POP Pankki, Säästöpankki, Oma Säästöpankki, Handelsbanken)
 - Cards (Visa, Mastercard, Amex)
-- MobilePay (one-off; recurring uses Vipps direct)
+- MobilePay (one-off)
 - Apple Pay, Google Pay
 - Siirto (instant FI A2A)
 - BNPL: Klarna, Walley
@@ -150,12 +150,11 @@ job automatically.
 Used by 6,500+ Finnish sites. Authentication is HMAC-SHA256 over canonicalised
 `checkout-*` headers + body. See `packages/payments/src/paytrail/gateway.ts`.
 
-### 3. Vipps MobilePay (native, recurring agreements)
+### 3. Vipps MobilePay (native one-time payments)
 
-For true SCA-once subscription agreements (annual / monthly), we integrate
-directly with the [Vipps MobilePay Recurring API](https://developer.vippsmobilepay.com/docs/APIs/recurring-api/).
-Paytrail's MobilePay path is one-off only; the direct adapter unlocks the
-recurring rail required by the tier model.
+We integrate directly with the [Vipps MobilePay ePayment API](https://developer.vippsmobilepay.com/docs/APIs/epayment-api/)
+so MobilePay donors approve a single payment in their app (biometric → SCA
+satisfied). No recurring agreement is created — every donation is one-time.
 
 ## Plant data
 
@@ -209,7 +208,7 @@ WCAG 2.2 AA / EAA 2025 conformance enforced in CI:
 
 - `axe-playwright` runs on every PR; serious violations block merge.
 - `jsx-a11y` ESLint rules, no overrides.
-- Keyboard-only path through the entire adopt flow verified by Playwright.
+- Keyboard-only path through the entire donate flow verified by Playwright.
 - Reduced-motion + larger-text + high-contrast modes built in.
 - Audio narrations have on-screen captions per locale.
 - Skip-to-main-content link, `:focus-visible` outlines, semantic landmarks throughout.
@@ -267,7 +266,7 @@ This implementation is grounded in current 2026 best practice:
 
 ### Payments
 - [Paytrail Payment API](https://docs.paytrail.com/) — Finnish e-commerce standard
-- [Vipps MobilePay Recurring API](https://developer.vippsmobilepay.com/docs/APIs/recurring-api/)
+- [Vipps MobilePay ePayment API](https://developer.vippsmobilepay.com/docs/APIs/epayment-api/)
 - [ISO 11649 RF Creditor Reference](https://www.finanssiala.fi/wp-content/uploads/2024/04/structure-of-the-rf-creditor-reference-iso-11649.pdf) — Finnish accounting standard
 - [PSD2 SCA + Stripe exemption logic](https://stripe.com/guides/strong-customer-authentication)
 - [Stripe webhook idempotency best practices](https://docs.stripe.com/webhooks)

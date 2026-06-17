@@ -14,7 +14,6 @@
  * additionally rejects subjects whose User.deactivatedAt is set.
  */
 import {
-  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -294,7 +293,7 @@ export class MeController {
    * Unified donor-activity timeline for the MyGarden page.
    *
    * Aggregates four event sources that already live in the DB:
-   *   - Adoption.createdAt           (kind: 'adoption_created')
+   *   - Donation.createdAt           (kind: 'donation_created')
    *   - Payment.createdAt + succeeded (kind: 'payment_succeeded')
    *   - AskMessage.createdAt          (kind: 'ask_asked')
    *   - SavedPlant.savedAt            (kind: 'plant_saved')
@@ -312,7 +311,7 @@ export class MeController {
    * add an opt-in `PlantView` event tied to userId.
    *
    * Response is a discriminated union: each item has `kind` + `ts` +
-   * exactly one of `adoption | payment | ask | plantSaved` populated.
+   * exactly one of `donation | payment | ask | plantSaved` populated.
    * The web layer formats the human-readable copy with i18n.
    */
   @Get('activity')
@@ -324,15 +323,16 @@ export class MeController {
     const PER_SOURCE = 20;
     const FINAL_LIMIT = 20;
 
-    const [adoptions, payments, asks, saves] = await Promise.all([
-      this.prisma.adoption.findMany({
+    const [donations, payments, asks, saves] = await Promise.all([
+      this.prisma.donation.findMany({
         where: { donorId: userId },
         orderBy: { createdAt: 'desc' },
         take: PER_SOURCE,
         select: {
           id: true,
           createdAt: true,
-          intent: true,
+          amountCents: true,
+          status: true,
           plant: {
             select: {
               slug: true,
@@ -377,16 +377,17 @@ export class MeController {
 
     // Normalize each row into a tagged item with a `ts` for sorting.
     type Item = {
-      kind: 'adoption_created' | 'payment_succeeded' | 'ask_asked' | 'plant_saved';
+      kind: 'donation_created' | 'payment_succeeded' | 'ask_asked' | 'plant_saved';
       ts: Date;
-      adoption?: {
+      donation?: {
         id: string;
-        plantSlug: string;
-        plantNameEn: string;
-        plantNameFi: string;
-        plantNameSv: string;
+        plantSlug: string | null;
+        plantNameEn: string | null;
+        plantNameFi: string | null;
+        plantNameSv: string | null;
         plantLatin: string | null;
-        intent: string;
+        amountCents: number;
+        status: string;
       };
       payment?: { id: string; amountCents: number; currency: string };
       ask?: { messageId: string; prompt: string };
@@ -400,17 +401,18 @@ export class MeController {
     };
 
     const items: Item[] = [
-      ...adoptions.map((a): Item => ({
-        kind: 'adoption_created',
-        ts: a.createdAt,
-        adoption: {
-          id: a.id,
-          plantSlug: a.plant.slug,
-          plantNameEn: a.plant.nameEn,
-          plantNameFi: a.plant.nameFi,
-          plantNameSv: a.plant.nameSv,
-          plantLatin: a.plant.taxon?.latinName ?? null,
-          intent: a.intent,
+      ...donations.map((d): Item => ({
+        kind: 'donation_created',
+        ts: d.createdAt,
+        donation: {
+          id: d.id,
+          plantSlug: d.plant?.slug ?? null,
+          plantNameEn: d.plant?.nameEn ?? null,
+          plantNameFi: d.plant?.nameFi ?? null,
+          plantNameSv: d.plant?.nameSv ?? null,
+          plantLatin: d.plant?.taxon?.latinName ?? null,
+          amountCents: d.amountCents,
+          status: d.status,
         },
       })),
       ...payments.map((p): Item => ({
@@ -443,61 +445,61 @@ export class MeController {
   }
 
   /**
-   * RSVP to an event-category benefit. The donor flips their attendance
-   * intent (accepted / declined / attended) on a specific AdoptionBenefit
-   * row. Persists rsvpStatus + rsvpAt. Ownership check ensures one donor
-   * can't manipulate another's benefits.
+   * My Garden dashboard — the donor's one-time donations plus the
+   * financial documents tied to them.
+   *
+   *   - donations:       newest-first, with the optional directed species
+   *   - receipts:        per-payment donation receipts (PDF links)
+   *   - taxCertificates: annual aggregate certificates (PDF links)
+   *
+   * Replaces the old loyalty-card / tier / impact-breakdown / benefits /
+   * plaques / gifts surface (those concepts no longer exist).
    */
-  @Patch('benefits/:benefitId/rsvp')
-  @Roles('donor', 'curator', 'finance', 'admin')
-  async rsvp(
-    @CurrentUser() actor: AuthenticatedUser,
-    @Param('benefitId') benefitId: string,
-    @Body(
-      new ZodValidationPipe(
-        z.object({
-          status: z.enum(['accepted', 'declined', 'attended']),
-        }),
-      ),
-    )
-    body: { status: 'accepted' | 'declined' | 'attended' },
-  ) {
-    const benefit = await this.prisma.adoptionBenefit.findUnique({
-      where: { id: benefitId },
-      include: {
-        adoption: { select: { donorId: true, giftRecipientId: true } },
-      },
-    });
-    if (!benefit) throw new NotFoundException();
-    if (benefit.category !== 'event') {
-      throw new BadRequestException('RSVP only applies to event-category benefits');
-    }
-    const isOwner =
-      benefit.adoption.donorId === actor.sub ||
-      benefit.adoption.giftRecipientId === actor.sub;
-    if (!isOwner && actor.role !== 'admin' && actor.role !== 'curator') {
-      throw new NotFoundException();
-    }
-    const updated = await this.prisma.adoptionBenefit.update({
-      where: { id: benefitId },
-      data: {
-        rsvpStatus: body.status,
-        rsvpAt: new Date(),
-        // Attended marks the benefit fulfilled too — the donor showed
-        // up to the event, that's the deliverable.
-        ...(body.status === 'attended'
-          ? { status: 'fulfilled' as const, fulfilledAt: new Date() }
-          : {}),
-      },
-      select: { id: true, rsvpStatus: true, rsvpAt: true, status: true },
-    });
-    await this.prisma.auditLog.create({
-      data: {
-        actorUserId: actor.sub,
-        action: `benefit.rsvp.${body.status}`,
-        resource: `AdoptionBenefit/${benefitId}`,
-      },
-    });
-    return updated;
+  @Get('donations')
+  async donations(@CurrentUser() actor: AuthenticatedUser) {
+    const userId = actor.sub;
+    const [donations, receipts, taxCertificates] = await Promise.all([
+      this.prisma.donation.findMany({
+        where: { donorId: userId },
+        orderBy: { createdAt: 'desc' },
+        take: 200,
+        select: {
+          id: true,
+          amountCents: true,
+          currency: true,
+          status: true,
+          dedication: true,
+          startedAt: true,
+          createdAt: true,
+          plant: { select: { slug: true, nameEn: true, nameFi: true, nameSv: true } },
+        },
+      }),
+      this.prisma.receipt.findMany({
+        where: { donorId: userId },
+        orderBy: { issuedAt: 'desc' },
+        select: {
+          id: true,
+          number: true,
+          kind: true,
+          amountCents: true,
+          currency: true,
+          pdfUrl: true,
+          issuedAt: true,
+        },
+      }),
+      this.prisma.taxCertificate.findMany({
+        where: { donorId: userId },
+        orderBy: { taxYear: 'desc' },
+        select: {
+          id: true,
+          taxYear: true,
+          totalCents: true,
+          scheme: true,
+          pdfUrl: true,
+          issuedAt: true,
+        },
+      }),
+    ]);
+    return { donations, receipts, taxCertificates };
   }
 }

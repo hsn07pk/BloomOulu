@@ -117,19 +117,6 @@ POSTGRES_DB=bloomoulu
 | `ASK_CURATOR_REPLY_SLA_DAYS` | `2` | RAG response footer |
 | `WEBAPP_USER_AGENT_EMAIL` | `conservation@bloomoulu.fi` | `User-Agent` for web-search fallback |
 
-### Tier pricing (annual / monthly cents)
-
-| Var | Default | Tier |
-|---|---|---|
-| `TIER_SEEDLING_ANNUAL_CENTS` / `..._MONTHLY_CENTS` | 2500 / 300 | Seedling |
-| `TIER_ROOTED_ANNUAL_CENTS` / `..._MONTHLY_CENTS` | 7500 / 800 | Rooted |
-| `TIER_VULNERABLE_ANNUAL_CENTS` / `..._MONTHLY_CENTS` | 25000 / 2500 | Vulnerable |
-| `TIER_ENDANGERED_ANNUAL_CENTS` / `..._MONTHLY_CENTS` | 75000 / 7500 | Endangered |
-| `TIER_CORPORATE_ANNUAL_CENTS` | 250000 (monthly disabled) | Corporate |
-
-Prices in the running DB always win; the env vars only set the **seed** value
-on first boot. After deploy, edit per-tier prices in /admin → Tier.
-
 ### Payments
 
 | Var | Default | Notes |
@@ -142,23 +129,28 @@ on first boot. After deploy, edit per-tier prices in /admin → Tier.
 | `PAYTRAIL_SECRET` | `SAIPPUAKAUPPIAS` (public test) | replace with your real secret |
 | `MOBILEPAY_*` | empty | see Vipps developer portal |
 
-### Adoption flow
+### Donation flow
+
+Donations are one-time gifts (no tiers, perks, or recurring billing). The
+donate form reads these via `/v1/settings/public`; admins can also edit them
+live in /admin → Donations. Env vars set the boot defaults.
 
 | Var | Default | Notes |
 |---|---|---|
-| `ADOPTION_GIFT_WRAP_CENTS` | `400` | €4 linen-card add-on |
-| `ADOPTION_DONATION_SHARE_BP` | `7200` | 72% donation / 28% benefits (donor disclosure box) |
-| `ADOPTION_PLAQUE_ELIGIBLE_TIERS` | `endangered,corporate` | comma-separated tier IDs |
-| `ADOPTION_DEDICATION_MAX_CHARS` | `240` | nickname / dedication length limit |
-| `ADOPTION_CO_ADOPTER_MAX` | `10` | max split-the-gift co-adopters |
-| `ADOPTION_FUNDS_FLOW_URL` | `/about#funds-flow` | link from disclosure box |
+| `DONATION_SUGGESTED_AMOUNTS_CENTS` | `500,1500,2500,5000` | comma-separated cents — the quick-pick chips |
+| `DONATION_DEFAULT_AMOUNT_CENTS` | `2500` | preselected amount (donate form + kiosk fallback) |
+| `DONATION_ALLOW_CUSTOM_AMOUNT` | `true` | allow a free custom amount in addition to the chips |
+| `DONATION_MIN_CENTS` | `100` | self-serve floor (€1) |
+| `DONATION_MAX_CENTS` | `1000000` | self-serve ceiling (€10,000); larger gifts go to a human |
+| `DONATION_DEDICATION_MAX_CHARS` | `240` | public dedication length limit |
+| `DONATION_FUNDS_FLOW_URL` | `/about#funds-flow` | "where your gift goes" link |
 
 ### VAT, receipts, GDPR
 
 | Var | Default | Notes |
 |---|---|---|
 | `VAT_DONATION_RATE_BP` | `0` | Finnish yleishyödyllinen yhteisö = VAT exempt |
-| `VAT_PERK_RATE_BP` | `2400` | 24% on physical perks (gift-wrap etc.) |
+| `VAT_PERK_RATE_BP` | `2400` | 24% standard rate (reserved; donations are exempt) |
 | `RECEIPT_PREFIX` | `BLO` | renders as `BLO-2026-000001` |
 | `RECEIPT_YEAR_RESET` | `true` | counter resets on Jan 1 |
 | `GDPR_AUDIT_RETENTION_DAYS` | `2190` (6 years) | Finnish Kirjanpitolaki 2:5 §. Non-financial AuditLog pruned by the daily retention sweep past this window |
@@ -204,7 +196,7 @@ on first boot. After deploy, edit per-tier prices in /admin → Tier.
 
 ```bash
 # Show what the api saw at startup
-docker compose exec api printenv | grep -E '^(GARDEN|ASK|TIER|ADOPTION|PAYMENT|VAT|RECEIPT|GDPR|KIOSK)' | sort
+docker compose exec api printenv | grep -E '^(GARDEN|ASK|DONATION|PAYMENT|VAT|RECEIPT|GDPR|KIOSK)' | sort
 
 # Show what /v1/settings/public returns (admin overrides + seed defaults)
 curl -s http://localhost:4000/v1/settings/public | python3 -m json.tool

@@ -2,7 +2,7 @@
  * Settings — overview / search across every SystemSetting and FeatureFlag.
  *
  * For day-to-day work, curators land on the dedicated config pages
- * (Garden Identity, Payment Providers, Adoption, …) which present the
+ * (Garden Identity, Payment Providers, Donations, …) which present the
  * same SystemSetting rows with rich help, examples, and live previews.
  *
  * This page is the fallback / power-user surface: it lists *every* row,
@@ -56,7 +56,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   features: 'Feature flags',
   ask: 'AskTheGarden',
   enrichment: 'Plant enrichment',
-  adoption: 'Adoption flow',
+  donation: 'Donations',
   garden: 'Garden identity',
   qrLabel: 'QR labels',
   kiosk: 'Kiosk',
@@ -69,13 +69,13 @@ const CATEGORY_HINTS: Record<string, string> = {
   paytrail: 'Paytrail merchant ID + sandbox/live hints. Real secrets live in .env.',
   mobilepay: 'Vipps MobilePay merchant serial + API target.',
   bankTransfer: 'IBAN, BIC, beneficiary name shown on the donor’s bank-transfer page.',
-  vat: 'VAT rates per line type (donation / perk / gift-wrap).',
+  vat: 'VAT rate handling on receipts.',
   receipts: 'PDF receipt template variables and numbering scheme.',
   gdpr: 'Data-erasure SLA, anonymisation policy, export bundle contents.',
   features: 'Boolean kill-switches consumed by the public site and admin.',
   ask: 'AskTheGarden behaviour: confidence floor, curator escalation, fallback links.',
   enrichment: '24/7 open-data backfill cadence and per-field auto-apply policy.',
-  adoption: 'Donor checkout knobs: billing intervals, gift wrap, plaque tiers.',
+  donation: 'Donate-page knobs: suggested amounts, default, custom-amount toggle, min/max, dedication limit.',
   garden: 'Public name, postal address, VAT identifier.',
   qrLabel: 'Plant tag print dimensions and label fields.',
   kiosk: 'Lobby display settings and tracking.',
@@ -260,7 +260,7 @@ const SettingsPage: React.FC = () => {
       <PageHeader
         kicker="System settings"
         title="Settings & feature flags"
-        lede="Every business-decision value, grouped by area. For most tasks the dedicated pages (Garden Identity, Payment Providers, Adoption Knobs…) are friendlier — use this overview to search for a specific key or flip a flag in a hurry."
+        lede="Every business-decision value, grouped by area. For most tasks the dedicated pages (Garden Identity, Payment Providers, Donation amounts…) are friendlier — use this overview to search for a specific key or flip a flag in a hurry."
       />
 
       <HelpBanner
