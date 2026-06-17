@@ -102,6 +102,11 @@ export function PlantIndex({
   const [bloom, setBloom] = useState<BloomId>('any');
   const [adopted, setAdopted] = useState<AdoptedId>('any');
   const [family, setFamily] = useState<string>('');
+  // Bloom / support / family are tucked behind a "More filters" disclosure so
+  // only search + the rarity chips show by default (cuts the filter clutter).
+  const [showMore, setShowMore] = useState(false);
+  const advancedCount =
+    (bloom !== 'any' ? 1 : 0) + (adopted !== 'any' ? 1 : 0) + (family.trim() !== '' ? 1 : 0);
   const [page, setPage] = useState(1);
 
   const [items, setItems] = useState<PlantIndexItem[]>(initialItems);
@@ -365,6 +370,20 @@ export function PlantIndex({
           ))}
         </FilterRow>
 
+        <button
+          type="button"
+          className="disclosure-toggle"
+          aria-expanded={showMore}
+          onClick={() => setShowMore((v) => !v)}
+          style={{ alignSelf: 'flex-start' }}
+        >
+          <span className="caret" aria-hidden="true">▸</span>
+          {locale === 'fi' ? 'Lisää suodattimia' : locale === 'sv' ? 'Fler filter' : 'More filters'}
+          {advancedCount > 0 ? ` (${advancedCount})` : ''}
+        </button>
+
+        {showMore && (
+          <>
         {/* Bloom season */}
         <FilterRow label={t('bloomFilterTitle')}>
           {BLOOM_ORDER.map((b) => (
@@ -447,6 +466,8 @@ export function PlantIndex({
             )}
           </div>
         </div>
+          </>
+        )}
       </div>
 
       {/* ── Counter ──────────────────────────────────────────────── */}

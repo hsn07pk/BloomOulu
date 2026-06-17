@@ -88,14 +88,37 @@ function formatEur(cents: number, locale: string): string {
 }
 
 
+interface TopFav {
+  slug: string;
+  nameEn: string;
+  nameFi: string;
+  nameSv: string;
+  redListStatus?: string | null;
+  voteCount: number;
+  primaryImage?: { url: string; altEn: string } | null;
+}
+async function fetchTopFavourites(): Promise<TopFav[]> {
+  try {
+    const res = await fetch(`${internalApiUrl()}/v1/votes/leaderboard?limit=4`, {
+      next: { revalidate: 120 },
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data.plants ?? []) as TopFav[];
+  } catch {
+    return [];
+  }
+}
+
 export default async function HomePage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: 'Home' });
   const tn = await getTranslations({ locale, namespace: 'Nav' });
   const tp = await getTranslations({ locale, namespace: 'Plants' });
-  const [{ items: plants }, stats] = await Promise.all([
+  const [{ items: plants }, stats, topFavourites] = await Promise.all([
     fetchInitialPlants(),
     fetchHomepageStats(),
+    fetchTopFavourites(),
   ]);
   const previewPlants = plants.slice(3, 11);
 
@@ -395,6 +418,75 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
           </Link>
         </div>
       </section>
+
+      {/* ── MOST-LOVED ───────────────────────────────────────────── */}
+      {topFavourites.length > 0 && (
+        <section className="container" style={{ paddingTop: 8, paddingBottom: 56 }}>
+          <div className="row between" style={{ alignItems: 'flex-end', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
+            <div>
+              <p className="eyebrow eyebrow--rust">
+                {locale === 'fi' ? 'Suosikit' : locale === 'sv' ? 'Favoriter' : 'Most loved'}
+              </p>
+              <h2 className="serif" style={{ fontSize: 'clamp(26px, 4vw, 38px)', marginTop: 8 }}>
+                {locale === 'fi'
+                  ? 'Yleisön suosikkikasvit'
+                  : locale === 'sv'
+                    ? 'Besökarnas favoriter'
+                    : 'The plants people love most'}
+              </h2>
+            </div>
+            <Link href={`/${locale}/favourites`} className="small" style={{ color: 'var(--forest)' }}>
+              {locale === 'fi'
+                ? 'Katso koko lista →'
+                : locale === 'sv'
+                  ? 'Se hela listan →'
+                  : 'See the leaderboard →'}
+            </Link>
+          </div>
+          <div data-grid-mobile="2" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+            {topFavourites.map((p) => {
+              const nm =
+                locale === 'fi' ? p.nameFi || p.nameEn : locale === 'sv' ? p.nameSv || p.nameEn : p.nameEn;
+              return (
+                <Link
+                  key={p.slug}
+                  href={`/${locale}/donate?plant=${p.slug}`}
+                  className="card"
+                  style={{ padding: 0, overflow: 'hidden', textDecoration: 'none', color: 'inherit', display: 'block' }}
+                >
+                  <div style={{ height: 120, background: 'var(--sage-pale)', position: 'relative', overflow: 'hidden' }}>
+                    {p.primaryImage?.url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={p.primaryImage.url}
+                        alt={p.primaryImage.altEn ?? ''}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', fontSize: 36 }} aria-hidden="true">
+                        🌿
+                      </div>
+                    )}
+                    {p.redListStatus && (
+                      <span className={`badge badge-${p.redListStatus.toLowerCase()}`} style={{ position: 'absolute', top: 10, left: 10 }}>
+                        {p.redListStatus}
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ padding: 14 }}>
+                    <div className="serif" style={{ fontSize: 15, lineHeight: 1.15 }}>{nm}</div>
+                    <div className="tiny muted" style={{ marginTop: 6, letterSpacing: 0, textTransform: 'none' }}>
+                      <span style={{ color: 'var(--rust)' }}>♥</span> {p.voteCount} ·{' '}
+                      {locale === 'fi' ? 'Lahjoita' : locale === 'sv' ? 'Donera' : 'Donate'}
+                    </div>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {/* ── JOURNEY ──────────────────────────────────────────────── */}
       <section className="container" style={{ paddingTop: 64, paddingBottom: 80 }}>
