@@ -155,7 +155,9 @@
     "voteCount": "{count} favoriter",
     "donateCta": "Donera",
     "vote": "Lägg till i favoriter",
-    "remove": "Ta bort från favoriter"
+    "remove": "Ta bort från favoriter",
+    "supporterCount": "{count} stödjare",
+    "browseAll": "Bläddra bland alla växter"
   },
   "MeProfile": {
     "eyebrow": "Min profil",

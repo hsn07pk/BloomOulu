@@ -155,7 +155,9 @@
     "voteCount": "{count} suosikkia",
     "donateCta": "Lahjoita",
     "vote": "Lisää suosikkeihin",
-    "remove": "Poista suosikeista"
+    "remove": "Poista suosikeista",
+    "supporterCount": "{count} tukijaa",
+    "browseAll": "Selaa kaikkia kasveja"
   },
   "MeProfile": {
     "eyebrow": "Profiilini",

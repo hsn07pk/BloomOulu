@@ -155,7 +155,9 @@
     "voteCount": "{count} favourites",
     "donateCta": "Donate",
     "vote": "Add to favourites",
-    "remove": "Remove from favourites"
+    "remove": "Remove from favourites",
+    "supporterCount": "{count} supporters",
+    "browseAll": "Browse all plants"
   },
   "MeProfile": {
     "eyebrow": "My profile",

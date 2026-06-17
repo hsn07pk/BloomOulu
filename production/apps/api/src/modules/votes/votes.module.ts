@@ -54,7 +54,10 @@ class VotesController {
     const take = Math.min(Math.max(parseInt(limit ?? '20', 10) || 20, 1), 100);
     const plants = await this.prisma.plant.findMany({
       where: { status: 'active' },
-      orderBy: [{ voteCount: 'desc' }, { nameEn: 'asc' }],
+      // Buzz (anonymous votes) leads the ranking as before; the number of
+      // real supporters (donors) is the secondary key so plants with genuine
+      // backing edge ahead on ties.
+      orderBy: [{ voteCount: 'desc' }, { donorCount: 'desc' }, { nameEn: 'asc' }],
       take,
       select: {
         slug: true,

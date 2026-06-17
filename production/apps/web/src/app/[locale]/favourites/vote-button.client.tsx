@@ -3,11 +3,17 @@
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { getBrowserApiUrl } from '@bloomoulu/constants';
+import { useFavourites } from '../../../lib/favourites.client';
 
 /**
- * Favourite (vote) toggle for a plant. Anonymous + idempotent on the server
- * (one vote per visitor hash); we keep optimistic local state so the heart
- * fills instantly, with a brief "pop" so the action feels rewarding.
+ * Favourite (vote) toggle for a plant.
+ *
+ * The persisted favourite set (useFavourites → localStorage) is the source of
+ * truth for whether THIS browser has favourited the plant, so the heart stays
+ * filled across refreshes + navigation and the same plant can't be favourited
+ * twice. The server owns the public COUNT (deduped per visitor hash); we
+ * reconcile it from the vote/unvote response. Optimistic + a brief "pop" so the
+ * action feels rewarding.
  */
 export function VoteButton({
   slug,
@@ -19,22 +25,27 @@ export function VoteButton({
   locale: string;
 }) {
   const t = useTranslations('Favourites');
-  const [voted, setVoted] = useState(false);
+  const { has, add, remove, hydrated } = useFavourites();
+  const voted = has(slug);
   const [count, setCount] = useState(initialCount);
   const [busy, setBusy] = useState(false);
   const [pop, setPop] = useState(false);
 
   async function toggle() {
-    if (busy) return;
+    // Block until localStorage has hydrated so we never act on a stale
+    // "not voted" assumption (which is what caused the re-vote confusion).
+    if (busy || !hydrated) return;
     setBusy(true);
     const next = !voted;
-    // Optimistic + tactile.
-    setVoted(next);
-    setCount((c) => Math.max(0, c + (next ? 1 : -1)));
+    // Optimistic: persist the favourite + nudge the count.
     if (next) {
+      add(slug);
       setPop(true);
       setTimeout(() => setPop(false), 320);
+    } else {
+      remove(slug);
     }
+    setCount((c) => Math.max(0, c + (next ? 1 : -1)));
     try {
       const res = await fetch(`${getBrowserApiUrl()}/v1/plants/${slug}/vote`, {
         method: next ? 'POST' : 'DELETE',
@@ -43,14 +54,22 @@ export function VoteButton({
       });
       if (res.ok) {
         const data = await res.json();
+        // Server is the source of truth for the public count...
         if (typeof data.voteCount === 'number') setCount(data.voteCount);
-        setVoted(Boolean(data.voted));
+        // ...and we reconcile our persisted flag with what it recorded.
+        if (typeof data.voted === 'boolean') {
+          if (data.voted) add(slug);
+          else remove(slug);
+        }
       } else {
-        setVoted(!next);
+        // Revert the optimistic change.
+        if (next) remove(slug);
+        else add(slug);
         setCount((c) => Math.max(0, c + (next ? -1 : 1)));
       }
     } catch {
-      setVoted(!next);
+      if (next) remove(slug);
+      else add(slug);
       setCount((c) => Math.max(0, c + (next ? -1 : 1)));
     } finally {
       setBusy(false);
@@ -64,7 +83,7 @@ export function VoteButton({
       aria-pressed={voted}
       aria-label={voted ? t('remove') : t('vote')}
       onClick={toggle}
-      disabled={busy}
+      disabled={busy || !hydrated}
       style={
         voted
           ? { borderColor: 'var(--rust)', background: 'var(--rust-soft)', color: 'var(--rust-on-light)' }
