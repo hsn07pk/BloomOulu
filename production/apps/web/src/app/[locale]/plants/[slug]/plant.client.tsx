@@ -933,12 +933,22 @@ export function PlantPageClient({ plant, similarPlants, locale, apiUrl: _apiUrl,
                   gap: 12,
                 }}
               >
-                <div>
-                  <div className="serif" style={{ fontSize: 36, lineHeight: 1 }}>
-                    {plant.donorCount ?? 0}
+                <div style={{ display: 'flex', gap: 24 }}>
+                  <div>
+                    <div className="serif" style={{ fontSize: 36, lineHeight: 1 }}>
+                      {plant.donorCount ?? 0}
+                    </div>
+                    <div className="tiny" style={{ marginTop: 4 }}>
+                      {locale === 'fi' ? 'Tukijaa' : locale === 'sv' ? 'Supportrar' : 'Supporters'}
+                    </div>
                   </div>
-                  <div className="tiny" style={{ marginTop: 4 }}>
-                    {locale === 'fi' ? 'Tukijaa' : locale === 'sv' ? 'Supportrar' : 'Supporters'}
+                  <div>
+                    <div className="serif" style={{ fontSize: 36, lineHeight: 1, color: 'var(--rust)' }}>
+                      {plant.voteCount ?? 0}
+                    </div>
+                    <div className="tiny" style={{ marginTop: 4 }}>
+                      {locale === 'fi' ? 'Suosikkina' : locale === 'sv' ? 'Favoriter' : 'Favourites'}
+                    </div>
                   </div>
                 </div>
                 <div className="small muted" style={{ textAlign: 'right' }}>
