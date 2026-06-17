@@ -75,7 +75,6 @@ interface Plant {
   // card in the sticky right column.
   viewCount?: number;
   scanCount?: number;
-  saveCount?: number;
   askCount?: number;
   lastDonatedAt?: string | null;
   primaryImage?: { url: string; altEn: string; altFi: string; altSv: string; attribution?: string } | null;
@@ -177,9 +176,7 @@ function makeQrDataUrl(text: string, size = 280): string {
   return qr.createDataURL(6, 0);
 }
 
-const SAVED_KEY = 'bloom_saved_plants';
-
-export function PlantPageClient({ plant, similarPlants, locale, apiUrl: _apiUrl, signedIn = false }: PlantPageClientProps) {
+export function PlantPageClient({ plant, similarPlants, locale, apiUrl: _apiUrl }: PlantPageClientProps) {
   const t = useTranslations('Plant');
   const tc = useTranslations('Common');
   const searchParams = useSearchParams();
@@ -257,7 +254,6 @@ export function PlantPageClient({ plant, similarPlants, locale, apiUrl: _apiUrl,
   const [showQR, setShowQR] = useState(false);
   const [showMap, setShowMap] = useState(false);
   const [showQuiz, setShowQuiz] = useState(false);
-  const [saved, setSaved] = useState(false);
   const [shareToast, setShareToast] = useState<string | null>(null);
 
   const name = localisedName(plant, locale);
@@ -280,80 +276,12 @@ export function PlantPageClient({ plant, similarPlants, locale, apiUrl: _apiUrl,
   const cleanLocation = cleanGardenZone ?? cleanOrigin;
   const altText = localisedAlt(plant.primaryImage, locale, name);
 
-  // Initial bookmark state from localStorage. If signed in,
-  // also sync the localStorage shadow into the user's server-side
-  // bookmark list (one-shot bulk merge) and then read the server list
-  // for the current plant's authoritative state.
-  useEffect(() => {
-    try {
-      const list = JSON.parse(localStorage.getItem(SAVED_KEY) ?? '[]') as string[];
-      setSaved(list.includes(plant.slug));
-      if (signedIn) {
-        // Best-effort sync of any localStorage shadow into the server.
-        if (list.length > 0) {
-          void fetch('/api/me/saved', {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ slugs: list }),
-          }).catch(() => undefined);
-        }
-        // Then check the server's authoritative state for this plant.
-        void fetch('/api/me/saved', { cache: 'no-store' })
-          .then((r) => (r.ok ? r.json() : { items: [] }))
-          .then((data: { items?: Array<{ plant?: { slug?: string } }> }) => {
-            const onServer = (data.items ?? []).some((it) => it.plant?.slug === plant.slug);
-            if (onServer) setSaved(true);
-          })
-          .catch(() => undefined);
-      }
-    } catch {
-      /* ignore — first-visit / quota errors */
-    }
-  }, [plant.id, plant.slug, signedIn]);
-
   // Toast auto-dismiss
   useEffect(() => {
     if (!shareToast) return;
     const id = setTimeout(() => setShareToast(null), 2200);
     return () => clearTimeout(id);
   }, [shareToast]);
-
-  const toggleSave = () => {
-    // Optimistic UI: flip state immediately, persist to both localStorage
-    // and (when signed in) the server. On server failure, leave the
-    // localStorage shadow updated and surface the error toast — next time
-    // they sign in, the sync endpoint will reconcile.
-    let nextSaved = saved;
-    try {
-      const list = JSON.parse(localStorage.getItem(SAVED_KEY) ?? '[]') as string[];
-      const slug = plant.slug;
-      const next = list.includes(slug) ? list.filter((x) => x !== slug) : [...list, slug];
-      localStorage.setItem(SAVED_KEY, JSON.stringify(next));
-      nextSaved = next.includes(slug);
-      setSaved(nextSaved);
-    } catch {
-      nextSaved = !saved;
-      setSaved(nextSaved);
-    }
-    setShareToast(
-      nextSaved
-        ? locale === 'fi'
-          ? 'Tallennettu omaan puutarhaan'
-          : locale === 'sv'
-            ? 'Sparat i din trädgård'
-            : 'Saved to My Garden'
-        : locale === 'fi'
-          ? 'Poistettu omasta puutarhasta'
-          : locale === 'sv'
-            ? 'Borttagen från din trädgård'
-            : 'Removed from My Garden',
-    );
-    if (signedIn) {
-      void fetch(`/api/me/saved/${encodeURIComponent(plant.slug)}`, {
-        method: nextSaved ? 'PUT' : 'DELETE',
-      }).catch(() => undefined);
-    }
-  };
 
   const handleShare = async () => {
     const url = typeof window !== 'undefined' ? window.location.href : '';
@@ -482,32 +410,6 @@ export function PlantPageClient({ plant, similarPlants, locale, apiUrl: _apiUrl,
               title={t('shareQr')}
             >
               <span aria-hidden="true">▥</span>
-            </button>
-            <button
-              type="button"
-              className="icon-btn"
-              onClick={toggleSave}
-              aria-label={
-                saved
-                  ? locale === 'fi'
-                    ? 'Poista kirjanmerkki'
-                    : locale === 'sv'
-                      ? 'Ta bort bokmärke'
-                      : 'Remove bookmark'
-                  : locale === 'fi'
-                    ? 'Tallenna omaan puutarhaan'
-                    : locale === 'sv'
-                      ? 'Spara i din trädgård'
-                      : 'Save to My Garden'
-              }
-              aria-pressed={saved}
-              style={{
-                background: saved ? 'var(--forest-deep)' : 'var(--paper)',
-                color: saved ? 'var(--sage-bright)' : 'var(--ink-soft)',
-                borderColor: saved ? 'var(--forest-deep)' : 'var(--line)',
-              }}
-            >
-              <span aria-hidden="true">{saved ? '★' : '☆'}</span>
             </button>
             <button
               type="button"
@@ -914,7 +816,6 @@ export function PlantPageClient({ plant, similarPlants, locale, apiUrl: _apiUrl,
           <PlantStats
             viewCount={plant.viewCount ?? 0}
             scanCount={plant.scanCount ?? 0}
-            saveCount={plant.saveCount ?? 0}
             askCount={plant.askCount ?? 0}
             lastDonatedAt={plant.lastDonatedAt ?? null}
             locale={locale}

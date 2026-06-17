@@ -13,7 +13,6 @@
  *   - AskMessage.text → "(erased)" (timestamps kept for retention stats)
  *   - QuizAttempt.userId → null
  *   - Account + Session rows → deleted (they hold OAuth secrets / live creds)
- *   - SavedPlant rows → deleted
  *   - AuditLog.ip / userAgent for the subject → nulled (action/resource kept)
  *   - Payment / Receipt / TaxCertificate → preserved (6-year retention)
  *

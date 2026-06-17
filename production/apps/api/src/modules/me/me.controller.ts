@@ -3,11 +3,6 @@
  *
  *   GET    /v1/me/profile            → donor's own profile fields
  *   PATCH  /v1/me/profile            → update name/locale/homeRegion/marketing
- *   GET    /v1/me/saved              → list of saved plants for the donor
- *   PUT    /v1/me/saved/:slug        → upsert a bookmark (idempotent)
- *   DELETE /v1/me/saved/:slug        → remove a bookmark (no-op if absent)
- *   POST   /v1/me/saved/sync         → bulk merge from the anonymous-localStorage
- *                                      shadow list (called on first sign-in)
  *
  * Auth: every endpoint requires a signed Bearer JWT (the bloomoulu.session
  * cookie content forwarded by the web's server-side proxy). RolesGuard
@@ -16,13 +11,9 @@
 import {
   Body,
   Controller,
-  Delete,
   Get,
   NotFoundException,
-  Param,
   Patch,
-  Post,
-  Put,
 } from '@nestjs/common';
 import { z } from 'zod';
 import { LocaleEnum } from '@bloomoulu/constants';
@@ -185,110 +176,6 @@ export class MeController {
     return parsed.success ? parsed.data : {};
   }
 
-  @Get('saved')
-  async list(@CurrentUser() actor: AuthenticatedUser) {
-    const userId = actor.sub;
-    const rows = await this.prisma.savedPlant.findMany({
-      where: { userId },
-      orderBy: { savedAt: 'desc' },
-      take: 200,
-      include: {
-        plant: {
-          include: {
-            primaryImage: true,
-            taxon: { select: { latinName: true, family: true } },
-          },
-        },
-      },
-    });
-    return { items: rows };
-  }
-
-  @Put('saved/:slug')
-  async save(@Param('slug') slug: string, @CurrentUser() actor: AuthenticatedUser) {
-    const userId = actor.sub;
-    const plant = await this.prisma.plant.findUnique({ where: { slug }, select: { id: true } });
-    if (!plant) throw new NotFoundException();
-    // Check first so we only bump the denormalized Plant.saveCount on a
-    // true insert (not on an idempotent re-save of an already-saved row).
-    const row = await this.prisma.$transaction(async (tx) => {
-      const existing = await tx.savedPlant.findUnique({
-        where: { userId_plantId: { userId, plantId: plant.id } },
-      });
-      if (existing) return existing;
-      const created = await tx.savedPlant.create({
-        data: { userId, plantId: plant.id },
-      });
-      await tx.plant.update({
-        where: { id: plant.id },
-        data: { saveCount: { increment: 1 } },
-      });
-      return created;
-    });
-    return { ok: true, id: row.id, savedAt: row.savedAt };
-  }
-
-  @Delete('saved/:slug')
-  async remove(@Param('slug') slug: string, @CurrentUser() actor: AuthenticatedUser) {
-    const userId = actor.sub;
-    const plant = await this.prisma.plant.findUnique({ where: { slug }, select: { id: true } });
-    if (!plant) return { ok: true, deleted: 0 };
-    // Decrement only by what was actually deleted — handles the case where
-    // the row was already gone (idempotent unsave) without going negative.
-    // Using GREATEST(0, …) as a safety net against drift.
-    const deleted = await this.prisma.$transaction(async (tx) => {
-      const r = await tx.savedPlant.deleteMany({
-        where: { userId, plantId: plant.id },
-      });
-      if (r.count > 0) {
-        await tx.$executeRaw`
-          UPDATE "Plant"
-          SET "saveCount" = GREATEST(0, "saveCount" - ${r.count})
-          WHERE id = ${plant.id}::uuid
-        `;
-      }
-      return r.count;
-    });
-    return { ok: true, deleted };
-  }
-
-  /**
-   * Bulk merge for the anonymous → signed-in handoff. The frontend reads
-   * its localStorage shadow on first sign-in and posts the slug list once.
-   * Already-saved rows are left alone (upsert + skipDuplicates semantics).
-   */
-  @Post('saved/sync')
-  async sync(@CurrentUser() actor: AuthenticatedUser, @Body() body: { slugs: string[] }) {
-    const userId = actor.sub;
-    if (!Array.isArray(body.slugs) || body.slugs.length === 0) return { ok: true, merged: 0 };
-    const plants = await this.prisma.plant.findMany({
-      where: { slug: { in: body.slugs.slice(0, 200) } },
-      select: { id: true },
-    });
-    if (plants.length === 0) return { ok: true, merged: 0 };
-    const data = plants.map((p) => ({ userId, plantId: p.id }));
-    // createMany returns how many rows it actually inserted (the rest were
-    // skipped as duplicates) but doesn't tell us which specific plantIds got
-    // a new row. We recompute saveCount from SavedPlant for every plant in
-    // the input — accurate regardless of which were dupes. Single update,
-    // bounded by the 200-slug cap.
-    const merged = await this.prisma.$transaction(async (tx) => {
-      const inserted = await tx.savedPlant.createMany({ data, skipDuplicates: true });
-      if (inserted.count > 0) {
-        const ids = plants.map((p) => p.id);
-        await tx.$executeRaw`
-          UPDATE "Plant" p
-          SET "saveCount" = (
-            SELECT COUNT(*)::int FROM "SavedPlant" sp WHERE sp."plantId" = p.id
-          )
-          WHERE p.id = ANY(${ids}::uuid[])
-        `;
-      }
-      return inserted.count;
-    });
-    return { ok: true, merged };
-  }
-
   /**
    * Unified donor-activity timeline for the MyGarden page.
    *
@@ -296,7 +183,6 @@ export class MeController {
    *   - Donation.createdAt           (kind: 'donation_created')
    *   - Payment.createdAt + succeeded (kind: 'payment_succeeded')
    *   - AskMessage.createdAt          (kind: 'ask_asked')
-   *   - SavedPlant.savedAt            (kind: 'plant_saved')
    *
    * Each source is queried for its top `limit` rows (so 4 × limit = 80
    * candidates max for the default), the union is sorted ts-DESC, and
@@ -323,7 +209,7 @@ export class MeController {
     const PER_SOURCE = 20;
     const FINAL_LIMIT = 20;
 
-    const [donations, payments, asks, saves] = await Promise.all([
+    const [donations, payments, asks] = await Promise.all([
       this.prisma.donation.findMany({
         where: { donorId: userId },
         orderBy: { createdAt: 'desc' },
@@ -356,28 +242,11 @@ export class MeController {
         take: PER_SOURCE,
         select: { id: true, createdAt: true, text: true },
       }),
-      this.prisma.savedPlant.findMany({
-        where: { userId },
-        orderBy: { savedAt: 'desc' },
-        take: PER_SOURCE,
-        select: {
-          savedAt: true,
-          plant: {
-            select: {
-              slug: true,
-              nameEn: true,
-              nameFi: true,
-              nameSv: true,
-              taxon: { select: { latinName: true } },
-            },
-          },
-        },
-      }),
     ]);
 
     // Normalize each row into a tagged item with a `ts` for sorting.
     type Item = {
-      kind: 'donation_created' | 'payment_succeeded' | 'ask_asked' | 'plant_saved';
+      kind: 'donation_created' | 'payment_succeeded' | 'ask_asked';
       ts: Date;
       donation?: {
         id: string;
@@ -391,13 +260,6 @@ export class MeController {
       };
       payment?: { id: string; amountCents: number; currency: string };
       ask?: { messageId: string; prompt: string };
-      plantSaved?: {
-        plantSlug: string;
-        plantNameEn: string;
-        plantNameFi: string;
-        plantNameSv: string;
-        plantLatin: string | null;
-      };
     };
 
     const items: Item[] = [
@@ -424,17 +286,6 @@ export class MeController {
         kind: 'ask_asked',
         ts: m.createdAt,
         ask: { messageId: m.id, prompt: m.text.slice(0, 120) },
-      })),
-      ...saves.map((s): Item => ({
-        kind: 'plant_saved',
-        ts: s.savedAt,
-        plantSaved: {
-          plantSlug: s.plant.slug,
-          plantNameEn: s.plant.nameEn,
-          plantNameFi: s.plant.nameFi,
-          plantNameSv: s.plant.nameSv,
-          plantLatin: s.plant.taxon?.latinName ?? null,
-        },
       })),
     ];
 

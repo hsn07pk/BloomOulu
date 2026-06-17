@@ -10,7 +10,6 @@ import { useTranslations } from 'next-intl';
  * Stats wired:
  *   - viewCount     Plain page views (web + kiosk URL hits)
  *   - scanCount     QR scans on the physical garden label (subset of views)
- *   - saveCount     Users who bookmarked the plant
  *   - lastDonatedAt Most recent completed donation (relative time)
  *   - askCount      RAG answers whose retrieved chunks linked to this plant
  *
@@ -28,7 +27,6 @@ import { useTranslations } from 'next-intl';
 export interface PlantStatsProps {
   viewCount: number;
   scanCount: number;
-  saveCount: number;
   askCount: number;
   /** ISO string from the controller; null if no completed donations yet. */
   lastDonatedAt: string | null;
@@ -73,7 +71,6 @@ function useRelativeTime(iso: string | null, locale: string): string | null {
 export function PlantStats({
   viewCount,
   scanCount,
-  saveCount,
   askCount,
   lastDonatedAt,
   locale,
@@ -82,12 +79,9 @@ export function PlantStats({
   const fmt = new Intl.NumberFormat(numberLocale(locale));
   const lastDonatedRelative = useRelativeTime(lastDonatedAt, locale);
 
-  // 5 tiles in a 2-col grid: the "Last donated" relative-time string is
-  // usually longer than a number, so it spans both columns on the bottom
-  // row to absorb the asymmetry from an odd tile count.
+  // 4 tiles in a clean 2-col grid: views / scans / questions / last-donated.
   const tiles: Array<{ icon: string; value: string; label: string; muted?: boolean; wide?: boolean }> = [
     { icon: '👁', value: fmt.format(viewCount), label: t('statsVisits') },
-    { icon: '♥', value: fmt.format(saveCount), label: t('statsSaved') },
     { icon: '📱', value: fmt.format(scanCount), label: t('statsScans') },
     { icon: '🤖', value: fmt.format(askCount), label: t('statsQuestions') },
     {
@@ -95,7 +89,6 @@ export function PlantStats({
       value: lastDonatedRelative ?? t('statsLastAdoptedNever'),
       label: t('statsLastAdopted'),
       muted: !lastDonatedRelative,
-      wide: true,
     },
   ];
 

@@ -3,7 +3,6 @@
  *
  *   - Your gifts (one-time donations): amount, status, optional directed
  *     species, dedication and date
- *   - Favourites (saved plants)
  *   - Recent AskTheGarden conversations
  *   - Donation receipts (PDF) + annual tax certificates (PDF)
  *   - GDPR self-service (export / erase)
@@ -66,36 +65,6 @@ async function fetchDonations(jwt: string): Promise<DonationsView | null> {
   }
 }
 
-interface SavedRow {
-  id: string;
-  savedAt: string;
-  plant: {
-    id: string;
-    slug: string;
-    nameEn: string;
-    nameFi: string;
-    nameSv: string;
-    redListStatus: string;
-    primaryImage?: { url: string; altEn: string; altFi: string; altSv: string } | null;
-    taxon?: { latinName: string } | null;
-  };
-}
-
-async function fetchSaved(jwt: string): Promise<SavedRow[]> {
-  const apiUrl = getInternalApiUrl();
-  try {
-    const res = await fetch(`${apiUrl}/v1/me/saved`, {
-      headers: { Authorization: `Bearer ${jwt}` },
-      cache: 'no-store',
-    });
-    if (!res.ok) return [];
-    const data = (await res.json()) as { items?: SavedRow[] };
-    return data.items ?? [];
-  } catch {
-    return [];
-  }
-}
-
 interface AskHistoryRow {
   id: string;
   // The API field is `text` (matches AskMessage.text in Prisma).
@@ -145,9 +114,8 @@ export default async function GardenPage({
   const { cookies } = await import('next/headers');
   const jar = await cookies();
   const sessionJwt = jar.get('bloomoulu.session')?.value ?? '';
-  const [data, saved, askHistory] = await Promise.all([
+  const [data, askHistory] = await Promise.all([
     fetchDonations(sessionJwt),
-    sessionJwt ? fetchSaved(sessionJwt) : Promise.resolve([] as SavedRow[]),
     fetchAskHistory(user.id),
   ]);
 
@@ -332,102 +300,6 @@ export default async function GardenPage({
                     {dateFmt(d.startedAt ?? d.createdAt)}
                   </div>
                 </article>
-              ))}
-            </div>
-          )}
-        </section>
-
-        {/* Favourites (saved plants) */}
-        <section aria-labelledby="saved-h" style={{ marginBottom: 56 }}>
-          <div className="eyebrow">
-            {locale === 'fi' ? 'Suosikit' : locale === 'sv' ? 'Favoriter' : 'Favourites'}
-          </div>
-          <h2 id="saved-h" style={{ fontSize: 28, marginTop: 8, marginBottom: 16 }}>
-            {saved.length}{' '}
-            {saved.length === 1
-              ? locale === 'fi'
-                ? 'tallennettu kasvi'
-                : locale === 'sv'
-                  ? 'sparad växt'
-                  : 'saved plant'
-              : locale === 'fi'
-                ? 'tallennettua kasvia'
-                : locale === 'sv'
-                  ? 'sparade växter'
-                  : 'saved plants'}
-          </h2>
-          {saved.length === 0 ? (
-            <p className="muted">
-              {locale === 'fi'
-                ? 'Klikkaa ☆ kasvisivulla tallentaaksesi kasveja tähän.'
-                : locale === 'sv'
-                  ? 'Klicka på ☆ på en växtsida för att spara hit.'
-                  : 'Click the ☆ on any plant page to save it here.'}
-            </p>
-          ) : (
-            <div
-              data-grid-mobile="2"
-              style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}
-            >
-              {saved.map((s) => (
-                <Link
-                  key={s.id}
-                  href={`/${locale}/plants/${s.plant.slug}`}
-                  className="card"
-                  style={{
-                    padding: 0,
-                    overflow: 'hidden',
-                    textDecoration: 'none',
-                    color: 'inherit',
-                    display: 'block',
-                  }}
-                >
-                  <div
-                    style={{
-                      height: 140,
-                      background: 'var(--sage-pale)',
-                      position: 'relative',
-                      overflow: 'hidden',
-                    }}
-                  >
-                    {s.plant.primaryImage?.url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={s.plant.primaryImage.url}
-                        alt=""
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                        loading="lazy"
-                      />
-                    ) : (
-                      <div
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          height: '100%',
-                          fontSize: 44,
-                        }}
-                        aria-hidden="true"
-                      >
-                        🌿
-                      </div>
-                    )}
-                    <span
-                      className={`badge badge-${s.plant.redListStatus.toLowerCase()}`}
-                      style={{ position: 'absolute', top: 10, left: 10 }}
-                    >
-                      {s.plant.redListStatus}
-                    </span>
-                  </div>
-                  <div style={{ padding: 14 }}>
-                    <div className="serif" style={{ fontSize: 16, fontStyle: 'italic', lineHeight: 1.1 }}>
-                      {s.plant.taxon?.latinName ?? s.plant.nameEn}
-                    </div>
-                    <div className="small muted" style={{ marginTop: 4 }}>
-                      {localisedPlantName(s.plant, locale)}
-                    </div>
-                  </div>
-                </Link>
               ))}
             </div>
           )}

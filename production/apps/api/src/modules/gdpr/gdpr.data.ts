@@ -33,7 +33,6 @@ export async function collectUserExport(prisma: PrismaClient, userId: string) {
     receipts,
     taxCertificates,
     askMessages,
-    savedPlants,
     quizAttempts,
     accountsRaw,
     sessionsRaw,
@@ -70,10 +69,6 @@ export async function collectUserExport(prisma: PrismaClient, userId: string) {
     prisma.askMessage.findMany({
       where: { userId },
       include: { answer: true },
-    }),
-    prisma.savedPlant.findMany({
-      where: { userId },
-      include: { plant: { select: { slug: true, nameEn: true } } },
     }),
     // QuizAttempt has no FK relation to User (userId is a bare column), so
     // query by userId directly.
@@ -119,7 +114,6 @@ export async function collectUserExport(prisma: PrismaClient, userId: string) {
     receipts,
     taxCertificates,
     askMessages,
-    savedPlants,
     quizAttempts,
     accounts,
     sessions,
@@ -205,9 +199,6 @@ export async function eraseUserData(
     //    hard delete. These hold secrets and must not survive erasure.
     await tx.account.deleteMany({ where: { userId } });
     await tx.session.deleteMany({ where: { userId } });
-
-    // 6. SavedPlant bookmarks (incl. free-form notes) → delete.
-    await tx.savedPlant.deleteMany({ where: { userId } });
 
     // 7. AuditLog — pseudonymise the network identifiers for THIS subject
     //    but keep action/resource so the security trail stays intact.

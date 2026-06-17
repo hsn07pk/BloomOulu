@@ -71,7 +71,6 @@ model User {
   receipts      Receipt[]
   taxCertificates TaxCertificate[]
   askMessages   AskMessage[]
-  savedPlants   SavedPlant[]
   dataExports   DataExportRequest[]
   erasures      DataErasureRequest[]
   auditLogs     AuditLog[]    @relation("auditActor")
@@ -210,13 +209,11 @@ model Plant {
   // POST /v1/plants/:slug/view. No per-event table — keep it lightweight.
   viewCount       Int           @default(0)
 
-  // Denormalised counters for plant-detail engagement. Authoritative
-  // sources stay in SavedPlant (saves) and AskAnswer (RAG retrievals
-  // whose chunks linked to this plant); these are bumped transactionally
-  // on insert in me.controller / ask.service. Both default to 0 and are
-  // backfilled by the 20260524170000_plant_engagement_counters migration.
-  // See docs/handover-files/stats-roadmap.md (Pattern B).
-  saveCount       Int           @default(0)
+  // Denormalised counter for plant-detail engagement. Authoritative
+  // source is AskAnswer (RAG retrievals whose chunks linked to this
+  // plant); bumped transactionally on insert in ask.service. Defaults to
+  // 0 and is backfilled by the 20260524170000_plant_engagement_counters
+  // migration. See docs/handover-files/stats-roadmap.md (Pattern B).
   askCount        Int           @default(0)
 
   // Relations
@@ -226,7 +223,6 @@ model Plant {
   narrations      AudioNarration[]
   citations       PlantCitation[]
   ragChunks       RagChunk[]
-  savedBy         SavedPlant[]
   quizQuestions   QuizQuestion[]
   scans           PlantScan[]
   enrichmentSuggestions EnrichmentSuggestion[]
@@ -1024,24 +1020,6 @@ model JobRun {
   createdAt       DateTime @default(now())
 
   @@index([queueName, status])
-}
-
-// Per-user bookmark list. Click the ☆ on a plant page to add it; the row
-// is the source of truth. Anonymous visitors get a localStorage-only
-// shadow that's synced into this table on first sign-in. The compound
-// unique constraint makes upserts idempotent.
-model SavedPlant {
-  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId    String   @db.Uuid
-  plantId   String   @db.Uuid
-  note      String?  // optional donor-side note ("birthday gift for Mom")
-  savedAt   DateTime @default(now())
-
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  plant     Plant    @relation(fields: [plantId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, plantId])
-  @@index([userId, savedAt(sort: Desc)])
 }
 
 // School-mode quiz. Three to five questions per plant per locale, each a
