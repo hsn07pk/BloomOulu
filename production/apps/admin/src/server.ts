@@ -898,6 +898,27 @@ const adminConfig = new AdminJS({
     { resource: { model: getModelByName('PlantImage'), client: prisma }, options: { navigation: { name: 'Catalogue' }, actions: restrictTo(...CURATOR_OR_ADMIN) } },
     { resource: { model: getModelByName('AudioNarration'), client: prisma }, options: { navigation: { name: 'Catalogue' }, actions: restrictTo(...CURATOR_OR_ADMIN) } },
     { resource: { model: getModelByName('Citation'), client: prisma }, options: { navigation: { name: 'Catalogue' }, actions: restrictTo(...CURATOR_OR_ADMIN) } },
+    // NOTE: instagram.handle / instagram.enabled / instagram.lastSyncedAt live in the SystemSetting resource (Operations → Settings, ADMIN_ONLY).
+    {
+      resource: { model: getModelByName('InstagramPost'), client: prisma },
+      options: {
+        navigation: { name: 'Catalogue', icon: 'Instagram' },
+        listProperties: ['imageUrl', 'caption', 'isFallback', 'takenAt', 'displayOrder'],
+        editProperties: ['imageUrl', 'caption', 'permalink', 'displayOrder', 'isFallback'],
+        showProperties: ['id', 'shortcode', 'imageUrl', 'caption', 'permalink', 'mediaType', 'takenAt', 'displayOrder', 'isFallback', 'createdAt', 'updatedAt'],
+        filterProperties: ['isFallback', 'shortcode', 'takenAt'],
+        properties: {
+          imageUrl: { description: 'For FALLBACK rows: paste an image URL (e.g. a /v1/files/... path or an https URL). Live rows are filled automatically by the instagram-sync job and overwrite themselves.' },
+          caption: { description: 'Short caption shown under the image on the home-page band.' },
+          permalink: { description: 'Link opened when a visitor clicks the tile. For fallback rows, point at https://www.instagram.com/oulubotgarden/ or a specific post.' },
+          displayOrder: { description: 'Order of FALLBACK rows (ascending). Ignored for live rows.' },
+          isFallback: { description: 'TRUE = curator-managed fallback (shown only when no live posts exist). FALSE = auto-synced live post — do not edit by hand.' },
+          shortcode: { description: 'Instagram post id (auto-set for live rows; leave blank for fallback rows).' },
+        },
+        sort: { sortBy: 'takenAt', direction: 'desc' as const },
+        actions: restrictTo(...CURATOR_OR_ADMIN),
+      },
+    },
     // ── Donations + donors ─────────────────────────────────────────────
     {
       resource: { model: getModelByName('Donation'), client: prisma },
