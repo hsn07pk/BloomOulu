@@ -38,6 +38,7 @@ import { FilesModule } from './modules/files/files.module.js';
 import { TranslationsModule } from './modules/translations/translations.module.js';
 import { EnrichmentModule } from './modules/enrichment/enrichment.module.js';
 import { StatsModule } from './modules/stats/stats.module.js';
+import { InstagramModule } from './modules/instagram/instagram.module.js';
 
 const isProd = process.env.NODE_ENV === 'production';
 
@@ -117,6 +118,7 @@ const isProd = process.env.NODE_ENV === 'production';
     TranslationsModule,
     EnrichmentModule,
     StatsModule,
+    InstagramModule,
   ],
   controllers: [HealthController],
   providers: [
