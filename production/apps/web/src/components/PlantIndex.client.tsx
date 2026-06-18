@@ -19,9 +19,11 @@ export interface PlantIndexItem {
   taxon?: { latinName: string; family?: string } | null;
 }
 
-// IUCN-style red-list codes — full set matches Prisma's RedListStatus enum.
-// (EX was missing from the original UI; DD had no badge CSS — both fixed.)
-type RedListId = 'All' | 'CR' | 'EN' | 'VU' | 'NT' | 'LC' | 'DD' | 'EX' | 'NA';
+// Donor-facing conservation filter. The API still stores the full 8-code
+// IUCN scale, but the public browse surface collapses it to two buckets:
+// "endangered" (the Threatened set CR/EN/VU) vs "non-endangered" (the rest).
+// See @bloomoulu/constants → endangermentBucket and the ?endangered query param.
+type RedListId = 'All' | 'endangered' | 'non-endangered';
 type BloomId = 'any' | 'spring' | 'summer' | 'autumn' | 'winter' | 'all';
 type AdoptedId = 'any' | 'true' | 'false';
 
@@ -39,16 +41,20 @@ interface FamilyOption {
 }
 
 const PAGE_SIZE = 24;
-const RED_LIST_ORDER: RedListId[] = ['All', 'CR', 'EN', 'VU', 'NT', 'LC', 'DD', 'EX', 'NA'];
+const RED_LIST_ORDER: RedListId[] = ['All', 'endangered', 'non-endangered'];
 const BLOOM_ORDER: BloomId[] = ['any', 'spring', 'summer', 'autumn', 'winter', 'all'];
 const ADOPTED_ORDER: AdoptedId[] = ['any', 'false', 'true'];
 
 const RED_LIST_DOT: Partial<Record<RedListId, string>> = {
-  CR: '#B8513A',
-  EN: '#C77E45',
-  VU: '#C19A3D',
-  NT: '#88A050',
-  EX: '#2a2a2a',
+  endangered: '#B8513A',
+  'non-endangered': '#5FB0A0',
+};
+
+// Filter id → i18n key (lives in the Plants namespace).
+const RED_LIST_KEY: Record<RedListId, 'filterAll' | 'filterEndangered' | 'filterNonEndangered'> = {
+  All: 'filterAll',
+  endangered: 'filterEndangered',
+  'non-endangered': 'filterNonEndangered',
 };
 
 const BLOOM_KEY: Record<BloomId, string> = {
@@ -137,7 +143,10 @@ export function PlantIndex({
       params.set('page', String(p));
     }
     if (query.trim().length >= 2) params.set('q', query.trim());
-    if (redList !== 'All') params.set('redList', redList);
+    // Two-bucket conservation filter → the API's ?endangered flag, which
+    // expands to redListStatus IN/NOT IN (CR,EN,VU) server-side.
+    if (redList === 'endangered') params.set('endangered', 'true');
+    else if (redList === 'non-endangered') params.set('endangered', 'false');
     if (bloom !== 'any') params.set('bloomSeason', bloom);
     if (adopted !== 'any') params.set('hasAdopters', adopted);
     if (family) params.set('family', family);
@@ -250,7 +259,7 @@ export function PlantIndex({
     const plantsWord = t('labelPlants');
     if (activeCount === 0) return plantsWord;
     if (activeCount === 1) {
-      if (redList !== 'All') return `${t(`filter${redList}` as 'filterAll')} ${plantsWord}`;
+      if (redList !== 'All') return `${t(RED_LIST_KEY[redList])} ${plantsWord}`;
       if (bloom !== 'any') return `${t(BLOOM_KEY[bloom] as 'bloomFilterAll')} ${plantsWord}`;
       if (adopted !== 'any') return t(ADOPTED_KEY[adopted] as 'adoptionFilterAll');
       if (family) return `${family} ${plantsWord}`;
@@ -365,7 +374,7 @@ export function PlantIndex({
               active={redList === f}
               onClick={() => setRedListAndReset(f)}
               dot={RED_LIST_DOT[f]}
-              label={t(`filter${f}` as 'filterAll')}
+              label={t(RED_LIST_KEY[f])}
             />
           ))}
         </FilterRow>

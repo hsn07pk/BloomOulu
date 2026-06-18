@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 import { getInternalApiUrl } from '@bloomoulu/constants';
 import { VoteButton } from './vote-button.client';
+import { redListBadgeClass, redListBucketLabel } from '@/lib/redlist';
 
 export const dynamic = 'force-dynamic';
 
@@ -139,10 +140,10 @@ export default async function FavouritesPage({
                   )}
                   {p.redListStatus && (
                     <span
-                      className={`badge badge-${p.redListStatus.toLowerCase()}`}
+                      className={redListBadgeClass(p.redListStatus)}
                       style={{ position: 'absolute', bottom: 4, left: 4, fontSize: 10 }}
                     >
-                      {p.redListStatus}
+                      {redListBucketLabel(p.redListStatus, locale)}
                     </span>
                   )}
                 </div>

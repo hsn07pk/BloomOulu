@@ -43,6 +43,8 @@
     "clearSearch": "Rensa sökning",
     "filters": "Filter",
     "filterAll": "Alla",
+    "filterEndangered": "Hotad",
+    "filterNonEndangered": "Ej hotad",
     "filterCR": "Akut hotad",
     "filterEN": "Starkt hotad",
     "filterVU": "Sårbar",

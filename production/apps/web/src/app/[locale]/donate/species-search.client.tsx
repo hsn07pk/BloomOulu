@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { getBrowserApiUrl } from '@bloomoulu/constants';
+import { redListBadgeClass, redListBucketLabel } from '@/lib/redlist';
 
 export interface SpeciesLite {
   slug: string;
@@ -102,8 +103,8 @@ export function SpeciesSearch({
             <span>
               {speciesName(selected, locale)}
               {selected.redListStatus && (
-                <span className={`badge badge-${selected.redListStatus.toLowerCase()}`} style={{ marginLeft: 8 }}>
-                  {selected.redListStatus}
+                <span className={redListBadgeClass(selected.redListStatus)} style={{ marginLeft: 8 }}>
+                  {redListBucketLabel(selected.redListStatus, locale)}
                 </span>
               )}
             </span>
@@ -169,7 +170,9 @@ export function SpeciesSearch({
                 >
                   <span style={{ flex: 1 }}>{speciesName(p, locale)}</span>
                   {p.redListStatus && (
-                    <span className={`badge badge-${p.redListStatus.toLowerCase()}`}>{p.redListStatus}</span>
+                    <span className={redListBadgeClass(p.redListStatus)}>
+                      {redListBucketLabel(p.redListStatus, locale)}
+                    </span>
                   )}
                 </button>
               ))}

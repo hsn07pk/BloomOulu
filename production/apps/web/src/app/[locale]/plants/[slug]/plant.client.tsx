@@ -21,6 +21,7 @@ import {
   type Locale as SharedLocale,
 } from '@bloomoulu/constants';
 import { isAdoptable, nonAdoptableReason } from '../../../../lib/adoption';
+import { redListBadgeClass, redListBucketLabel } from '../../../../lib/redlist';
 import { PlantStats } from '../../../../components/PlantStats';
 import { VoteButton } from '../../favourites/vote-button.client';
 
@@ -359,7 +360,7 @@ export function PlantPageClient({ plant, similarPlants, locale, apiUrl: _apiUrl 
       [labelMap.origin!, cleanOrigin],
       [labelMap.habitat!, cleanHabitat],
       [labelMap.biome!, cleanBiome],
-      [labelMap.redList!, cleanField(plant.redListStatus)],
+      [labelMap.redList!, redListBucketLabel(plant.redListStatus, locale)],
     ] as Array<[string, string | null]>).filter((entry): entry is [string, string] => entry[1] !== null);
   })();
 
@@ -498,8 +499,8 @@ export function PlantPageClient({ plant, similarPlants, locale, apiUrl: _apiUrl 
                 flexWrap: 'wrap',
               }}
             >
-              <span className={`badge badge-${plant.redListStatus.toLowerCase()}`}>
-                {plant.redListStatus}
+              <span className={redListBadgeClass(plant.redListStatus)}>
+                {redListBucketLabel(plant.redListStatus, locale)}
               </span>
               {cleanFamily && (
                 <span
@@ -725,7 +726,7 @@ export function PlantPageClient({ plant, similarPlants, locale, apiUrl: _apiUrl 
                         [locale === 'fi' ? 'Elinympäristö' : locale === 'sv' ? 'Habitat' : 'Habitat', cleanHabitat],
                         [locale === 'fi' ? 'Kasvuvyöhyke' : locale === 'sv' ? 'Biom' : 'Biome', cleanBiome],
                         [locale === 'fi' ? 'Kukinta-aika' : locale === 'sv' ? 'Blomningstid' : 'Blooms', cleanBloom],
-                        [locale === 'fi' ? 'Uhanalaisuusluokka' : locale === 'sv' ? 'Rödlistningsstatus' : 'Red-List status', cleanField(plant.redListStatus)],
+                        [locale === 'fi' ? 'Uhanalaisuusluokka' : locale === 'sv' ? 'Rödlistningsstatus' : 'Red-List status', redListBucketLabel(plant.redListStatus, locale)],
                         [locale === 'fi' ? 'Heimo' : locale === 'sv' ? 'Familj' : 'Family', cleanFamily],
                         [locale === 'fi' ? 'Tieteellinen nimi' : locale === 'sv' ? 'Vetenskapligt namn' : 'Latin name', latin],
                         [locale === 'fi' ? 'Puutarha-alue' : locale === 'sv' ? 'Trädgårdsområde' : 'Garden zone', cleanGardenZone],
@@ -940,7 +941,7 @@ export function PlantPageClient({ plant, similarPlants, locale, apiUrl: _apiUrl 
                     {nonAdoptableReason(plant.redListStatus, locale)}
                   </p>
                   <Link
-                    href={`/${locale}/plants?redList=CR`}
+                    href={`/${locale}/plants?endangered=true`}
                     className="btn btn-ghost small"
                     style={{
                       marginTop: 12,
@@ -1011,7 +1012,7 @@ export function PlantPageClient({ plant, similarPlants, locale, apiUrl: _apiUrl 
                         {p.taxon?.latinName ?? p.nameEn}
                       </div>
                       <div className="small muted">
-                        {p.redListStatus} · {p.donorCount ?? 0}{' '}
+                        {redListBucketLabel(p.redListStatus, locale)} · {p.donorCount ?? 0}{' '}
                         {locale === 'fi' ? 'tukijaa' : locale === 'sv' ? 'supportrar' : 'supporters'}
                       </div>
                     </div>
@@ -1288,7 +1289,7 @@ function KidIntro({
   const latin = plant.taxon?.latinName ?? plant.nameEn;
   const location = cleanField(plant.gardenZone) ?? cleanField(plant.origin);
   const bloom = cleanField(plant.bloomWindow) ?? cleanField(plant.bloomSeason);
-  const cleanRedList = cleanField(plant.redListStatus);
+  const cleanRedList = redListBucketLabel(plant.redListStatus, locale);
   const cards: Array<[string, string, string]> = [];
   const cleanedOrigin = cleanField(plant.origin);
   if (cleanedOrigin) {
@@ -1390,7 +1391,7 @@ function SchoolIntro({
         // Only list facts the DB actually has — placeholders are silently
         // dropped so the school-mode summary never reads "Habitat: pending".
         const rows: Array<[string, string]> = [];
-        const r = cleanField(plant.redListStatus);
+        const r = redListBucketLabel(plant.redListStatus, locale);
         if (r) rows.push([locale === 'fi' ? 'Lajin uhanalaisuusluokka' : locale === 'sv' ? 'Artens hotstatus' : 'Red-List status', r]);
         const h = cleanField(plant.habitat);
         if (h) rows.push([locale === 'fi' ? 'Elinympäristö' : 'Habitat', h]);

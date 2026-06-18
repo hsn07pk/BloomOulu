@@ -20,7 +20,7 @@
 import { Body, Controller, Get, HttpCode, Ip, NotFoundException, Param, Post, Query, Req } from '@nestjs/common';
 import type { FastifyRequest } from 'fastify';
 import { createHmac } from 'node:crypto';
-import { LocaleEnum } from '@bloomoulu/constants';
+import { LocaleEnum, ENDANGERED_STATUSES } from '@bloomoulu/constants';
 import { z } from 'zod';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { NarrationService } from '../narration/narration.service.js';
@@ -43,6 +43,12 @@ type RecordScanDto = z.infer<typeof RecordScanDto>;
 const MAX_LIMIT = 100;
 const DEFAULT_LIMIT = 24;
 
+/** Quoted, comma-joined IUCN "Threatened" codes (CR,EN,VU) for raw-SQL
+ *  IN / NOT IN clauses. Built from a trusted constant — never user input —
+ *  so inlining into SQL is safe. Powers the public ?endangered=true|false
+ *  filter, which the web/kiosk surfaces use in place of per-code filters. */
+const ENDANGERED_SQL = ENDANGERED_STATUSES.map((s) => `'${s}'`).join(', ');
+
 @Controller('plants')
 export class PlantsController {
   constructor(
@@ -54,6 +60,7 @@ export class PlantsController {
   async list(
     @Query('status') status: string = 'active',
     @Query('redList') redList?: string,
+    @Query('endangered') endangered?: string,
     @Query('bloomSeason') bloomSeason?: string,
     @Query('family') family?: string,
     @Query('hasAdopters') hasAdopters?: string,
@@ -73,11 +80,16 @@ export class PlantsController {
     // Fuzzy / FTS path: delegate to /search internally so the index plan
     // is the same. Forward facet filters so combined search+filter works.
     if (q && q.trim().length >= 2) {
-      return this.search(q, limitStr, cursor, redList, bloomSeason, family, hasAdopters, pageMode ? page : undefined);
+      return this.search(q, limitStr, cursor, redList, bloomSeason, family, hasAdopters, pageMode ? page : undefined, endangered);
     }
 
     const where: any = { status };
+    // `redList` (exact IUCN code) is kept for internal callers — similar-plants
+    // and the admin tools. `endangered` is the donor-facing two-bucket filter
+    // (CR/EN/VU vs the rest). Exact code wins if both are somehow supplied.
     if (redList) where.redListStatus = redList as any;
+    else if (endangered === 'true') where.redListStatus = { in: [...ENDANGERED_STATUSES] };
+    else if (endangered === 'false') where.redListStatus = { notIn: [...ENDANGERED_STATUSES] };
     if (bloomSeason) where.bloomSeason = bloomSeason as any;
     if (family) where.taxon = { family };
     if (hasAdopters === 'true') where.donorCount = { gt: 0 };
@@ -154,6 +166,7 @@ export class PlantsController {
   async count(
     @Query('status') status: string = 'active',
     @Query('redList') redList?: string,
+    @Query('endangered') endangered?: string,
     @Query('bloomSeason') bloomSeason?: string,
     @Query('family') family?: string,
     @Query('hasAdopters') hasAdopters?: string,
@@ -162,10 +175,12 @@ export class PlantsController {
     // Fuzzy / FTS path mirrors search() WHERE clauses so the counter
     // stays accurate when the user has a query active.
     if (q && q.trim().length >= 2) {
-      return this.searchCount(q, redList, bloomSeason, family, hasAdopters);
+      return this.searchCount(q, redList, bloomSeason, family, hasAdopters, endangered);
     }
     const where: any = { status };
     if (redList) where.redListStatus = redList as any;
+    else if (endangered === 'true') where.redListStatus = { in: [...ENDANGERED_STATUSES] };
+    else if (endangered === 'false') where.redListStatus = { notIn: [...ENDANGERED_STATUSES] };
     if (bloomSeason) where.bloomSeason = bloomSeason as any;
     if (family) where.taxon = { family };
     if (hasAdopters === 'true') where.donorCount = { gt: 0 };
@@ -186,6 +201,7 @@ export class PlantsController {
     bloomSeason?: string,
     family?: string,
     hasAdopters?: string,
+    endangered?: string,
   ): Promise<{ total: number }> {
     const qTrim = q.trim();
     const tsq = qTrim
@@ -202,6 +218,10 @@ export class PlantsController {
     if (redList) {
       params.push(redList);
       clauses.push(`AND p."redListStatus" = $${params.length}::"RedListStatus"`);
+    } else if (endangered === 'true') {
+      clauses.push(`AND p."redListStatus" IN (${ENDANGERED_SQL})`);
+    } else if (endangered === 'false') {
+      clauses.push(`AND p."redListStatus" NOT IN (${ENDANGERED_SQL})`);
     }
     if (bloomSeason) {
       params.push(bloomSeason);
@@ -241,6 +261,8 @@ export class PlantsController {
     @Query('hasAdopters') hasAdopters?: string,
     /** When set, switches search into offset pagination — returns total + totalPages instead of nextCursor. */
     @Query('page') pageParam?: number | string,
+    /** Donor-facing two-bucket filter: 'true' = CR/EN/VU, 'false' = the rest. */
+    @Query('endangered') endangered?: string,
   ) {
     if (!q || q.trim().length < 2)
       return pageParam !== undefined
@@ -269,6 +291,10 @@ export class PlantsController {
     if (redList) {
       filterParams.push(redList);
       filterClauses.push(`AND p."redListStatus" = $${filterParamStart + filterParams.length - 1}::"RedListStatus"`);
+    } else if (endangered === 'true') {
+      filterClauses.push(`AND p."redListStatus" IN (${ENDANGERED_SQL})`);
+    } else if (endangered === 'false') {
+      filterClauses.push(`AND p."redListStatus" NOT IN (${ENDANGERED_SQL})`);
     }
     if (bloomSeason) {
       filterParams.push(bloomSeason);
@@ -311,7 +337,7 @@ export class PlantsController {
       const params = [tsq.length > 0 ? tsq : qTrim, qTrim, limit, ...filterParams, offset];
       const [ranked, countRes] = await Promise.all([
         this.prisma.$queryRawUnsafe<Array<{ id: string }>>(rankedSql, ...params),
-        this.searchCount(q, redList, bloomSeason, family, hasAdopters),
+        this.searchCount(q, redList, bloomSeason, family, hasAdopters, endangered),
       ]);
       const rankedIds = ranked.map((r) => r.id);
       const fullRows = rankedIds.length

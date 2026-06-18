@@ -837,7 +837,7 @@ const adminConfig = new AdminJS({
           nameEn: { description: 'Common name in English. Shown as the card title on the public site.' },
           nameFi: { description: 'Common name in Finnish (Suomi).' },
           nameSv: { description: 'Common name in Swedish (Svenska).' },
-          redListStatus: { description: 'IUCN / Finnish Red List category: CR · EN · VU · NT · LC · DD · NE · NA. Drives the badge on the public card.' },
+          redListStatus: { description: 'IUCN / Finnish Red List category: CR · EN · VU · NT · LC · DD · NE · NA. Stored at full precision here; the public site collapses it to a two-state badge — "Endangered" (CR/EN/VU) vs "Non-endangered" (everything else).' },
           redListYear: { description: 'Year the Red-List assessment was published. Defaults to 2019 (Suomen lajien uhanalaisuus).' },
           origin: { description: 'Short native-origin description (≤ 240 chars). e.g. "Northern boreal forests, Fennoscandia". Auto-filled by GBIF if blank.' },
           habitat: { description: 'Habitat type: mire, esker, alpine, riparian, etc. Free text.' },

@@ -4,6 +4,7 @@ import { type PlantIndexItem } from '../../components/PlantIndex.client';
 import { PlantCard, plantSubName } from '../../components/PlantCard';
 import { PlantImage } from '../../components/PlantImage.client';
 import { internalApiUrl } from '../../lib/api';
+import { redListBadgeClass, redListBucketLabel } from '../../lib/redlist';
 
 export const revalidate = 60;
 
@@ -469,8 +470,8 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
                       </div>
                     )}
                     {p.redListStatus && (
-                      <span className={`badge badge-${p.redListStatus.toLowerCase()}`} style={{ position: 'absolute', top: 10, left: 10 }}>
-                        {p.redListStatus}
+                      <span className={redListBadgeClass(p.redListStatus)} style={{ position: 'absolute', top: 10, left: 10 }}>
+                        {redListBucketLabel(p.redListStatus, locale)}
                       </span>
                     )}
                   </div>

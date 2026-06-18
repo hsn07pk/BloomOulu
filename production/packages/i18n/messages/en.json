@@ -43,6 +43,8 @@
     "clearSearch": "Clear search",
     "filters": "Filters",
     "filterAll": "All",
+    "filterEndangered": "Endangered",
+    "filterNonEndangered": "Non-endangered",
     "filterCR": "Critically Endangered",
     "filterEN": "Endangered",
     "filterVU": "Vulnerable",

@@ -125,6 +125,10 @@ a { color: var(--forest); text-underline-offset: 3px; }
 .pill-on-dark { background: rgba(250, 247, 238, 0.12); color: var(--cream); border: 1px solid rgba(250,247,238,0.18); }
 
 .badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 3px; font-size: 0.667rem; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; font-family: var(--f-mono); white-space: nowrap; }
+/* Donor-facing two-bucket badges (see lib/redlist.ts). "endangered" = IUCN
+   Threatened (CR/EN/VU) in warm rust; everything else reads calm teal. */
+.badge-endangered { background: var(--rust-soft); color: var(--rust-on-light); }
+.badge-non-endangered { background: var(--teal-pale); color: var(--forest-mid); }
 .badge-cr, .badge-en { background: var(--rust-soft); color: var(--rust-on-light); } /* AA on rust-soft at 10px */
 .badge-ex { background: #2a2a2a; color: #f0f0f0; } /* extinct — heaviest visual weight, mono grey on near-black */
 .badge-vu { background: var(--amber-soft); color: #6B4F1B; } /* darkened for 4.5:1 at 10px on amber-soft */

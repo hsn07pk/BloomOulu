@@ -43,6 +43,8 @@
     "clearSearch": "Tyhjennä haku",
     "filters": "Suodattimet",
     "filterAll": "Kaikki",
+    "filterEndangered": "Uhanalainen",
+    "filterNonEndangered": "Ei uhanalainen",
     "filterCR": "Äärimmäisen uhanalainen",
     "filterEN": "Erittäin uhanalainen",
     "filterVU": "Vaarantunut",

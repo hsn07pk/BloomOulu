@@ -14,19 +14,14 @@
 import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { isEndangered } from '@bloomoulu/constants';
 
 const GARDEN_CENTER: [number, number] = [65.0617, 25.4661];
 
-const RED_LIST_COLOR: Record<string, string> = {
-  CR: '#B8513A',
-  EN: '#C77E45',
-  VU: '#C19A3D',
-  NT: '#88A050',
-  LC: '#5FB0A0',
-  DD: '#9DA8B4',
-  EX: '#7A5C4A',
-  NA: '#5FB0A0',
-};
+// Two-bucket pin colour — warm rust for the IUCN Threatened set (CR/EN/VU),
+// calm teal for everything else. Matches the public badge palette.
+const ENDANGERED_PIN = '#B8513A';
+const NON_ENDANGERED_PIN = '#5FB0A0';
 
 export function PlantMap({
   lat,
@@ -65,7 +60,7 @@ export function PlantMap({
       attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     }).addTo(map);
 
-    const color = RED_LIST_COLOR[redListStatus] ?? '#5FB0A0';
+    const color = isEndangered(redListStatus) ? ENDANGERED_PIN : NON_ENDANGERED_PIN;
     const icon = L.divIcon({
       className: '',
       html: `
@@ -74,9 +69,9 @@ export function PlantMap({
           background: ${color}; border: 3px solid #FAF7EE;
           box-shadow: 0 4px 14px rgba(31,58,44,0.35);
           display: flex; align-items: center; justify-content: center;
-          font-family: ui-monospace, monospace; font-size: 10px;
+          font-family: ui-monospace, monospace; font-size: 13px;
           font-weight: 700; color: #FAF7EE;
-        ">${redListStatus}</div>
+        ">📍</div>
       `,
       iconSize: [28, 28],
       iconAnchor: [14, 14],

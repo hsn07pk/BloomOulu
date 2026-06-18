@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { PlantIndexItem } from './PlantIndex.client';
 import { PlantImage } from './PlantImage.client';
+import { redListBadgeClass, redListBucketLabel } from '@/lib/redlist';
 
 const ACCENT_PALETTE = ['#E8EEDE', '#F1E6CB', '#F0DCD0', '#D6EBE3'];
 
@@ -137,7 +138,9 @@ export function PlantCard({ plant: p, locale, adoptersLabel }: PlantCardProps) {
           </div>
         )}
         <div style={{ position: 'absolute', top: 14, left: 14 }}>
-          <span className={`badge badge-${p.redListStatus.toLowerCase()}`}>{p.redListStatus}</span>
+          <span className={redListBadgeClass(p.redListStatus)}>
+            {redListBucketLabel(p.redListStatus, locale)}
+          </span>
         </div>
       </div>
       <div style={{ padding: 18 }}>
