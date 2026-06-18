@@ -34,6 +34,14 @@
     "conservation": "Bevarandeeffekt",
     "howItWorks": "Så fungerar BloomOulu"
   },
+  "Instagram": {
+    "eyebrow": "Följ oss",
+    "title": "Vår trädgård, på Instagram",
+    "subtitle": "Dagliga glimtar av samlingen — vad som blommar, bakom växthusets glas och människorna som sköter den.",
+    "follow": "Följ @oulubotgarden",
+    "viewOnInstagram": "Visa på Instagram",
+    "handle": "@oulubotgarden"
+  },
   "Plants": {
     "collection": "Den levande samlingen",
     "indexTitle": "Bläddra i levande indexet",

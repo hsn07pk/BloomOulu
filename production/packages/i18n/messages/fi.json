@@ -34,6 +34,14 @@
     "conservation": "Suojelun vaikutus",
     "howItWorks": "Näin BloomOulu toimii"
   },
+  "Instagram": {
+    "eyebrow": "Seuraa meitä",
+    "title": "Puutarhamme Instagramissa",
+    "subtitle": "Päivittäisiä vilauksia kokoelmasta — mikä kukkii, kasvihuoneen lasin takana ja ihmiset jotka siitä huolehtivat.",
+    "follow": "Seuraa @oulubotgarden",
+    "viewOnInstagram": "Katso Instagramissa",
+    "handle": "@oulubotgarden"
+  },
   "Plants": {
     "collection": "Elävä kokoelma",
     "indexTitle": "Selaa elävää indeksiä",
