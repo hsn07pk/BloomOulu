@@ -36,36 +36,37 @@ export async function InstagramSection({ locale }: { locale: string }) {
   const posts = feed?.posts ?? [];
 
   return (
-    <section style={{ background: 'var(--forest-deep, #18271E)', color: 'var(--cream, #FAF7EE)', padding: '72px 0' }}>
+    <section style={{ background: 'var(--sage-pale)', padding: '72px 0' }}>
       <div className="container">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 16, marginBottom: 28 }}>
           <div>
-            <div className="tiny" style={{ color: '#A8C060', letterSpacing: '0.18em', textTransform: 'uppercase' }}>{t('eyebrow')}</div>
-            <h2 className="serif" style={{ fontSize: 'clamp(28px, 4vw, 44px)', marginTop: 8 }}>{t('title')}</h2>
-            <p style={{ marginTop: 10, maxWidth: 520, color: 'rgba(250,247,238,0.72)' }}>{t('subtitle')}</p>
+            <div className="tiny" style={{ color: 'var(--rust-on-light)' }}>{t('eyebrow')}</div>
+            <h2 className="serif" style={{ fontSize: 'clamp(28px, 4vw, 44px)', marginTop: 8, color: 'var(--ink)' }}>{t('title')}</h2>
+            <p className="muted" style={{ marginTop: 10, maxWidth: 520 }}>{t('subtitle')}</p>
           </div>
           <a href={profileUrl} target="_blank" rel="noopener noreferrer" className="btn btn-primary"
-             style={{ background: '#A8C060', color: '#18271E', whiteSpace: 'nowrap' }}>
+             style={{ whiteSpace: 'nowrap' }}>
             {t('follow')} ↗
           </a>
         </div>
 
         {posts.length > 0 && (
-          <div data-grid-mobile="2" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+          <div data-grid-mobile="2" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20 }}>
             {posts.map((p) => (
               <a key={p.shortcode ?? p.imageUrl} href={p.permalink} target="_blank" rel="noopener noreferrer"
                  aria-label={t('viewOnInstagram')}
-                 style={{ display: 'block', borderRadius: 14, overflow: 'hidden', background: 'rgba(250,247,238,0.06)', textDecoration: 'none', color: 'inherit' }}>
-                <div style={{ aspectRatio: '1 / 1', position: 'relative', overflow: 'hidden' }}>
+                 className="card"
+                 style={{ display: 'block', padding: 0, overflow: 'hidden', textDecoration: 'none', color: 'inherit' }}>
+                <div style={{ aspectRatio: '1 / 1', position: 'relative', overflow: 'hidden', background: 'var(--sage-pale)' }}>
                   <PlantImage src={p.imageUrl} alt={p.caption ?? t('handle')} variant="card" />
                 </div>
-                <div style={{ padding: '12px 14px 14px' }}>
+                <div style={{ padding: '14px 16px 16px' }}>
                   {p.caption && (
-                    <p style={{ margin: 0, fontSize: 14, lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                    <p style={{ margin: 0, fontSize: 14, lineHeight: 1.45, color: 'var(--ink-soft)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                       {p.caption}
                     </p>
                   )}
-                  <div className="tiny" style={{ marginTop: 8, color: 'rgba(250,247,238,0.55)' }}>
+                  <div className="tiny" style={{ marginTop: 10 }}>
                     {relativeTime(p.takenAt, locale)}
                   </div>
                 </div>
