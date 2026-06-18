@@ -1122,3 +1122,30 @@ model QuizAttempt {
   @@index([plantId, createdAt(sort: Desc)])
   @@index([userId, createdAt(sort: Desc)])
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// Instagram feed cache (home-page band)
+// ────────────────────────────────────────────────────────────────────────────
+
+/// Cached Instagram posts for the public home-page band. Live rows
+/// (isFallback=false) are refreshed by the instagram-sync job; fallback
+/// rows (isFallback=true) are curator-managed in /admin and shown only when
+/// no live rows exist. `imageUrl` is the same-origin serving path
+/// (/v1/files/instagram/<shortcode>.jpg) for live rows, or a curator-entered
+/// URL for fallback rows. The full IUCN-style granularity note does not apply.
+model InstagramPost {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  shortcode    String?   @unique          // null for fallback rows
+  caption      String?
+  takenAt      DateTime?
+  mediaType    String    @default("image") // image | carousel | video (thumbnail only)
+  imageUrl     String
+  permalink    String?
+  displayOrder Int        @default(0)
+  isFallback   Boolean    @default(false)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([isFallback, displayOrder])
+  @@index([isFallback, takenAt(sort: Desc)])
+}
