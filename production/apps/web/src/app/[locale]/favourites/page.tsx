@@ -115,7 +115,7 @@ export default async function FavouritesPage({
                 </span>
 
                 {/* Thumbnail with the Red-List badge tucked into the corner */}
-                <div style={{ position: 'relative', flexShrink: 0, width: 76, height: 76 }}>
+                <div style={{ flexShrink: 0, width: 76, height: 76 }}>
                   {p.primaryImage?.url ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -138,14 +138,6 @@ export default async function FavouritesPage({
                       🌿
                     </span>
                   )}
-                  {p.redListStatus && (
-                    <span
-                      className={redListBadgeClass(p.redListStatus)}
-                      style={{ position: 'absolute', bottom: 4, left: 4, fontSize: 10 }}
-                    >
-                      {redListBucketLabel(p.redListStatus, locale)}
-                    </span>
-                  )}
                 </div>
 
                 {/* Name + buzz bar + counts */}
@@ -164,6 +156,12 @@ export default async function FavouritesPage({
                     <div style={{ width: `${barPct}%`, height: '100%', background: 'var(--forest)' }} />
                   </div>
                   <div style={{ marginTop: 6, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                    {/* Red-List bucket — flows inline here so the long "Non-endangered" / "Endangered" label can't overflow the thumbnail */}
+                    {p.redListStatus && (
+                      <span className={redListBadgeClass(p.redListStatus)}>
+                        {redListBucketLabel(p.redListStatus, locale)}
+                      </span>
+                    )}
                     {/* Buzz — anonymous favourites */}
                     <span
                       style={{
