@@ -23,13 +23,12 @@ export async function processInstagramSync(
     return { ok: false, synced: 0, pruned: 0 };
   }
 
-  const keptShortcodes: string[] = [];
+  const fetchedShortcodes = posts.map((p) => p.shortcode);
   let synced = 0;
   for (let i = 0; i < posts.length; i++) {
     const p = posts[i]!;
     const imageUrl = await cacheThumbnail(p.displayUrl, p.shortcode);
     if (!imageUrl) continue; // keep any prior row for this shortcode
-    keptShortcodes.push(p.shortcode);
     await prisma.instagramPost.upsert({
       where: { shortcode: p.shortcode },
       create: {
@@ -54,11 +53,11 @@ export async function processInstagramSync(
     synced++;
   }
 
-  // Prune live rows that disappeared from the profile (only if we synced something).
+  // Prune live rows that disappeared from the profile (guard: only if fetch returned posts).
   let pruned = 0;
-  if (keptShortcodes.length > 0) {
+  if (posts.length > 0) {
     const res = await prisma.instagramPost.deleteMany({
-      where: { isFallback: false, shortcode: { notIn: keptShortcodes } },
+      where: { isFallback: false, shortcode: { notIn: fetchedShortcodes } },
     });
     pruned = res.count;
   }
