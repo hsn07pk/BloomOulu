@@ -23,6 +23,7 @@ import {
   QUEUE_ENRICHMENT_SWEEP,
   QUEUE_DISBURSEMENT_MONTHLY,
   QUEUE_RETENTION,
+  QUEUE_INSTAGRAM,
   defaultJobOpts,
 } from './queues.js';
 
@@ -123,5 +124,14 @@ export async function registerCronJobs() {
       data: {},
       opts: defaultJobOpts,
     });
+  }
+
+  const instagram = new Queue(QUEUE_INSTAGRAM, { connection });
+  if (process.env.INSTAGRAM_CRON_DISABLED !== 'true') {
+    await instagram.upsertJobScheduler(
+      'every-6h',
+      { pattern: '0 */6 * * *' },
+      { name: 'sync', data: {}, opts: defaultJobOpts },
+    );
   }
 }

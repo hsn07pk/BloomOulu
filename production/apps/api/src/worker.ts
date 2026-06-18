@@ -30,6 +30,7 @@ import {
   QUEUE_PLANT_ENRICH,
   QUEUE_ENRICHMENT_SWEEP,
   QUEUE_RETENTION,
+  QUEUE_INSTAGRAM,
 } from './modules/jobs/queues.js';
 import { registerCronJobs } from './modules/jobs/cron.js';
 import { processReceipt } from './modules/jobs/processors/receipt.processor.js';
@@ -46,6 +47,7 @@ import { processAuditGap } from './modules/jobs/processors/audit-gap.processor.j
 import { makePlantEnrichProcessor } from './modules/jobs/processors/plant-enrich.processor.js';
 import { makeEnrichmentSweepProcessor } from './modules/jobs/processors/enrichment-sweep.processor.js';
 import { processRetention } from './modules/jobs/processors/retention.processor.js';
+import { processInstagramSync } from './modules/jobs/processors/instagram-sync.processor.js';
 import { buildSettingsDefaults } from './modules/settings/settings.service.js';
 
 const logger = new Logger('Worker');
@@ -85,6 +87,7 @@ const QUEUES: ReadonlyArray<QueueDef> = [
     concurrency: 1,
     handler: makeEnrichmentSweepProcessor({ get: () => buildSettingsDefaults() }),
   },
+  { name: QUEUE_INSTAGRAM, concurrency: 1, handler: processInstagramSync },
 ];
 
 const workers: Worker[] = [];

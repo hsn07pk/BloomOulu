@@ -10,6 +10,7 @@ import {
   QUEUE_GDPR_EXPORT,
   QUEUE_GDPR_ERASE,
   QUEUE_PLANT_ENRICH,
+  QUEUE_INSTAGRAM,
   defaultJobOpts,
 } from './queues.js';
 import type { EmailJob } from './processors/email.processor.js';
@@ -57,3 +58,6 @@ export const enqueuePlantEnrich = (data: PlantEnrichJob) =>
     removeOnComplete: true,
     removeOnFail: true,
   });
+
+export const enqueueInstagramSync = () =>
+  q(QUEUE_INSTAGRAM).add('sync', {}, { ...defaultJobOpts, removeOnComplete: true });

@@ -31,6 +31,7 @@ export const QUEUE_ENRICHMENT_SWEEP = 'enrichment-sweep';
 /// inactive donor Users. Windows are admin/env-configurable; see
 /// retention.processor.ts.
 export const QUEUE_RETENTION = 'retention';
+export const QUEUE_INSTAGRAM = 'instagram-sync';
 
 export const defaultJobOpts: JobsOptions = {
   attempts: 5,
