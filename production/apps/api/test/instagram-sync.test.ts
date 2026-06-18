@@ -8,7 +8,7 @@ vi.mock('../src/infra/storage.js', () => ({
 vi.mock('../src/modules/instagram/instagram.source.js', () => ({
   fetchInstagramProfile: vi.fn(async () => [
     { shortcode: 'TESTaaa', caption: 'hello', takenAt: '2024-06-15T09:12:00.000Z',
-      mediaType: 'image', displayUrl: 'https://scontent/x.jpg',
+      mediaType: 'image', displayUrl: 'https://scontent.cdninstagram.com/x.jpg',
       permalink: 'https://www.instagram.com/p/TESTaaa/' },
   ]),
 }));
