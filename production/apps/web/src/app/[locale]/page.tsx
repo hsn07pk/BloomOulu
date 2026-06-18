@@ -2,6 +2,7 @@ import { getTranslations } from 'next-intl/server';
 import Link from 'next/link';
 import { type PlantIndexItem } from '../../components/PlantIndex.client';
 import { PlantCard, plantSubName } from '../../components/PlantCard';
+import { InstagramSection } from '../../components/InstagramSection';
 import { PlantImage } from '../../components/PlantImage.client';
 import { internalApiUrl } from '../../lib/api';
 import { redListBadgeClass, redListBucketLabel } from '../../lib/redlist';
@@ -534,6 +535,8 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
           ))}
         </div>
       </section>
+      {/* ── INSTAGRAM ────────────────────────────────────────────── */}
+      <InstagramSection locale={locale} />
     </div>
   );
 }
