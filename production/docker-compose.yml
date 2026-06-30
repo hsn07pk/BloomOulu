@@ -282,6 +282,13 @@ services:
       LLM_BASE_URL: ${LLM_BASE_URL:-}
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-512}
+      # Instagram feed providers (apps/api/src/modules/instagram; see docs/ENV.md).
+      # Tiered + best-effort: Graph API token → credential login → public scraper.
+      # All optional — with none set, the public scraper runs (no creds needed).
+      IG_GRAPH_ACCESS_TOKEN: ${IG_GRAPH_ACCESS_TOKEN:-}
+      IG_GRAPH_USER_ID: ${IG_GRAPH_USER_ID:-}
+      IG_USERNAME: ${IG_USERNAME:-}
+      IG_PASSWORD: ${IG_PASSWORD:-}
       # Payment env — dunning + renewal workers construct gateway
       # adapters here. Must mirror the `api` service's payment env so
       # background charges hit the same merchant. The defaults match

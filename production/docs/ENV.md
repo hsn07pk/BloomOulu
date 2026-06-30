@@ -192,6 +192,41 @@ live in /admin → Donations. Env vars set the boot defaults.
 | `AUTH_OULU_OIDC_*` | empty | University of Oulu SSO; awaiting IT registration |
 | `ADMIN_BOOTSTRAP_EMAIL` / `_PASSWORD_HASH` | `admin@admin.com` / bcrypt | admin user seeded on first boot |
 
+### Instagram feed ("From our garden, on Instagram")
+
+The homepage band pulls live posts for the handle in `SystemSetting instagram.handle`
+(default `oulubotgarden`) via a **tiered, best-effort provider chain** — the first tier
+that succeeds wins, and the public scraper is the guaranteed fallback. **All vars are
+optional**: with none set, the scraper alone runs (no credentials needed — the account
+is public). Resolution order per 6-hourly `instagram-sync` cron: **Graph API → credential
+login → scraper**; a tier is skipped if unconfigured and falls through on error, so the
+band always keeps last-good content.
+
+| Var | Default | Notes |
+|---|---|---|
+| `IG_GRAPH_ACCESS_TOKEN` | empty | **Tier 1 — official Instagram Graph API** (recommended). Long-lived token. |
+| `IG_GRAPH_USER_ID` | `me` | IG Business user id for the Graph API; `me` resolves from the token. |
+| `IG_USERNAME` | empty | **Tier 2 — credential login** (unofficial private endpoint). Login handle. |
+| `IG_PASSWORD` | empty | Login password. Username **and** password must both be set to enable this tier. |
+
+**Tier 1 — Graph API (official, ToS-compliant, robust — recommended).** Needs the account
+to be a **Business/Creator** account linked to a **Facebook Page**, plus a **Meta app**
+(developer.facebook.com) with `instagram_basic`. Generate a **long-lived access token**
+(Graph API Explorer → exchange for a 60-day token, then refresh), then
+`echo 'IG_GRAPH_ACCESS_TOKEN=<token>' >> .env` (optionally `IG_GRAPH_USER_ID=<id>`) and
+`docker compose -f docker-compose.yml -f docker-compose.csc.yml up -d --force-recreate api-worker`.
+
+**Tier 2 — credential login (account username/password).** Drives Instagram's private web
+login — **outside Instagram's official API terms**; the first login from a new server IP
+may trigger a "suspicious login" email to confirm on the account. The session is cached
+(`SystemSetting instagram.session`) so it doesn't re-login every sync. Enable with
+`echo 'IG_PASSWORD=<password>' >> .env` (username already set) + recreate `api-worker`.
+If Instagram rejects the login it falls back to the scraper.
+
+**Tier 3 — scraper (default, no setup).** Unauthenticated `web_profile_info` via curl
+(Instagram TLS-fingerprints + 429s Node's `fetch`, so every tier uses curl). Works for any
+public account.
+
 ## Verifying your config
 
 ```bash

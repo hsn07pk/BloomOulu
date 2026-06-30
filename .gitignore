@@ -8,3 +8,6 @@ GEMINI.md
 .idea/
 test/
 .session-handover.md
+
+# macOS
+.DS_Store
