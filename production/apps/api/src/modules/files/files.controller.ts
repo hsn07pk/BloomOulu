@@ -20,6 +20,7 @@
  * requests serve from disk, so third parties aren't hit on every view.
  */
 import { Controller, Get, NotFoundException, Req, Res } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { readFile } from '../../infra/storage.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -41,6 +42,13 @@ function basename(key: string): string {
   return last.replace(/\.meta\.json$/, '');
 }
 
+// Static asset serving (plant images, receipt/cert PDFs, audio narrations).
+// A single image-heavy page legitimately fires 20+ requests at once, which
+// would trip the global throttler and 429 the grid. These responses are
+// immutable + cache-controlled, so exempt the whole controller from both
+// named tiers. NB: bare @SkipThrottle() only skips a tier named "default";
+// our tiers are "short" + "mid" (see app.module.ts), so name them explicitly.
+@SkipThrottle({ short: true, mid: true })
 @Controller('files')
 export class FilesController {
   constructor(private readonly prisma: PrismaService) {}
