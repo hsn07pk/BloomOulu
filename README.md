@@ -1,197 +1,140 @@
-<div align="center">
+# BloomOulu
 
-# 🌱 BloomOulu
+Digital platform for the University of Oulu Botanical Garden, built by Team Meraki at GrowthHack 2026. The repository holds two parts:
 
-**One platform for the University of Oulu Botanical Garden - adoption · AI-grounded plant guide · immersive QR experience · live kiosk.**
-
-[![Live demo](https://img.shields.io/badge/demo-bloom--oulu.vercel.app-2D5440?style=flat&logo=vercel)](https://bloom-oulu.vercel.app/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-A8C060.svg?style=flat)](./LICENSE)
-[![WCAG 2.2 AA](https://img.shields.io/badge/WCAG-2.2%20AA-5FB0A0?style=flat)](https://www.w3.org/WAI/WCAG22/quickref/)
-[![EU hosted](https://img.shields.io/badge/hosted-EU-1F3C2D?style=flat)](https://vercel.com)
-[![Languages: FI · SV · EN](https://img.shields.io/badge/i18n-FI%20·%20SV%20·%20EN-88A050?style=flat)](./demo-design/translations.jsx)
-
-[**Open the live demo →**](https://bloom-oulu.vercel.app/demo-design/)
-
-</div>
-
----
-
-## Overview
-
-BloomOulu is a unified digital experience for the University of Oulu Botanical Garden, the northernmost scientific garden in the world. It replaces the existing voluntary‑MobilePay donation flow with a **four-tier Adopt-a-Plant program** (€25 → €500 + corporate), pairs every plant label with a **scannable QR** that opens a rich plant page (audio narration, real photos, deep-link), and adds an **AI plant guide grounded in the Garden's own science** with visible citations.
-
-The platform is designed for the European Accessibility Act 2025 and BGCI/IUCN reporting standards, and is multilingual (Finnish, Swedish, English) end-to-end - UI, audio narration, captions and all.
-
-> Built by **Team Meraki** for **GrowthHack 2026** at the University of Oulu, with research grounded in [the comprehensive platform analysis](https://github.com/hsn07pk/BloomOulu/) (peer benchmarks: Kew, Meise, ELTE Füvészkert, RBGE, Queens BG, NYBG, Mt Auburn).
-
-## Features
-
-| Pillar | Inside |
-|---|---|
-| 🌿 **Discover** | Hero with live Oulu weather, plant index filtered by Red-List status (CR/EN/VU/NT), conservation-impact strip, "How BloomOulu works" journey. |
-| 🪴 **Plant page** | Real plant photos + per-season Wikimedia alternates, live multilingual audio narration with on-screen captions, accession data, cited papers, Kid mode (plant-as-character + sticker collection), School mode (reading-level toggle + 3-question quiz + printable worksheet), shareable per-plant QR. |
-| 🤖 **AskTheGarden** | RAG-styled chat grounded in the accession DB and Biodiversity Unit corpus, with visible citations. EN/FI/SV intent matching, helpful/off-base/forward-to-curator reactions, recent + trending starter prompts. |
-| 💚 **Adopt** | 4-tier ladder (€25 Seed → €500 Critically Endangered) + corporate tiers (€2,500 → €20,000/yr), gift / memorial / class intents, monthly recurring, transparent VAT split + TVL §57 corporate-deduction copy. |
-| 🌷 **My Garden** | Loyalty card (Silver/Gold), conservation-impact breakdown, plant timeline with curator notes, memorial dedication, gifts sent, year-end tax certificate, saved-for-later list. |
-| 🖥 **Kiosk** | Lobby-display-ready view with live time, weather, "Blooming today" feature card, real scannable QR (deep-links to a plant page), animated adopter wall, daily stats. |
-| 🗺 **Real maps** | Leaflet + OpenStreetMap. Every plant has micro-coordinates within the garden; pin clusters by Red-List status. |
-| 🔊 **Audio** | 24 narrations (8 plants × 3 languages), AAC/m4a, ~30 sec each, generated locally so they always load. |
-| 📷 **QR** | Real high-error-correction QR codes (qrcode-generator) with the BloomOulu mark in the centre. Tap-or-scan deep-links via URL hash. |
-| ♿ **Accessibility** | Skip-link, focus-visible, ARIA landmarks + labels, semantic regions, reduced-motion, larger-text, high-contrast, on-screen audio captions per language. EAA 2025 / WCAG 2.2 AA target. |
+- `demo-design/`: the original static prototype, live at [bloom-oulu.vercel.app/demo-design/](https://bloom-oulu.vercel.app/demo-design/)
+- `production/`: a pnpm + Turborepo monorepo (Next.js web and kiosk, NestJS API, AdminJS panel, Postgres + pgvector) that implements the platform end to end
 
 ## Live demo
 
-[**bloom-oulu.vercel.app/demo-design/**](https://bloom-oulu.vercel.app/demo-design/)
+[bloom-oulu.vercel.app/demo-design/](https://bloom-oulu.vercel.app/demo-design/)
 
-Try:
+Things to try:
 
-1. **Scan the kiosk QR** with your phone → land on Pulsatilla patens.
-2. **Switch the language** in the top bar → audio + captions + UI all swap atomically.
-3. **Kid mode** (right panel) → plant introduces itself, sticker book counts up.
-4. **School mode** → Alakoulu / Yläkoulu / Lukio reading levels + Start quiz + Print worksheet.
-5. **Show on map** → real OpenStreetMap pin on the south esker bed.
-6. **Read where your money goes** (Discover) → full funds-flow policy modal with audit + tax disclosure.
-7. **Accessibility ♿ button** (bottom-left) → larger text, high contrast, reduced motion.
+- Scan the kiosk QR code with a phone; it deep links to a plant page through the URL hash (`#plant=puls-pat`)
+- Switch language in the top bar; UI strings, audio narration, and on-screen captions change together
+- Open a plant page and toggle Kid mode or School mode (reading levels, quiz, printable worksheet)
+- Press "Show on map" for a Leaflet pin on OpenStreetMap tiles
+- Open the accessibility panel (bottom left) for larger text, high contrast, and reduced motion
 
-## Tech stack
-
-| | |
-|---|---|
-| **Frontend** | Vanilla React 18 loaded via Babel-standalone (no build step). One global namespace; window-attached components. |
-| **Mapping** | [Leaflet](https://leafletjs.com/) + OpenStreetMap tiles (free, no key). |
-| **Weather** | [Open-Meteo](https://open-meteo.com/) (free, no key) - live readings for the Garden coordinates. |
-| **QR codes** | [qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator) (vanilla JS) with level-H error correction. |
-| **Audio** | macOS `say` (Samantha/Satu/Alva voices) → AAC m4a, served as static assets. |
-| **Images** | Wikimedia Commons (CC-licensed, attributed in `plants/CREDITS.md`), resized to 800 px / 75 % JPEG via `sips`. |
-| **Hosting** | [Vercel](https://vercel.com/) static deploy from `main`, auto-redeploy on push, EU region. |
-| **Fonts** | Fraunces, Manrope, JetBrains Mono (Google Fonts). |
-
-No npm, no bundler, no build pipeline - `git push` is the deploy. The entire site is static files.
-
-## Project structure
+## Repository layout
 
 ```
 BloomOulu/
-├── index.html                 # Root redirect → /demo-design/
-├── vercel.json                # cleanUrls, Cache-Control on demo
-├── LICENSE                    # MIT
-├── README.md                  # this file
-└── demo-design/               # Self-contained prototype (~6 MB)
-    ├── index.html             # CSS tokens, accessibility CSS, mobile @media
-    ├── app.jsx                # Top nav, routing (hash-based deep links), toaster, a11y panel
-    ├── data.jsx               # Plants, tiers, citations, season images, transcripts (3 langs)
-    ├── translations.jsx       # FI + SV i18n (700+ keys)
-    ├── icons.jsx              # Icons, BloomMark, PlantImage, QRCode, PlantMap, hooks, helpers
-    ├── screens-discover.jsx   # Homepage
-    ├── screens-plant.jsx      # Plant detail (Kid / School / Adult modes)
-    ├── screens-adopt.jsx      # 4-step adoption flow
-    ├── screens-ask.jsx        # AskTheGarden chat
-    ├── screens-garden.jsx     # My Garden dashboard
-    ├── screens-kiosk.jsx      # Lobby kiosk view
-    ├── plants/                # 16 plant photos + CREDITS.md
-    ├── audio/{en,fi,sv}/      # 24 m4a narrations + CREDITS.md
-    └── uploads/, assets/      # Logo + pitch deck
-
-# Local-serving config (in repo root)
-├── Dockerfile                 # nginx:1.27-alpine
-├── docker-compose.yml         # `docker compose up -d`
-├── docker/
-│   ├── nginx.conf             # MIME, cache, security headers
-│   └── mime.types
-└── environment.yml            # `conda env create -f environment.yml`
+├── index.html           # redirects to /demo-design/
+├── vercel.json          # cleanUrls + cache headers for the demo
+├── Dockerfile           # nginx image for serving the demo locally (port 8080)
+├── docker-compose.yml   # demo on :8080, hot-reload variant on :8081
+├── environment.yml      # conda env with ffmpeg/pillow for regenerating assets
+├── demo-design/         # static prototype (React via Babel standalone)
+└── production/          # pnpm + Turborepo monorepo
+    ├── apps/            # web, api, admin, kiosk
+    ├── packages/        # db, rag, payments, emails, i18n, ui, constants, config
+    ├── infra/           # Caddy, Prometheus, Grafana, Loki, Tempo, reranker, restic
+    └── docs/            # 11 ADRs, system design, runbooks, DPIA, security audit
 ```
 
-## Local development
+## The prototype (demo-design/)
 
-Three equivalent ways to run BloomOulu on your machine - pick whichever you have.
+A self-contained static site: React 18 loaded through Babel standalone, no bundler, no npm install. Each screen is a `.jsx` file evaluated in the browser.
 
-### 🐳 Docker (recommended)
+- Six screens: discover, plant detail, adopt, AskTheGarden chat, my garden, and lobby kiosk (`screens-*.jsx`)
+- Hash-based routing with per-plant deep links; the kiosk QR encodes the same hash (qrcode-generator, error correction level H)
+- Leaflet 1.9.4 with OpenStreetMap tiles for plant positions inside the garden
+- Live Oulu weather from the Open-Meteo forecast API, no API key
+- Eight species, each with three Wikimedia Commons photos (per-image attribution in `plants/CREDITS.md`) and 24 audio narrations (8 plants x 3 languages) under `audio/`
+- Finnish and Swedish UI strings in `translations.jsx`, English inline
+- Skip link, ARIA landmarks, focus-visible outlines, reduced-motion support, larger-text and high-contrast toggles; targets WCAG 2.2 AA
+
+Run it locally any of three ways:
 
 ```bash
-docker compose up -d
-# open http://localhost:8080/
+docker compose up -d          # nginx, http://localhost:8080/
+# or
+conda env create -f environment.yml && conda activate bloomoulu && python -m http.server 8000
+# or
+python3 -m http.server 8000   # then open /demo-design/
 ```
 
-This builds a slim nginx 1.27-alpine image, copies the site in, applies a hand-tuned `nginx.conf` (correct MIME types for `.jsx` and `.m4a`, gzip, long-cache for plant images + audio, no-cache for HTML + JSX), and exposes port 80 → 8080 on the host. The container has a healthcheck and auto-restarts. Hot-reload variant available via `docker compose --profile dev up BloomOulu-dev` (port 8081, files mounted read-only).
+## The production monorepo (production/)
 
-### 🐍 Conda
+Requires Node >= 20.11 and pnpm >= 9. Four apps and eight workspace packages, orchestrated by Turborepo.
+
+### Apps
+
+| App | Stack | What it does |
+|---|---|---|
+| `apps/web` (:3000) | Next.js 15, next-intl, next-auth, react-leaflet | Public site: locale-prefixed routes for the plant index and detail pages, donation flow, AskTheGarden chat, favourites, donor wall, profile, sign-in with email plus a University of Oulu SSO route, receipt and tax certificate PDF endpoints, GDPR export/erase API routes |
+| `apps/api` (:4000) | NestJS 10 on Fastify, Prisma, BullMQ, Swagger | REST API plus a separate worker process; modules for plants, donations, payments, webhooks, disbursements, reconciliation, ask (RAG), narration, enrichment, Instagram feed, quiz, kiosk, GDPR, audit, auth, translations, settings |
+| `apps/admin` (:4100) | AdminJS 7 on Fastify | Curator and finance panel: plant tools, bulk add, QR label printing, translations editor, bank reconciliation, enrichment review, payment provider config, backups, observability |
+| `apps/kiosk` (:3100) | Next.js 15 | Lobby display with an Open-Meteo weather pill and a scannable deep-link QR |
+
+### Packages
+
+| Package | Contents |
+|---|---|
+| `packages/db` | Prisma schema (44 models) on Postgres 16 + pgvector, 25 migrations, seed data for Finnish flora |
+| `packages/rag` | Chunking, Ollama embeddings, reranker client, ingest CLI, corpus files |
+| `packages/payments` | Paytrail, Vipps MobilePay, and bank transfer gateways behind a provider router, each with vitest specs; bank transfers use ISO 11649 RF creditor references matched during CSV reconciliation |
+| `packages/emails` | Email templates plus PDF renderers for adoption certificates, tax certificates, disbursement reports, and quarterly CSR summaries |
+| `packages/i18n` | next-intl message catalogues for en, fi, sv |
+| `packages/ui`, `constants`, `config` | Shared components, shared enums, lint and formatting config |
+
+### RAG pipeline
+
+The AskTheGarden chat (`apps/api/src/modules/ask/ask.service.ts`) answers from the garden's own corpus:
+
+1. Guardrail and intent classification; common intents get template answers without touching the LLM
+2. The query is embedded with `nomic-embed-text:v1.5` on a local Ollama instance
+3. Hybrid retrieval in Postgres: pgvector cosine search (HNSW index), tsvector full text, and pg_trgm trigram matching, fused with reciprocal rank fusion
+4. Candidates are reranked by a FastAPI sidecar running the `BAAI/bge-reranker-v2-m3` cross-encoder (`infra/reranker/`)
+5. The answer streams from a local Ollama model (default `llama3.2:1b`), with citations persisted per answer; `USE_HOSTED_LLM` swaps in a hosted model
+
+### Background jobs
+
+Fifteen BullMQ processors handle receipts, bank reconciliation, monthly disbursements, annual tax certificates, plant enrichment (images, origin, red-list status, stories), RAG ingest and evaluation, Instagram sync, GDPR export and erasure, data retention, kiosk watchdog checks, and audit gap detection.
+
+### Infrastructure and operations
+
+- Caddy for TLS termination, with compose files for local, VPS, and CSC cPouta deployments (`docker-compose.yml`, `docker-compose.csc.yml`, `infra/cloud-init.cpouta.yaml`)
+- Prometheus + Alertmanager, six Grafana dashboards, Loki + Promtail logs, Tempo traces, OpenTelemetry instrumentation in the API
+- Nightly restic backups (`infra/restic/run-backup.sh`) and a restore runbook
+- Runbooks for deploys, DNS/TLS, university SSO, payment webhook failures, and chaos drills under `docs/runbook/`
+- Architecture decision records (11) in `docs/adr/`, plus a DPIA and security audit in `docs/compliance/`
+
+### Running it
 
 ```bash
-conda env create -f environment.yml
-conda activate bloomoulu
-python -m http.server 8000
-# open http://localhost:8000/demo-design/
+cd production
+cp .env.example .env                     # defaults work for local dev
+docker compose --profile bootstrap up -d # Postgres, Redis, Ollama, MinIO, observability
+pnpm install
+pnpm db:generate && pnpm db:migrate:dev && pnpm db:seed
+pnpm dev                                 # web :3000, api :4000 (/docs), admin :4100, kiosk :3100
 ```
 
-The conda env also installs `ffmpeg`, `pillow`, and `imagemagick` so you can regenerate audio narrations and resize plant photos locally.
+### Testing
 
-### 📁 Plain Python
+- Unit and integration tests with vitest: payment gateways, webhook idempotency, Instagram sync, tax certificates
+- Playwright accessibility spec with axe-core
+- k6 load test script (`scripts/loadtest.k6.js`)
+- Workflow definitions under `production/.github/workflows/` cover lint, typecheck, tests, and build
 
 ```bash
-python3 -m http.server 8000
-# open http://localhost:8000/demo-design/
+pnpm test        # turbo run test across the workspace
+pnpm test:e2e
 ```
 
-Works on any machine with Python 3. No dependencies.
+## Internationalisation and accessibility
 
----
-
-The Plant page deep-links via URL hash (e.g. `…/demo-design/#plant=puls-pat`). The same hash is what the kiosk QR code encodes.
-
-## Deployment
-
-Pushing to `main` auto-deploys on Vercel (~30 seconds). Branches get preview URLs automatically.
-
-To deploy your own fork: import the repo at [vercel.com/new](https://vercel.com/new) - leave framework as "Other" and root directory at `./`. Done.
-
-## Accessibility
-
-- **Keyboard:** every interactive element is reachable in tab order; `:focus-visible` outlines on all controls; skip-to-main-content link at page top.
-- **Screen readers:** semantic `<header role="banner">`, `<main>`, `<nav aria-label>`, `<footer role="contentinfo">`, `aria-current="page"`, `aria-pressed` on toggle buttons, `lang=` attribute on translated regions, live region for toasts.
-- **Motion:** respects `prefers-reduced-motion`; explicit in-app toggle.
-- **Vision:** in-app larger-text + high-contrast modes; tap targets ≥44 px on mobile.
-- **Audio:** on-screen captions for every narration in the playing language.
-- **Internationalisation:** UI, narration audio, transcripts, and intent matching all support FI + SV + EN.
-
-Targeted standards: **WCAG 2.2 AA** and the **European Accessibility Act 2025**.
-
-## Internationalisation
-
-| Surface | EN | FI | SV |
-|---|:---:|:---:|:---:|
-| UI strings | ✓ | ✓ | ✓ |
-| Audio narration | ✓ | ✓ | ✓ |
-| On-screen captions | ✓ | ✓ | ✓ |
-| Chat intent matching | ✓ | ✓ | ✓ |
-| Funds-flow disclosure | ✓ | ✓ | ✓ |
-| Map labels | ✓ | ✓ | ✓ |
-
-Plant scientific names stay constant; common names are pulled per language from `data.jsx`.
+English, Finnish, and Swedish throughout: UI messages (`production/packages/i18n/messages/`), demo audio narration and captions, and chat intent matching. Both the prototype and the web app target WCAG 2.2 AA; the API test suite includes an axe-based Playwright spec.
 
 ## Attribution
 
-- **Plant photos** - Wikimedia Commons under various Creative Commons licences. See [`demo-design/plants/CREDITS.md`](./demo-design/plants/CREDITS.md) for per-image source + author.
-- **Map tiles** - © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright).
-- **Weather data** - [Open-Meteo](https://open-meteo.com/) (CC BY 4.0).
-- **Research** - peer-benchmarked against Kew (UK), Meise (BE), ELTE Füvészkert (HU), Royal Botanic Garden Edinburgh, Queens Botanical Garden (US), New York Botanical Garden, Mount Auburn Cemetery, Singapore Botanic Gardens, BGCI / IUCN Red List.
-
-## Status
-
-⚠️ **This is a reference prototype.** It is the visual + interaction handoff from the design phase, deployed live so stakeholders can experience the full flow. A production build with proper SSR/SSG, real payments (MobilePay + Stripe), an authoritative accession DB sync, a CMS-backed transcript pipeline, and human-recorded audio is the next phase.
+- Plant photos from Wikimedia Commons under Creative Commons licences; per-image credits in `demo-design/plants/CREDITS.md`
+- Map tiles (c) OpenStreetMap contributors
+- Weather data from Open-Meteo (CC BY 4.0)
 
 ## License
 
-MIT - see [`LICENSE`](./LICENSE).
-
-## Acknowledgments
-
-- **Team Meraki** - concept, research, design, build.
-- **University of Oulu Botanical Garden** - Director Jouni Aspi, Curator Anna Liisa Ruotsalainen, Head Gardener Tuomas Kauppila.
-- **University of Oulu Biodiversity Unit** - corpus grounding for AskTheGarden.
-- **BGCI** + **LIFE+ ESCAPE** project (LIFE11 BIO/FI/000917) - conservation framing.
-
-<div align="center">
-
-*65.0617° N, 25.4661° E · Oulu, Finland*
-
-</div>
+MIT, see [LICENSE](./LICENSE).
